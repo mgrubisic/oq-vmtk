@@ -391,7 +391,10 @@ class slf_generator:
         self.conversion = conversion
         self.realizations = realizations
         self.replacement_cost = replacement_cost
-        self.regression = regression.lower()
+        if regression is None:
+            self.regression = None
+        else:
+            self.regression = regression.lower()
         self.storey = storey
         self.directionality = directionality
         self.correlation_tree = correlation_tree
@@ -1006,6 +1009,10 @@ class slf_generator:
                         best_fitting_parameters = fitting_parameters
                         best_error_max = error_max
                         best_error_cum = error_cum
+                        
+                        self.regression = reg_type
+                        
+                    
                 except Exception as e:
                     print(f"Regression failed for {reg_type}: {e}")
     
