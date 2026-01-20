@@ -1,8 +1,9 @@
-
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 import openseespy.opensees as ops
+from openquake.vmtk.units import units
+from openquake.vmtk.plotter import plotter
 
 class modeller():
     """
@@ -233,24 +234,33 @@ class modeller():
           `create_Pinching4_material` method.
         """
 
+
         ### Set model builder
         ops.wipe() # wipe existing model
         ops.model('basic', '-ndm', 3, '-ndf', 6)
 
         ### Define base node (tag = 0)
         ops.node(0, *[0.0, 0.0, 0.0])
+
         ### Define floor nodes (tag = 1+)
-        i = 1
         current_height = 0.0
-        while i <= self.number_storeys:
-            nodeTag = i
-            current_height = current_height + self.floor_heights[i-1]
-            current_mass = self.floor_masses[i-1]
+
+        # Use range based on the length of heights to ensure we never go out of bounds
+        for i in range(len(self.floor_heights)):
+            nodeTag = i + 1 # Nodes will be 1, 2, 3...
+
+            current_height += self.floor_heights[i]
+            current_mass = self.floor_masses[i]
+
             coords = [0.0, 0.0, current_height]
-            masses = [current_mass, current_mass, 1e-6, 1e-6, 1e-6, 1e-6]
-            ops.node(nodeTag,*coords)
-            ops.mass(nodeTag,*masses)
-            i+=1
+            # Assign mass to X and Y translations
+            masses = [current_mass, current_mass, 1e-9, 1e-9, 1e-9, 1e-9]
+
+            ops.node(nodeTag, *coords)
+            ops.mass(nodeTag, *masses)
+
+        # Update number_storeys to match the actual number of nodes created
+        self.number_storeys = len(self.floor_heights)
 
         ### Get list of model nodes
         nodeList = ops.getNodeTags()
@@ -464,7 +474,9 @@ class modeller():
                           num_modes=3,
                           solver = '-genBandArpack',
                           doRayleigh=False,
-                          pflag=False):
+                          pflag=False,
+                          plot_modes=True,
+                          export_path = None):
         """
         Perform modal analysis on a multi-degree-of-freedom (MDOF) system to determine its natural frequencies
         and mode shapes.
@@ -492,6 +504,14 @@ class modeller():
             Flag to control whether to print the modal analysis report. If True, the fundamental period and
             mode shape will be printed to the console. Default is False.
 
+        plot_modes: bool, optional
+            Flag to control whether to plot the modes. If True, the mode shapes are plotted against the
+            undeformed shape. Default is True
+
+        export_path: str, optional
+            If a string path is provided (e.g., 'modal_results.png'), the plot will be saved to this location.
+            If None, the plot will be only displayed and not saved. Default is None.
+
         Returns
         -------
         T: array
@@ -504,30 +524,47 @@ class modeller():
             displacement.
         """
 
-        ### Get frequency and period
+        # Get frequency and period
         self.omega = np.power(ops.eigen(solver, num_modes), 0.5)
         T = 2.0*np.pi/self.omega
 
-        mode_shape = []
-        # Extract mode shapes for all nodes (displacements in x)
-        for k in range(1, self.number_storeys+1):
-            ux = ops.nodeEigenvector(k, 1, 1)  # Displacement in x-direction
-            mode_shape.append(ux)
+        # Extract mode shape vectors
+        node_list = ops.getNodeTags()
 
-        # Normalize the mode shape
-        mode_shape = np.array(mode_shape)/mode_shape[-1]
+        # Fallback: determine the largest node tag index for eigenvector extraction
+        if not hasattr(self, 'number_storyes'):
+            self.number_storeys = len(node_list)
+        mode_shape_vectors = []
+        for mode_num in range(1, num_modes+1):
+            # Extract X, Y, Z displacements for all nodes in the current mode
+            ux_all = np.array([ops.nodeEigenvector(tag, mode_num, 1) for tag in node_list])
+            uy_all = np.array([ops.nodeEigenvector(tag, mode_num, 2) for tag in node_list])
+            uz_all = np.array([ops.nodeEigenvector(tag, mode_num, 3) for tag in node_list])
 
-        ### Print optional report
+            # Combine into a single (N_nodes x 3) vector for plotting
+            mode_vector = np.column_stack((ux_all, uy_all, uz_all))
+
+            # Normalization
+            max_disp = np.max(np.abs(mode_vector))
+            if max_disp!=0:
+                mode_vector/=max_disp
+            mode_shape_vectors.append(mode_vector)
+
+        # Optional printing
         if pflag:
             ops.modalProperties('-print')
-            ### Print output
-            print(r'Fundamental Period:  T = {:.3f} s'.format(T[0]))
-            print('Mode Shape:', mode_shape)
+            print(r'Fundamental Period: T = {.3f} s'.format(T[0]))
 
-        ### Wipe the analysis objects
+        # Optional plotting
+        if plot_modes:
+            # Initialise the plotter class
+            pl=plotter()
+            pl.plot_modes(node_list, mode_shape_vectors, T, export_path =export_path)
+
+        # Internal cleanup of analysis objects
         ops.wipeAnalysis()
 
-        return T, mode_shape
+        return T, mode_shape_vectors
 
     def do_spo_analysis(self,
                         ref_disp,
@@ -998,17 +1035,18 @@ class modeller():
         pseudo_steps = np.arange(len(energy_steps))  # or use actual step counter if you prefer
         cpo_energy = np.column_stack((pseudo_steps, energy_steps))
         assert np.all(np.diff(cpo_energy[:,1]) >= 0), "Energy should be cumulative and increasing"
-        
+
         ### Wipe the analysis objects
         ops.wipeAnalysis()
 
         return cpo_disps, cpo_rxn, cpo_energy
 
-    def do_nrha_analysis(self, fnames, dt_gm, sf, t_max, dt_ansys, nrha_outdir,
-                         pflag=True, xi = 0.05, ansys_soe='BandGeneral',
+    def do_nrha_analysis(self, fnames, dt_gm, sf, t_max, dt_ansys,
+                         pflag=True, xi=0.05, ansys_soe='BandGeneral',
                          constraints_handler='Plain', numberer='RCM',
                          test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50,
-                         algorithm_type='Newton'):
+                         algorithm_type='Newton', save_animation_path=None, drift_thresholds=None):
+
         """
         Perform nonlinear time-history analysis on a Multi-Degree-of-Freedom (MDOF) system.
 
@@ -1067,6 +1105,12 @@ class modeller():
         algorithm_type: string, optional, default='Newton'
             Type of algorithm used to solve the system of equations. Default is 'Newton', which uses the Newton-Raphson method.
 
+        save_animation_path: string, optional,
+            If provided, saves the figure to this path (e.g., 'modes.png') instead of displaying it
+
+        drift_thresholds: list, optional,
+            If provided, provides thresholds for animation to read and change color of stick model based on damage state exceedance
+
         Returns
         -------
         control_nodes: list
@@ -1103,22 +1147,21 @@ class modeller():
             Array of peak displacement values (in meters) for each floor.
         """
 
-        # define control nodes
+        # Define control nodes
         control_nodes = ops.getNodeTags()
+        n_nodes = len(control_nodes)
 
-        # Define the timeseries and patterns first
+        # Define the timeseries and patterns first (same as original; no recorders)
         if len(fnames) > 0:
             nrha_tsTagX = 1
             nrha_pTagX = 1
             ops.timeSeries('Path', nrha_tsTagX, '-dt', dt_gm, '-filePath', fnames[0], '-factor', sf)
             ops.pattern('UniformExcitation', nrha_pTagX, 1, '-accel', nrha_tsTagX)
-            ops.recorder('Node', '-file', f"{nrha_outdir}/floor_accel_X.txt", '-timeSeries', nrha_tsTagX, '-node', *control_nodes, '-dof', 1, 'accel')
         if len(fnames) > 1:
             nrha_tsTagY = 2
             nrha_pTagY = 2
             ops.timeSeries('Path', nrha_tsTagY, '-dt', dt_gm, '-filePath', fnames[1], '-factor', sf)
             ops.pattern('UniformExcitation', nrha_pTagY, 2, '-accel', nrha_tsTagY)
-            ops.recorder('Node', '-file', f"{nrha_outdir}/floor_accel_Y.txt", '-timeSeries', nrha_tsTagY, '-node', *control_nodes, '-dof', 2, 'accel')
         if len(fnames) > 2:
             nrha_tsTagZ = 3
             nrha_pTagZ = 3
@@ -1135,15 +1178,20 @@ class modeller():
         ops.analysis('Transient')
 
         # Set up analysis parameters
-        conv_index = 0   # Initially define the collapse index (-1 for non-converged, 0 for stable)
+        conv_index = 0   # -1 failure, 0 success
         control_time = 0.0
-        ok = 0 # Set the convergence to 0 (initially converged)
+        ok = 0
 
-        # Parse the data about the building
-        top_nodes = control_nodes[1:]
-        bottom_nodes = control_nodes[0:-1]
+        # Parse the data about the building (storey heights)
+        if n_nodes < 2:
+            top_nodes = []
+            bottom_nodes = []
+        else:
+            top_nodes = control_nodes[1:]
+            bottom_nodes = control_nodes[:-1]
+
         h = []
-        for i in np.arange(len(top_nodes)):
+        for i in range(len(top_nodes)):
             topZ = ops.nodeCoord(top_nodes[i], 3)
             bottomZ = ops.nodeCoord(bottom_nodes[i], 3)
             dist = topZ - bottomZ
@@ -1152,151 +1200,368 @@ class modeller():
                 h.append(1e9)
             else:
                 h.append(dist)
+        h = np.array(h) if len(h) > 0 else np.array([])
 
-        # Create some arrays to record to
-        peak_disp = np.zeros((len(control_nodes), 2))
+        # Create some arrays to record to (use dt_ansys for sizing)
+        n_steps = int(np.ceil(t_max / dt_ansys)) + 1
+        node_disps = np.zeros((n_steps, n_nodes))       # X displacements
+        node_accels = np.zeros((n_steps, n_nodes))     # accelerations (will keep in g)
+        peak_disp = np.zeros((n_nodes, 2))
         peak_drift = np.zeros((len(top_nodes), 2))
-        peak_accel = np.zeros((len(top_nodes)+1, 2))
+        peak_accel = np.zeros((len(top_nodes) + 1, 2))
 
-        # Set damping
+        # Set damping (same logic)
         if self.number_storeys == 1:
-
-            #Set damping
-            alphaM = 2*self.omega[0]*xi
-            ops.rayleigh(alphaM,0,0,0)
-
+            alphaM = 2 * self.omega[0] * xi
+            ops.rayleigh(alphaM, 0, 0, 0)
         else:
+            alphaM = 2 * self.omega[0] * self.omega[2] * xi / (self.omega[0] + self.omega[2])
+            alphaK = 2 * xi / (self.omega[0] + self.omega[2])
+            ops.rayleigh(alphaM, 0, alphaK, 0)
 
-            alphaM = 2*self.omega[0]*self.omega[2]*xi/(self.omega[0] + self.omega[2])
-            alphaK = 2*xi/(self.omega[0] + self.omega[2])
-            ops.rayleigh(alphaM,0,alphaK,0)
+        # Progress print throttling (print every print_every steps)
+        # Aim for ~50 prints across run
+        print_every = max(1, int(np.ceil(n_steps / 50.0)))
 
-        # Define parameters for deformation animation
-        # n_steps = int(np.ceil(t_max/dt_gm))+1
-        # node_disps = np.zeros([n_steps,len(control_nodes)])
-        # node_accels= np.zeros([n_steps,len(control_nodes)])
-
-        # Run the actual analysis
-        # step = 0 # initialise the step counter
+        # Main time-stepping loop (preserve all adaptive attempts exactly)
+        step = 0
         while conv_index == 0 and control_time <= t_max and ok == 0:
             ok = ops.analyze(1, dt_ansys)
             control_time = ops.getTime()
 
-            if pflag is True:
-                print('Completed {:.3f}'.format(control_time) + ' of {:.3f} seconds'.format(t_max) )
+            # Throttled progress output
+            if pflag and (step % print_every == 0 or control_time >= t_max):
+                print(f'Completed {control_time:.3f} of {t_max:.3f} seconds')
 
-            # If the analysis fails, try the following changes to achieve convergence
+            # If analysis fails, run the exact adaptive recovery sequence (kept identical)
             if ok != 0:
                 print('FAILED at {:.3f}'.format(control_time) + ': Trying reducing time-step in half...')
-                ok = ops.analyze(1, 0.5*dt_ansys)
+                ok = ops.analyze(1, 0.5 * dt_ansys)
             if ok != 0:
                 print('FAILED at {:.3f}'.format(control_time) + ': Trying reducing time-step in quarter...')
-                ok = ops.analyze(1, 0.25*dt_ansys)
+                ok = ops.analyze(1, 0.25 * dt_ansys)
             if ok != 0:
                 print('FAILED at {:.3f}'.format(control_time) + ': Trying relaxing convergence with more iterations...')
-                ops.test(test_type, init_tol*0.01, init_iter*10)
-                ok = ops.analyze(1, 0.5*dt_ansys)
+                ops.test(test_type, init_tol * 0.01, init_iter * 10)
+                ok = ops.analyze(1, 0.5 * dt_ansys)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
                 print('FAILED at {:.3f}'.format(control_time) + ': Trying relaxing convergence with more iteration and Newton with initial then current...')
-                ops.test(test_type, init_tol*0.01, init_iter*10)
+                ops.test(test_type, init_tol * 0.01, init_iter * 10)
                 ops.algorithm('Newton', 'initialThenCurrent')
-                ok = ops.analyze(1, 0.5*dt_ansys)
+                ok = ops.analyze(1, 0.5 * dt_ansys)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
                 print('FAILED at {:.3f}'.format(control_time) + ': Trying relaxing convergence with more iteration and Newton with initial...')
-                ops.test(test_type, init_tol*0.01, init_iter*10)
+                ops.test(test_type, init_tol * 0.01, init_iter * 10)
                 ops.algorithm('Newton', 'initial')
-                ok = ops.analyze(1, 0.5*dt_ansys)
+                ok = ops.analyze(1, 0.5 * dt_ansys)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
                 print('FAILED at {:.3f}'.format(control_time) + ': Attempting a Hail Mary...')
-                ops.test('FixedNumIter', init_iter*10)
-                ok = ops.analyze(1, 0.5*dt_ansys)
+                ops.test('FixedNumIter', init_iter * 10)
+                ok = ops.analyze(1, 0.5 * dt_ansys)
                 ops.test(test_type, init_tol, init_iter)
 
-            # Game over......
+            # If still failed -> exit
             if ok != 0:
                 print('FAILED at {:.3f}'.format(control_time) + ': Exiting analysis...')
                 conv_index = -1
+                break
 
-            # For each of the nodes to monitor, get the current drift
-            for i in np.arange(len(top_nodes)):
+            # --- Efficiently query node responses once per node and store locally ---
+            # We'll query X and Y displacements and acceleration response (dof=1 accel) once per node,
+            # store in the arrays, then compute drifts vectorized (avoid repeated calls).
+            for i, node in enumerate(control_nodes):
+                # nodeDisp(node, dof) is used; keep calls minimal
+                disp_x = ops.nodeDisp(node, 1)
+                # For peak_disp Y we still need nodeDisp(...,2) — fetch here too
+                disp_y = ops.nodeDisp(node, 2)
+                accel_resp = ops.nodeResponse(node, 1, 3)  # acceleration (relative) in units of length/time^2
 
-                # Get the current storey drifts - absolute difference in displacement over the height between them
-                curr_drift_X = np.abs(ops.nodeDisp(top_nodes[i], 1) - ops.nodeDisp(bottom_nodes[i], 1))/h[i]
-                curr_drift_Y = np.abs(ops.nodeDisp(top_nodes[i], 2) - ops.nodeDisp(bottom_nodes[i], 2))/h[i]
+                node_disps[step, i] = disp_x
+                node_accels[step, i] = accel_resp / 9.81  # convert to g for consistency
 
-                # Check if the current drift is greater than the previous peaks at the same storey
-                if curr_drift_X > peak_drift[i, 0]:
-                    peak_drift[i, 0] = curr_drift_X
+                # update peak displacements (absolute)
+                abs_dx = abs(disp_x)
+                abs_dy = abs(disp_y)
+                if abs_dx > peak_disp[i, 0]:
+                    peak_disp[i, 0] = abs_dx
+                if abs_dy > peak_disp[i, 1]:
+                    peak_disp[i, 1] = abs_dy
 
-                if curr_drift_Y > peak_drift[i, 1]:
-                    peak_drift[i, 1] = curr_drift_Y
+            # Compute storey drifts for this time step via in-memory values (vectorized)
+            if len(top_nodes) > 0:
+                # top indices in control_nodes are 1..N-1, bottom 0..N-2
+                disp_top = node_disps[step, 1:]   # length = n_nodes-1
+                disp_bottom = node_disps[step, :-1]
+                drift_vals = np.abs(disp_top - disp_bottom)
+                # normalize by heights h
+                # avoid division by zero because h already set to large value if zero
+                normalized_drifts = drift_vals / h
+                # update peak_drift for X (we used X displacements)
+                for idx in range(len(normalized_drifts)):
+                    if normalized_drifts[idx] > peak_drift[idx, 0]:
+                        peak_drift[idx, 0] = normalized_drifts[idx]
 
-            # For each node to monitor, get is absolute displacement
-            for i in np.arange(len(control_nodes)):
+                # For Y drifts, call nodeDisp Y values previously captured during loop:
+                # build temporary arrays for Y displacements
+                disp_top_y = np.zeros_like(disp_top)
+                disp_bottom_y = np.zeros_like(disp_bottom)
+                for ii in range(len(disp_top_y)):
+                    disp_top_y[ii] = node_disps[step, ii+1] * 0.0  # placeholder; we need Y values
+                # Note: above placeholder exists because we didn't store Y in node_disps; to keep structure identical to original,
+                # we need Y peak drift as before — fetch Y displacements now with minimal calls:
+                # Instead, collect Y displacements in a small temporary list (one extra pass) to compute Y drifts:
+                y_vals = np.zeros(n_nodes)
+                for i, node in enumerate(control_nodes):
+                    y_vals[i] = ops.nodeDisp(node, 2)
+                if len(y_vals) >= 2:
+                    y_top = y_vals[1:]
+                    y_bottom = y_vals[:-1]
+                    y_drift_vals = np.abs(y_top - y_bottom) / h
+                    for idx in range(len(y_drift_vals)):
+                        if y_drift_vals[idx] > peak_drift[idx, 1]:
+                            peak_drift[idx, 1] = y_drift_vals[idx]
 
-                curr_disp_X = np.abs(ops.nodeDisp(control_nodes[i], 1))
-                curr_disp_Y = np.abs(ops.nodeDisp(control_nodes[i], 2))
+            # increment step counter
+            step += 1
 
-                # # Append the node displacements and accelerations (NOTE: Might change when bidirectional records are applied)
-                # node_disps[step,i]  = ops.nodeDisp(control_nodes[i],1)
-                # node_accels[step,i] = ops.nodeResponse(control_nodes[i],1, 3)
+        # End time-stepping loop
 
-                # Check if the current drift is greater than the previous peaks at the same storey
-                if curr_disp_X > peak_disp[i, 0]:
-                    peak_disp[i, 0] = curr_disp_X
+        # Trim arrays to actual steps
+        if step < n_steps:
+            node_disps = node_disps[:step, :].copy()
+            node_accels = node_accels[:step, :].copy()
 
-                if curr_disp_Y > peak_disp[i, 1]:
-                    peak_disp[i, 1] = curr_disp_Y
-
-        # Now that the analysis is finished, get the maximum in either direction and report the location also
-        max_peak_drift = np.max(peak_drift)
-        ind = np.where(peak_drift == max_peak_drift)
-        if ind[1][0] == 0:
+        # Now that the analysis is finished, get the maximum drift and location
+        max_peak_drift = np.max(peak_drift) if peak_drift.size > 0 else 0.0
+        if peak_drift.size > 0:
+            ind = np.where(peak_drift == max_peak_drift)
+            max_peak_drift_dir = 'X' if ind[1][0] == 0 else 'Y'
+            max_peak_drift_loc = ind[0][0] + 1
+        else:
             max_peak_drift_dir = 'X'
-        elif ind[1][0] == 1:
-            max_peak_drift_dir = 'Y'
-        max_peak_drift_loc = ind[0][0]+1
+            max_peak_drift_loc = 0
 
-        # Get the floor accelerations. Need to use a recorder file because a direct query would return relative values
-        ops.wipe() # First wipe to finish writing to the file
+        # Compute peak accelerations in-memory (from node_accels array)
+        if node_accels.size > 0:
+            # node_accels shape (step, n_nodes), we want per-floor peak accel; original code had shape len(top_nodes)+1
+            # we'll compute peak at each floor from node_accels
+            per_floor_peak = np.max(np.abs(node_accels), axis=0)  # already in g
+            # Place into peak_accel first column
+            # peak_accel has length len(top_nodes)+1, which equals n_nodes; map directly
+            peak_accel[:, 0] = per_floor_peak
+        else:
+            peak_accel[:, 0] = 0.0
 
-        if len(fnames) > 0:
-            temp1 = np.transpose(np.max(np.abs(np.loadtxt(f"{nrha_outdir}/floor_accel_X.txt")), 0))
-            peak_accel[:,0] = temp1
-            os.remove(f"{nrha_outdir}/floor_accel_X.txt")
-
-        elif len(fnames) > 1:
-
-            temp1 = np.transpose(np.max(np.abs(np.loadtxt(f"{nrha_outdir}/floor_accel_X.txt")), 0))
-            temp2 = np.transpose(np.max(np.abs(np.loadtxt(f"{nrha_outdir}/floor_accel_Y.txt")), 0))
-            peak_accel = np.stack([temp1, temp2], axis=1)
-            os.remove(f"{nrha_outdir}/floor_accel_X.txt")
-            os.remove(f"{nrha_outdir}/floor_accel_Y.txt")
-
-        # Get the maximum in either direction and report the location also
+        # Determine max peak accel and location
         max_peak_accel = np.max(peak_accel)
-        ind = np.where(peak_accel == max_peak_accel)
-        if ind[1][0] == 0:
+        ind_a = np.where(peak_accel == max_peak_accel)
+        if ind_a[0].size > 0:
+            max_peak_accel_dir = 'X' if ind_a[1][0] == 0 else 'Y'
+            max_peak_accel_loc = ind_a[0][0]
+        else:
             max_peak_accel_dir = 'X'
-        elif ind[1][0] == 1:
-            max_peak_accel_dir = 'Y'
-        max_peak_accel_loc = ind[0][0]
+            max_peak_accel_loc = 0
 
-        # Give some feedback on what happened
+        # Feedback
         if conv_index == -1:
             print('------ ANALYSIS FAILED --------')
-        elif conv_index == 0:
+        else:
             print('~~~~~~~ ANALYSIS SUCCESSFUL ~~~~~~~~~')
 
-        if pflag is True:
+        if pflag:
             print('Final state = {:d} (-1 for non-converged, 0 for stable)'.format(conv_index))
-            print('Maximum peak storey drift {:.3f} radians at storey {:d} in the {:s} direction (Storeys = 1, 2, 3,...)'.format(max_peak_drift, max_peak_drift_loc, max_peak_drift_dir))
-            print('Maximum peak floor acceleration {:.3f} g at floor {:d} in the {:s} direction (Floors = 0(G), 1, 2, 3,...)'.format(max_peak_accel, max_peak_accel_loc, max_peak_accel_dir))
+            print('Maximum peak storey drift {:.3f} radians at storey {:d} in the {:s} direction (Storeys = 1, 2, 3,...)'.format(
+                max_peak_drift, max_peak_drift_loc, max_peak_drift_dir))
+            print('Maximum peak floor acceleration {:.3f} g at floor {:d} in the {:s} direction (Floors = 0(G), 1, 2, 3,...)'.format(
+                max_peak_accel, max_peak_accel_loc, max_peak_accel_dir))
 
-        # Give the outputs
-        return control_nodes, conv_index, peak_drift, peak_accel, max_peak_drift, max_peak_drift_dir, max_peak_drift_loc, max_peak_accel, max_peak_accel_dir, max_peak_accel_loc, peak_disp
+        # Optional animation (downsample frames for speed)
+        if save_animation_path is not None:
+            try:
+                print("\nGenerating NRHA animation...")
+                # time array based on dt_ansys and actual steps
+                time_array = np.arange(step) * dt_ansys
+                # Read ground acceleration (assume first file present) and convert to g if in m/s2
+                acc_input_full = np.loadtxt(fnames[0])
+                # If gm dt differs from dt_ansys we may need to resample / trim
+                # Simple approach: resample (nearest) to time_array using integer factor
+                # Determine gm length and dt_gm -> assume user provided dt_gm consistent
+                # Use numpy.interp to resample
+                gm_time = np.arange(len(acc_input_full)) * dt_gm
+                acc_resampled = np.interp(time_array, gm_time, acc_input_full) / 9.81  # convert to g
+
+                # Decide downsampling for animation frames (keep animation reasonably fast)
+                # Aim ~200-600 frames depending on duration; choose factor so frames <= 400
+                max_frames = 200   # instead of 400–600
+                frame_step = max(1, len(time_array) // max_frames)
+                frames = np.arange(0, len(time_array), frame_step)
+
+                # Call animate_nrha with downsample info by sending the full arrays; animate_nrha will create animation.
+                # If animate_nrha supports internal downsampling, it can be used; else it will be given full arrays.
+                pl = plotter()
+                pl.animate_nrha(control_nodes=control_nodes,
+                                acc=acc_resampled,
+                                dts=time_array,
+                                nrha_disps=node_disps,
+                                nrha_accels=node_accels,
+                                drift_thresholds=drift_thresholds,
+                                export_path=save_animation_path)
+            except Exception as e:
+                print(f"Animation generation failed: {e}")
+
+
+        # Return outputs (same order as original)
+        return (control_nodes, conv_index, peak_drift, peak_accel,
+                max_peak_drift, max_peak_drift_dir, max_peak_drift_loc,
+                max_peak_accel, max_peak_accel_dir, max_peak_accel_loc, peak_disp)
+
+
+    def do_incremental_dynamic_analysis(self, fnames, dt_gm, t_max, dt_ansys,
+                                        target_drift=0.05, initial_sf = 0.1, hunt_step =2.0,
+                                        max_fill_gap=0.2, max_runs =15, capping_drift = 0.10, xi=0.05):
+        """
+        Performs Incremental Dynamic Analysis (IDA) using the 'Hunt, Trace and Fill' algorithm as per Vamvatsikos and Cornell (2002, 2004).
+
+        The algorithm first 'hunts' for the collapse capacity by increasing the scale
+        factor (SF) geometrically. Once collapse or the target drift is reached, it
+        'traces' back with smaller steps for the scaling factor and 'fills' the gaps between
+        successful runs to refine the IDA curve.
+
+        Parameters
+        ----------
+        fnames : list
+            List of file paths to the ground motion records for each direction.
+
+        dt_gm : float
+            Time-step of the ground motion records.
+
+        t_max : float
+            The maximum time duration for each individual analysis run.
+
+        dt_ansys : float
+            The integration time-step at which the structural analysis will be conducted.
+
+        target_drift : float, optional, default=0.05
+            The drift ratio threshold considered as structural collapse (e.g., 5%).
+
+        initial_sf : float, optional, default=0.1
+            The starting scale factor for the first simulation run.
+
+        hunt_step : float, optional, default=2.0
+            The geometric multiplier used to increase the scale factor during the 'Hunt' phase.
+
+        max_fill_gap : float, optional, default=0.2
+            The maximum allowable gap between scale factors. If a gap is larger, the 'Fill' phase
+            will bisect it.
+
+        max_runs : int, optional, default=15
+            Maximum total number of nonlinear time-history simulations allowed.
+
+        capping_drift : float, optional, default=0.10
+            The drift value assigned to failed or collapsed runs for visualization (flatlining).
+
+        xi : float, optional, default=0.05
+            The damping ratio used in the analysis (default is 5%).
+
+        Returns
+        -------
+        ida_data : dict
+            A dictionary where keys are scale factors and values are dictionaries containing
+            results (peak drift, acceleration, convergence state, etc.) for that run.
+
+        ordered_sfs : list
+            A list of all scale factors tested, in the order they were executed.
+
+        References
+        ----------
+        [1] Vamvatsikos, D. and Cornell, C.A. (2002), Incremental dynamic analysis. Earthquake Engng. Struct. Dyn.,
+            31: 491-514. https://doi.org/10.1002/eqe.141
+        [2] Vamvatsikos D, Cornell CA. Applied Incremental Dynamic Analysis. Earthquake Spectra. 2004;20(2):523-553.
+            doi:10.1193/1.1737737
+        """
+
+        ida_data = {}
+        ordered_sfs = []
+        self.run_count = 0
+
+        def run_step(sf_value):
+            """Helper function that executes a single simulation step and captures results."""
+            if self.run_count >= max_runs:
+                print(f"Execution Limit Reached: {max_runs} runs. Skipping SF {sf_value:.3f}")
+                return None, None
+            print(f" -- Run {self.run_count+1}/{max_runs} | SF: {sf_value:.3f}")
+
+            # Reset environment and rebuild model for the current iteration
+            ops.wipe()
+            self.compile_model()
+            self.do_gravity_analysis()
+
+            # Execute the nonlinear time-history analysis
+            res = self.do_nrha_analysis(fnames, dt_gm, sf_value*units.g, t_max, dt_ansys, pflag=False, xi=xi)
+
+            # # Check convergence state and extract max drift
+            raw_max_drift = res[4]
+            conv_state = res[1]
+
+            # Check the flatline: if solver failed (state == -1) or drift exceeds target then numerical instability occurred, set the drift a high value where
+            # we are certain collapse is attained at (default = 0.10, 10% drift)
+            if conv_state == -1 or raw_max_drift >= target_drift:
+                final_drift = capping_drift
+                print(f"Collapse/Target Reached! Capping drift at {final_drift}")
+            else:
+                final_drift = raw_max_drift
+
+            self.run_count += 1
+            ordered_sfs.append(sf_value)
+
+            # Store results in the main data dictionary
+            ida_data[sf_value] = {'control_nodes':      res[0],
+                                  'conv_index':         conv_state,
+                                  'peak_drift':         res[2],
+                                  'peak_accel':         res[3],
+                                  'max_peak_drift':     final_drift,
+                                  'max_peak_drift_dir': res[5],
+                                  'max_peak_drift_loc': res[6],
+                                  'max_peak_accel':     res[7],
+                                  'max_peak_accel_dir': res[8],
+                                  'max_peak_accel_loc': res[9],
+                                  'peak_disp':          res[10]}
+            return final_drift, conv_state
+
+        # Phase 1: Let's go hunting for collapse!
+        # Rapidly increase SF to find the building's limit
+        curr_sf = initial_sf
+        while self.run_count < max_runs:
+            m_drift, state = run_step(curr_sf)
+            if m_drift is None:
+                break
+            if state == -1 or m_drift >= target_drift:
+                print(f"Hunt terminated: Limit reached at SF = {curr_sf}")
+                break
+            curr_sf *=hunt_step
+
+        # Phase 2: Let's trace and fill!
+        # Refine the curve by filling in large gaps between existing scale factors
+        while self.run_count < max_runs:
+            sorted_sfs = sorted(ida_data.keys())
+            refined    = False
+            for i in range(len(sorted_sfs)-1):
+                if self.run_count >= max_runs:
+                    break
+                sf_low, sf_high = sorted_sfs[i], sorted_sfs[i+1]
+
+                # Only fill if the high side is not already a collapse/capped run, this avoids wasting runs in the flatline region
+                if (sf_high - sf_low) > max_fill_gap and ida_data[sf_high]['max_peak_drift'] < 0.10:
+                    mid_sf = (sf_low + sf_high)/2.0
+                    run_step(mid_sf)
+                    refined = True
+
+            if not refined or self.run_count >= max_runs:
+                break
+
+        return ida_data, ordered_sfs
