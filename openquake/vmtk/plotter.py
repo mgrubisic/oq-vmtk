@@ -2,10 +2,15 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import openseespy.opensees as ops
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 import matplotlib.gridspec as gridspec
+from scipy.interpolate import interp1d
+import matplotlib.animation as animation
 from matplotlib.animation import FuncAnimation
+from scipy.interpolate import make_interp_spline
+from matplotlib.collections import LineCollection
 
 class plotter:
     """
@@ -599,114 +604,811 @@ class plotter:
             ax.legend(fontsize=self.font_sizes['legend'])
             self._save_plot(output_directory, f"{plot_label}_{current_key}")
 
-    def animate_model_run(self,
-                          control_nodes,
-                          acc,
-                          dts,
-                          nrha_disps,
-                          nrha_accels,
-                          drift_thresholds,
-                          output_directory=None,
-                          plot_label='animation'):
+    def plot_modes(self, node_list, mode_shape_vectors, T, export_path=None):
         """
-        Animate the seismic demands for a single nonlinear time-history analysis (NRHA) run.
+        Plots the undeformed structure (3D, left) and 2D mode shape profiles (right).
 
-        This function creates an animation that visualizes the time history of seismic responses, including:
-        1. Floor displacement over time for each control node.
-        2. Floor acceleration over time for each control node.
-        3. Acceleration time-history for the entire model.
-
-        The animation updates the seismic demand for each time step, displaying:
-        - A plot of floor displacements, where the color of the line changes based on the maximum drift threshold exceeded.
-        - A plot of floor accelerations.
-        - A plot of the acceleration time-history.
+        - 3D plot X and Y limits are set to encompass the structure coordinates and a minimum range of [-2, 2].
+        - 3D plot Z-limit is fixed to start at 0.0.
+        - Mode shape vectors are normalized by the X-displacement of the top node (max(Z)).
 
         Parameters:
-        ----------
-        control_nodes : list
-            A list of nodes (floors) in the model, representing the control points for displacement and acceleration.
-
-        acc : numpy.ndarray
-            A 1D array of acceleration values corresponding to the time-history of seismic excitation.
-
-        dts : numpy.ndarray
-            A 1D array of time steps (in seconds) for the NRHA analysis.
-
-        nrha_disps : numpy.ndarray
-            A 2D array of node displacements (in meters) for each time step and control node.
-
-        nrha_accels : numpy.ndarray
-            A 2D array of node accelerations (in g) for each time step and control node.
-
-        drift_thresholds : list
-            A list of drift thresholds that define the damage states for the nodes in the model (e.g., no damage, slight damage, etc.).
-
-        output_directory : str, optional
-            Directory where the animation will be saved. If None, the animation is displayed but not saved.
-
-        plot_label : str, optional
-            The label for the saved animation file. Default is 'animation'.
-
-        Returns:
-        --------
-        None
-            The function generates an animated plot showing seismic demands and optionally saves it as an MP4 file.
-
-        Notes:
-        -----
-        - Currently, obtaining `nrha_disps` (node displacements) and `nrha_accels` (node accelerations) is not straightforward, but this functionality will be available in the next release.
-
+            node_list (list): List of node tags.
+            mode_shape_vectors (list of numpy.ndarray): Mode shape vectors (one per mode).
+            T (list): List of natural periods corresponding to the modes.
+            export_path (str, optional): If provided, saves the figure to this path
+                                         (e.g., 'modes.png') instead of displaying it.
         """
-        fig = plt.figure(figsize=(8, 8))
-        gs = gridspec.GridSpec(2, 2, height_ratios=[1, 0.5])
 
-        # Create subplots
-        ax1 = fig.add_subplot(gs[0, 0])  # Floor displacement
-        ax2 = fig.add_subplot(gs[0, 1])  # Floor acceleration
-        ax3 = fig.add_subplot(gs[1, :])  # Acceleration time-history
+        num_modes = len(T)
 
-        # Initialize lines
-        line1, = ax1.plot([], [], color="blue", linewidth=self.line_widths['medium'], marker='o', markersize=self.marker_sizes['small'])
-        line2, = ax2.plot([], [], color="red", linewidth=self.line_widths['medium'], marker='o', markersize=self.marker_sizes['small'])
-        line3, = ax3.plot([], [], color="green", linewidth=self.line_widths['medium'])
+        # --- 1. Data Retrieval and Structuring ---
+        node_coords_list = [ops.nodeCoord(tag) for tag in node_list]
+        node_coords_undeformed = np.array(node_coords_list)
+        element_list = ops.getEleTags()
 
-        # Set up subplots
-        self._set_plot_style(ax1, title="Floor Displacement (in m)", ylabel='Floor No.')
-        self._set_plot_style(ax2, title="Floor Acceleration (in g)", ylabel='Floor No.')
-        self._set_plot_style(ax3, title="Acceleration Time-History", xlabel='Time (s)', ylabel='Acceleration (g)')
+        # Identify Base Nodes (first node) and Top Nodes (max Z coordinate)
+        base_node_tag = node_list[0] if node_list else -1
 
-        ax1.set_ylim(0.0, len(control_nodes))
-        ax2.set_ylim(0.0, len(control_nodes))
+        X, Y, Z = node_coords_undeformed.T
+        z_max = np.max(Z)
+        top_node_indices = np.where(Z == z_max)[0]
+
+        # Z-levels for 2D plots (must be unique and ordered for interpolation)
+        unique_z_levels = np.unique(Z)
+        z_min = np.min(unique_z_levels)
+        z_max = np.max(unique_z_levels)
+
+        # --- CALCULATE 3D AXES LIMITS (Enforcing X/Y range [-2, 2] and Z min 0.0) ---
+        x_min_data, x_max_data = np.min(X), np.max(X)
+        y_min_data, y_max_data = np.min(Y), np.max(Y)
+        z_min_data = np.min(Z)
+
+        epsilon = 1e-6 # Small buffer for axes with zero extent
+
+        # X Limits: Must span at least [-2, 2] and cover the data range plus a buffer
+        x_min_3d = min(x_min_data, -2.0)
+        x_max_3d = max(x_max_data, 2.0)
+        x_range = x_max_3d - x_min_3d
+        x_lim_3d = (x_min_3d - 0.05 * x_range, x_max_3d + 0.05 * x_range)
+        if np.isclose(x_range, 0.0): # Handle case where all X coords are the same
+            x_lim_3d = (x_min_3d - epsilon, x_max_3d + epsilon)
+
+        # Y Limits: Must span at least [-2, 2] and cover the data range plus a buffer
+        y_min_3d = min(y_min_data, -2.0)
+        y_max_3d = max(y_max_data, 2.0)
+        y_range = y_max_3d - y_min_3d
+        y_lim_3d = (y_min_3d - 0.05 * y_range, y_max_3d + 0.05 * y_range)
+        if np.isclose(y_range, 0.0): # Handle case where all Y coords are the same
+            y_lim_3d = (y_min_3d - epsilon, y_max_3d + epsilon)
+
+        # Z Limits: Force minimum to 0.0
+        z_lim_3d = (max(0.0, z_min_data), z_max * 1.1)
+
+        # --- 2. Create Figure and GridSpec Layout ---
+        fig = plt.figure(figsize=(18, 10), facecolor='white')
+        gs = gridspec.GridSpec(num_modes, 3, figure=fig, width_ratios=[2, 0.1, 1], wspace=0.1)
+
+        # --- TITLE ALIGNMENT: Set figure-wide title for 2D plots ---
+        title_x_pos = 0.835 # Position centered over the right column
+        fig.suptitle('2D Mode Shapes: Deformed Profile (X-Z View)',
+                     fontsize=16,
+                     weight='bold',
+                     color='black',
+                     y=0.95,
+                     x=title_x_pos)
+
+        # --- 3. Plot the 3D Axes (Left Side - UNDEFORMED ONLY) ---
+        ax3d = fig.add_subplot(gs[:, 0], projection='3d')
+        ax3d.set_facecolor('white')
+        fig.patch.set_facecolor('white')
+
+        # 3D Aesthetics
+        ax3d.set_xlabel('X-Direction [m]', fontsize=14, color='black', labelpad=10)
+        ax3d.set_ylabel('Y-Direction [m]', fontsize=14, color='black', labelpad=10)
+        ax3d.set_zlabel('Z-Direction [m]', fontsize=14, color='black', labelpad=10)
+        ax3d.grid(True, linestyle=':', alpha=0.6, color='gray')
+        ax3d.view_init(elev=20, azim=-60)
+
+        # Set the corrected limits
+        ax3d.set_xlim(x_lim_3d); ax3d.set_ylim(y_lim_3d); ax3d.set_zlim(z_lim_3d)
+        ax3d.set_title('3D Undeformed Structure', fontsize=16, weight='bold', color='black', pad=15)
+
+        # Plot Undeformed Nodes (Black markers)
+        for i, node_tag in enumerate(node_list):
+            x, y, z = node_coords_undeformed[i]
+            marker_style = 's' if node_tag == base_node_tag else 'o'
+            marker_size = 200 if node_tag == base_node_tag else 150
+            ax3d.scatter(x, y, z, marker=marker_style, s=marker_size, color='black', zorder=2)
+
+        # Plot Undeformed Elements (Solid Blue Line)
+        for ele_tag in element_list:
+            ele_nodes_tags = ops.eleNodes(ele_tag)
+            if len(ele_nodes_tags) == 2:
+                idx_i = node_list.index(ele_nodes_tags[0])
+                idx_j = node_list.index(ele_nodes_tags[1])
+
+                x_u = [node_coords_undeformed[idx_i, 0], node_coords_undeformed[idx_j, 0]]
+                y_u = [node_coords_undeformed[idx_i, 1], node_coords_undeformed[idx_j, 1]]
+                z_u = [node_coords_undeformed[idx_i, 2], node_coords_undeformed[idx_j, 2]]
+
+                ax3d.plot(x_u, y_u, z_u, color='blue', linewidth=1.5, linestyle='-', alpha=0.7, zorder=1)
+
+        # --- 4. Normalization and 2D Plot Setup ---
+        normalized_mode_vectors = []
+        for mode_vec in mode_shape_vectors:
+            top_node_disp_x = mode_vec[top_node_indices, 0]
+            max_top_disp = np.max(np.abs(top_node_disp_x))
+
+            if max_top_disp != 0:
+                normalized_vec = mode_vec / max_top_disp
+            else:
+                normalized_vec = mode_vec
+            normalized_mode_vectors.append(normalized_vec)
+
+        deformed_color = 'blue'
+        max_disp_for_plotting = 1.0
+        x_lim_2d = (-max_disp_for_plotting * 1.5, max_disp_for_plotting * 1.5)
+        z_lim_2d = (z_min - 0.5, z_max + 0.5)
+
+        # --- 5. Iterate through Modes for 2D Profile Plot (Right Side) ---
+
+        for mode_idx, mode_vector in enumerate(normalized_mode_vectors):
+            mode_num = mode_idx + 1
+            period = T[mode_idx]
+
+            ax2d = fig.add_subplot(gs[mode_idx, 2])
+
+            # Extract 2D Plot Data (X-displacement vs Z-height)
+            node_displacements_x = []
+            for z_level in unique_z_levels:
+                z_indices = np.where(Z == z_level)[0]
+                node_displacements_x.append(np.mean(mode_vector[z_indices, 0]))
+
+            # --- Interpolation Kind Selection ---
+            N_z = len(unique_z_levels)
+            if N_z < 3:
+                interpolation_kind = 'linear'
+            elif N_z == 3:
+                interpolation_kind = 'quadratic'
+            else:
+                interpolation_kind = 'cubic'
+
+            # 1. Undeformed Reference Line (Solid Gray Line)
+            ax2d.plot([0] * N_z, unique_z_levels, color='gray', linewidth=3.0, linestyle='-', alpha=0.7, zorder=1)
+
+            # 2. Plot Undeformed Nodes (Black Square/Circle at X=0)
+            for i, node_tag in enumerate(node_list):
+                z_u = node_coords_undeformed[i, 2]
+                if z_u not in unique_z_levels: continue
+
+                marker_style = 's' if node_tag == base_node_tag else 'o'
+                marker_size = 80 if node_tag == base_node_tag else 50
+
+                ax2d.scatter(0, z_u, marker=marker_style, s=marker_size, color='black', edgecolor='black', linewidth=0.5, zorder=2)
+
+            # 3. Smooth Deformed Profile (Fixed Blue Line)
+            f_interp = interp1d(unique_z_levels, node_displacements_x, kind=interpolation_kind)
+            Z_smooth = np.linspace(z_min, z_max, 100)
+            X_smooth = f_interp(Z_smooth)
+
+            ax2d.plot(X_smooth, Z_smooth, color=deformed_color, linewidth=3.0, linestyle='-', zorder=4)
+
+            # 4. Plot Deformed Nodes (Black Square/Circle at DISPLACED position)
+            for i, node_tag in enumerate(node_list):
+                z_u = node_coords_undeformed[i, 2]
+                if z_u not in unique_z_levels: continue
+
+                z_idx = np.where(unique_z_levels == z_u)[0][0]
+                x_disp_at_z = node_displacements_x[z_idx]
+
+                marker_style = 's' if node_tag == base_node_tag else 'o'
+                marker_size = 80 if node_tag == base_node_tag else 50
+
+                ax2d.scatter(x_disp_at_z, z_u, marker=marker_style, s=marker_size, color='black', edgecolor='black', linewidth=0.5, zorder=5)
+
+
+            # 2D Plot Aesthetics and Labels
+            title_text = f'Mode {mode_num}, $T_{{{mode_num}}} = {period:.3f}$ s'
+            ax2d.set_title(title_text, fontsize=12, color='black', pad=5)
+
+            ax2d.set_ylim(z_lim_2d)
+            ax2d.grid(True, linestyle=':', alpha=0.5)
+            ax2d.set_xlim(x_lim_2d)
+            ax2d.set_ylabel('Z-Height [m]', fontsize=10)
+
+            # X-Label placement
+            if mode_idx < num_modes - 1:
+                ax2d.tick_params(labelbottom=False)
+                ax2d.set_xlabel(' ', fontsize=10)
+            else:
+                ax2d.set_xlabel('X-Displacement (Normalized)', fontsize=10)
+
+            # Consistent Y-axis tick and label placement
+            if mode_idx > 0:
+                 ax2d.sharey(fig.axes[2])
+                 ax2d.tick_params(labelleft=False)
+
+        # Align labels again after tight_layout to finalize position
+        fig.align_labels()
+        plt.subplots_adjust(top=0.9)
+
+        # --- FIGURE EXPORT/SHOW LOGIC ---
+        if export_path:
+            print(f"Saving figure to {export_path}")
+            plt.savefig(export_path, bbox_inches='tight')
+            plt.show()
+        else:
+            plt.show()
+
+    def animate_spo(self, spo_top_disp, spo_rxn, spo_disps, spo_midr, nodeList, elementList, push_dir, save_path):
+        """Generates and saves the SPO animation using FuncAnimation."""
+        deform_factor = 1 # Scaling factor for visualization
+        # spo_midr is now passed in as an argument, so its length determines the number of frames.
+        num_frames = len(spo_top_disp)
+
+        # ------------------ Data Processing ------------------
+        # Get undeformed coordinates once
+        NodeCoordListX_und = [ops.nodeCoord(tag, 1) for tag in nodeList]
+        NodeCoordListY_und = [ops.nodeCoord(tag, 2) for tag in nodeList]
+        NodeCoordListZ_und = [ops.nodeCoord(tag, 3) for tag in nodeList]
+
+        # Determine the plotting coordinates based on push_dir for the 2D view
+        if push_dir == 1:
+            plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
+            x_label_model = 'X-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
+        elif push_dir == 2:
+            plot_coords_und = (NodeCoordListY_und, NodeCoordListZ_und)
+            x_label_model = 'Y-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
+        elif push_dir == 3:
+            plot_coords_und = (NodeCoordListZ_und, NodeCoordListX_und)
+            x_label_model = 'Z-Direction [m]'
+            y_label_model = 'X-Direction [m]'
+        else:
+            plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
+            x_label_model = 'X-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
+
+        # Max coordinate for consistent plot limits
+        max_abs_coord_x = np.max(np.abs(plot_coords_und[0]))
+        max_abs_coord_y = np.max(np.abs(plot_coords_und[1]))
+        model_x_lim = (-max_abs_coord_x * 3.0, max_abs_coord_x * 3.0)
+        model_y_lim = (0, max_abs_coord_y * 1.5)
+
+        # Max Interstorey Drift History (passed as spo_midr)
+        max_drift_history = np.maximum.accumulate(spo_midr)
+
+        # ------------------ Initialize the Figure and Subplots ------------------
+        fig = plt.figure(figsize=(16, 8))
+
+        # Layout: (1, 2, 1) is big left plot; (2, 2, 2) is top right; (2, 2, 4) is bottom right
+        ax_model = fig.add_subplot(1, 2, 1)
+        ax_curve = fig.add_subplot(2, 2, 2)
+        ax_drift = fig.add_subplot(2, 2, 4)
+
+        plt.subplots_adjust(wspace=0.4, hspace=0.4)
+
+        # Store the number of static (undeformed) artists for easy cleanup in update()
+        num_static_lines = len(elementList)
+        num_static_collections = 1 # For the single undeformed nodes scatter plot
+
+        # ------------------ Set up static plot elements ------------------
+        # 2D Model Plot (Undeformed - static gray background)
+        ax_model.scatter(plot_coords_und[0], plot_coords_und[1],
+                          marker='o', s=50, color='gray', alpha=0.5, label='Undeformed Nodes')
+        for eleTag in elementList:
+            [NodeItag, NodeJtag] = ops.eleNodes(eleTag)
+            i = nodeList.index(NodeItag)
+            j = nodeList.index(NodeJtag)
+            x_und = [plot_coords_und[0][i], plot_coords_und[0][j]]
+            y_und = [plot_coords_und[1][i], plot_coords_und[1][j]]
+            ax_model.plot(x_und, y_und, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+
+        ax_model.set_xlabel(x_label_model)
+        ax_model.set_ylabel(y_label_model)
+        ax_model.set_title('Deformed Model Shape')
+        ax_model.set_xlim(model_x_lim)
+        ax_model.set_ylim(model_y_lim)
+        ax_model.grid(True)
+
+        # Pushover Curve (Base Shear vs Top Disp)
+        ax_curve.set_xlabel('Top Displacement [m]')
+        ax_curve.set_ylabel('Base Shear [kN]')
+        ax_curve.set_title('Pushover Curve (Base Shear vs Top Disp)')
+        ax_curve.plot(spo_top_disp, spo_rxn, 'gray', linewidth=2, alpha=0.5, label='Static Curve')
+        curve_anim, = ax_curve.plot([], [], 'blue', linewidth=2, label='Current Step')
+        ax_curve.legend()
+        ax_curve.set_xlim(np.min(spo_top_disp)*1.1 if np.min(spo_top_disp) < 0 else 0, np.max(spo_top_disp)*1.1)
+        ax_curve.set_ylim(np.min(spo_rxn)*1.1, np.max(spo_rxn)*1.1)
+        ax_curve.grid(True)
+
+        # Max Drift vs Base Shear
+        ax_drift.set_xlabel('Max Interstorey Drift Ratio [%]')
+        ax_drift.set_ylabel('Base Shear [kN]')
+        ax_drift.set_title('Base Shear vs Max Interstorey Drift Ratio')
+        drift_anim, = ax_drift.plot([], [], 'green', linewidth=2, label='Current Max Drift')
+        ax_drift.legend()
+        # Use spo_midr limits
+        ax_drift.set_xlim(0, np.max(max_drift_history) * 1.2)
+        ax_drift.set_ylim(np.min(spo_rxn)*1.1, np.max(spo_rxn)*1.1)
+        ax_drift.grid(True)
+
+
+        # ------------------ The update function for FuncAnimation ------------------
+        def update(frame):
+            nonlocal num_static_lines, num_static_collections
+
+            # --- 2D Model Plot Cleanup ---
+            # Remove dynamically drawn lines (deformed elements) from the LAST frame
+            while len(ax_model.lines) > num_static_lines:
+                ax_model.lines[-1].remove()
+
+            # Remove dynamically drawn collections (deformed nodes) from the LAST frame
+            while len(ax_model.collections) > num_static_collections:
+                ax_model.collections[-1].remove()
+
+            # --- 2D Model Plot Redraw (Deformed Shape) ---
+
+            # Get displacement data for the current frame
+            current_disps_floor = spo_disps[frame]
+            # Include ground floor (index 0) displacement = 0
+            full_node_disps = np.insert(current_disps_floor, 0, 0, axis=0)
+
+            # Calculate deformed coordinates based on push_dir
+            if push_dir == 1: # X-Z plane
+                X_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+                Z_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
+                plot_coords_def = (X_def, Z_def)
+            elif push_dir == 2: # Y-Z plane
+                Y_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+                Z_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
+                plot_coords_def = (Y_def, Z_def)
+            elif push_dir == 3: # Z-X plane
+                Z_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+                X_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
+                plot_coords_def = (Z_def, X_def)
+            else:
+                 plot_coords_def = plot_coords_und
+
+            # Plot Deformed Shape (Blue)
+            ax_model.scatter(plot_coords_def[0], plot_coords_def[1],
+                              marker='o', s=50, color='blue', label='Deformed Nodes')
+            for eleTag in elementList:
+                [NodeItag, NodeJtag] = ops.eleNodes(eleTag)
+                i = nodeList.index(NodeItag)
+                j = nodeList.index(NodeJtag)
+                x_def = [plot_coords_def[0][i], plot_coords_def[0][j]]
+                y_def = [plot_coords_def[1][i], plot_coords_def[1][j]]
+                ax_model.plot(x_def, y_def, color='blue', linewidth=1.5)
+
+            ax_model.set_title(f'Frame: {frame}/{num_frames-1} (Scale: {deform_factor}x)')
+
+            # --- Pushover Curve Update ---
+            curve_anim.set_data(spo_top_disp[:frame+1], spo_rxn[:frame+1])
+
+            # --- Max Drift vs Base Shear Update (Using spo_midr) ---
+            drift_anim.set_data(spo_midr[:frame+1], spo_rxn[:frame+1])
+
+            # Return the artists that were modified
+            return curve_anim, drift_anim
+
+        # Create the animation object
+        ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=50, blit=False)
+
+        # Save the animation
+        print(f"\nSaving animation to: {save_path}")
+
+        if save_path.lower().endswith('.gif'):
+            ani.save(save_path, writer='pillow', dpi=150)
+        elif save_path.lower().endswith('.mp4'):
+            ani.save(save_path, writer='ffmpeg', dpi=200)
+        else:
+            print("WARNING: Animation path extension not recognized (.gif or .mp4 recommended). Saving as default.")
+            ani.save(save_path, dpi=150)
+
+        plt.close(fig)
+
+    # Helper function to create and save the animation for cyclic pushover analysis
+    def animate_cpo(self, cpo_dict, nodeList, elementList, push_dir, save_path):
+        """
+        Generates and saves the CPO animation using FuncAnimation, showing:
+        1. Deformed model shape.
+        2. Base shear vs. top displacement (hysteretic curve, spanning negative/positive).
+        3. Base shear vs. maximum interstorey drift (newly updated to show hysteresis).
+
+        Parameters
+        ----------
+        cpo_dict: dict
+            The analysis results dictionary returned by do_cpo_analysis.
+        nodeList: list
+            List of node tags in the model.
+        elementList: list
+            List of element tags in the model.
+        push_dir: int
+            Direction of the pushover analysis (1=X, 2=Y, 3=Z).
+        save_path: str
+            File path to save the animation (e.g., 'cpo_animation.gif' or 'cpo_animation.mp4').
+        """
+
+        # ------------------ Data Extraction and Processing ------------------
+        cpo_top_disp = cpo_dict['cpo_top_disp']
+        cpo_rxn = cpo_dict['cpo_rxn']
+        cpo_disps = cpo_dict['cpo_disps']
+        cpo_drifts = cpo_dict['cpo_idr']
+
+        deform_factor = 1.0 # Scaling factor for visualization
+        num_frames = len(cpo_top_disp)
+
+        # Calculate the maximum interstorey drift at each step:
+        # Find the drift (with sign) of the floor that experiences the maximum absolute drift at this step.
+        max_drift_indices = np.argmax(np.abs(cpo_drifts), axis=1)
+        governing_drift_history = cpo_drifts[np.arange(num_frames), max_drift_indices]
+
+        # Max absolute drift for setting limits
+        max_drift_limit = np.max(np.abs(governing_drift_history))
+
+        # Get undeformed coordinates once
+        NodeCoordListX_und = [ops.nodeCoord(tag, 1) for tag in nodeList]
+        NodeCoordListY_und = [ops.nodeCoord(tag, 2) for tag in nodeList]
+        NodeCoordListZ_und = [ops.nodeCoord(tag, 3) for tag in nodeList]
+
+        # Determine the plotting coordinates based on push_dir for the 2D view
+        if push_dir == 1:
+            plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
+            x_label_model = 'X-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
+        elif push_dir == 2:
+            plot_coords_und = (NodeCoordListY_und, NodeCoordListZ_und)
+            x_label_model = 'Y-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
+        elif push_dir == 3:
+            plot_coords_und = (NodeCoordListZ_und, NodeCoordListX_und)
+            x_label_model = 'Z-Direction [m]'
+            y_label_model = 'X-Direction [m]'
+        else:
+            plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
+            x_label_model = 'X-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
+
+        # Max coordinate for consistent plot limits
+        max_abs_coord_x = np.max(np.abs(plot_coords_und[0]))
+        max_abs_coord_y = np.max(np.abs(plot_coords_und[1]))
+        model_x_lim = (-max_abs_coord_x * 3.0, max_abs_coord_x * 3.0)
+        model_y_lim = (0, max_abs_coord_y * 1.5)
+
+        # ------------------ Initialize the Figure and Subplots ------------------
+        fig = plt.figure(figsize=(16, 8))
+
+        # Layout: (1, 2, 1) is big left plot; (2, 2, 2) is top right; (2, 2, 4) is bottom right
+        ax_model = fig.add_subplot(1, 2, 1)
+        ax_curve = fig.add_subplot(2, 2, 2)
+        ax_drift = fig.add_subplot(2, 2, 4)
+
+        plt.subplots_adjust(wspace=0.4, hspace=0.4)
+
+        # Store the number of static (undeformed) artists for easy cleanup in update()
+        num_static_lines = len(elementList)
+        num_static_collections = 1 # For the single undeformed nodes scatter plot
+
+        # ------------------ Set up static plot elements (Undeformed Shape) ------------------
+        ax_model.scatter(plot_coords_und[0], plot_coords_und[1],
+                         marker='o', s=50, color='gray', alpha=0.5, label='Undeformed Nodes')
+        for eleTag in elementList:
+            try:
+                [NodeItag, NodeJtag] = ops.eleNodes(eleTag)
+                i = nodeList.index(NodeItag)
+                j = nodeList.index(NodeJtag)
+            except:
+                continue
+
+            x_und = [plot_coords_und[0][i], plot_coords_und[0][j]]
+            y_und = [plot_coords_und[1][i], plot_coords_und[1][j]]
+            ax_model.plot(x_und, y_und, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+
+        ax_model.set_xlabel(x_label_model)
+        ax_model.set_ylabel(y_label_model)
+        ax_model.set_title('Deformed Model Shape (Cyclic Pushover)')
+        ax_model.set_xlim(model_x_lim)
+        ax_model.set_ylim(model_y_lim)
+        ax_model.grid(True)
+
+        # Hysteretic Curve (Base Shear vs Top Disp)
+        ax_curve.set_xlabel('Top Displacement [m]')
+        ax_curve.set_ylabel('Base Shear [kN]')
+        ax_curve.set_title('Hysteretic Curve (Base Shear vs Top Disp)')
+        ax_curve.plot(cpo_top_disp, cpo_rxn, 'gray', linewidth=1, alpha=0.5, label='History')
+        curve_anim, = ax_curve.plot([], [], 'blue', linewidth=2, label='Current Step')
+        ax_curve.legend(loc='lower right')
+
+        # Set limits for cyclic analysis (must cover negative space)
+        max_x_curve = np.max(np.abs(cpo_top_disp)) * 1.1
+        max_y_curve = np.max(np.abs(cpo_rxn)) * 1.1
+        ax_curve.set_xlim(-max_x_curve, max_x_curve)
+        ax_curve.set_ylim(-max_y_curve, max_y_curve)
+        ax_curve.grid(True)
+
+        # Governing Drift Hysteresis (Base Shear vs MIDR) - UPDATED
+        ax_drift.set_xlabel('Maximum Interstorey Drift [-]')
+        ax_drift.set_ylabel('Base Shear [kN]')
+        ax_drift.set_title('Hysteretic Curve (Base Shear vs MIDR)')
+        # Plot full history in gray
+        ax_drift.plot(governing_drift_history, cpo_rxn, 'gray', linewidth=1, alpha=0.5, label='History')
+        # Plot current step in green
+        drift_anim, = ax_drift.plot([], [], 'green', linewidth=2, label='Current Step')
+        ax_drift.legend(loc='lower right')
+
+        # Set limits for cyclic analysis (must cover negative space for drift) - UPDATED
+        ax_drift.set_xlim(-max_drift_limit * 1.1, max_drift_limit * 1.1)
+        ax_drift.set_ylim(-max_y_curve, max_y_curve)
+        ax_drift.grid(True)
+
+
+        # ------------------ The update function for FuncAnimation ------------------
+        def update(frame):
+            nonlocal num_static_lines, num_static_collections
+
+            # --- 2D Model Plot Cleanup ---
+            while len(ax_model.lines) > num_static_lines:
+                ax_model.lines[-1].remove()
+
+            while len(ax_model.collections) > num_static_collections:
+                ax_model.collections[-1].remove()
+
+            # --- 2D Model Plot Redraw (Deformed Shape) ---
+            current_disps_floor = cpo_disps[frame]
+            # Include ground floor (index 0) displacement = 0
+            full_node_disps = np.insert(current_disps_floor, 0, 0, axis=0)
+
+            # Calculate deformed coordinates based on push_dir
+            if push_dir == 1: # X-Z plane
+                X_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+                Z_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
+                plot_coords_def = (X_def, Z_def)
+            elif push_dir == 2: # Y-Z plane
+                Y_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+                Z_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
+                plot_coords_def = (Y_def, Z_def)
+            elif push_dir == 3: # Z-X plane
+                Z_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+                X_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
+                plot_coords_def = (Z_def, X_def)
+            else:
+                plot_coords_def = plot_coords_und
+
+            # Plot Deformed Shape (Blue)
+            ax_model.scatter(plot_coords_def[0], plot_coords_def[1],
+                             marker='o', s=50, color='blue', label='Deformed Nodes')
+            for eleTag in elementList:
+                try:
+                    [NodeItag, NodeJtag] = ops.eleNodes(eleTag)
+                    i = nodeList.index(NodeItag)
+                    j = nodeList.index(NodeJtag)
+                except:
+                    continue
+
+                x_def = [plot_coords_def[0][i], plot_coords_def[0][j]]
+                y_def = [plot_coords_def[1][i], plot_coords_def[1][j]]
+                ax_model.plot(x_def, y_def, color='blue', linewidth=1.5)
+
+            ax_model.set_title(f'Frame: {frame}/{num_frames-1} (Scale: {deform_factor}x)')
+
+            # --- Hysteretic Curve Update (Top Disp) ---
+            curve_anim.set_data(cpo_top_disp[:frame+1], cpo_rxn[:frame+1])
+
+            # --- Governing Drift Hysteresis Update ---
+            drift_anim.set_data(governing_drift_history[:frame+1], cpo_rxn[:frame+1])
+
+            # Return the artists that were modified
+            return curve_anim, drift_anim
+
+        # Create the animation object
+        ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=50, blit=False)
+
+        # Save the animation
+        print(f"\nSaving animation to: {save_path}")
+
+        if save_path.lower().endswith('.gif'):
+            ani.save(save_path, writer='pillow', dpi=300)
+        elif save_path.lower().endswith('.mp4'):
+            ani.save(save_path, writer='ffmpeg', dpi=300)
+        else:
+            print("WARNING: Animation path extension not recognized (.gif or .mp4 recommended). Saving as default.")
+            ani.save(save_path, dpi=300)
+
+        plt.close(fig)
+
+    def animate_nrha(self,
+                     control_nodes,
+                     acc,
+                     dts,
+                     nrha_disps,
+                     nrha_accels,
+                     drift_thresholds=None,
+                     export_path=None):
+        """
+        Animate the seismic response for a nonlinear time-history analysis (NRHA).
+        Automatically infers storey heights and applies cumulative color and annotation updates.
+        """
+
+        # --- Compute storey heights from Z coordinates ---
+        node_z_coords = np.array([ops.nodeCoord(n, 3) for n in control_nodes])
+        sorted_idx = np.argsort(node_z_coords)
+        control_nodes = np.array(control_nodes)[sorted_idx]
+        node_z_coords = node_z_coords[sorted_idx]
+        storey_heights = np.diff(node_z_coords)
+
+        if np.any(storey_heights <= 1e-6):
+            print("⚠️ Warning: Zero or near-zero storey height detected")
+
+        # --- Initialize Figure and Axes ---
+        fig = plt.figure(figsize=(10, 8))
+        gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 0.6])
+
+        ax1 = fig.add_subplot(gs[0])  # Displacement
+        ax2 = fig.add_subplot(gs[1])  # Acceleration
+        ax3 = fig.add_subplot(gs[2])  # Ground motion
+
+        # --- Plot undeformed shape (gray background) ---
+        ax1.plot(np.zeros_like(control_nodes), node_z_coords, color='gray', lw=1.0, alpha=0.6)
+        ax2.plot(np.zeros_like(control_nodes), node_z_coords, color='gray', lw=1.0, alpha=0.6)
+
+        # --- Plot ground motion background ---
+        ax3.plot(dts, acc, color='lightgray', lw=1.0, alpha=0.6)
+
+        # --- Initialize Lines ---
+        line_disp, = ax1.plot([], [], 'o-', color="blue", lw=2.0, markersize=6)
+        line_acc, = ax2.plot([], [], 'o-', color="red", lw=2.0, markersize=6)
+        line_acc_time, = ax3.plot([], [], color="green", lw=1.8)
+
+        # --- Grid and formatting ---
+        for ax in (ax1, ax2, ax3):
+            ax.grid(True, ls='--', alpha=0.4)
+
+        ax1.set_title("Floor Displacements (m)")
+        ax1.set_xlabel("Displacement (m)")
+        ax1.set_ylabel("Elevation (m)")
+        ax1.set_ylim(node_z_coords[0] - 0.1 * storey_heights.mean(),
+                     node_z_coords[-1] + 0.1 * storey_heights.mean())
+
+        ax2.set_title("Floor Accelerations (g)")
+        ax2.set_xlabel("Acceleration (g)")
+        ax2.set_ylabel("Elevation (m)")
+        ax2.set_ylim(node_z_coords[0] - 0.1 * storey_heights.mean(),
+                     node_z_coords[-1] + 0.1 * storey_heights.mean())
+        ax2.set_xlim(-5.0, 5.0)
+
+        ax3.set_title("Input Ground Motion")
+        ax3.set_xlabel("Time (s)")
+        ax3.set_ylabel("Acceleration (g)")
         ax3.set_xlim(0, dts[-1])
         ax3.set_ylim(np.floor(acc.min()), np.ceil(acc.max()))
 
-        # Add damage state legend
-        legend_elements = [Line2D([0], [0], color=c, lw=3, label=state) for c, state in zip(self.colors['damage_states'], ['No Damage', 'Slight Damage', 'Moderate Damage', 'Extensive Damage', 'Complete Damage'])]
-        ax1.legend(handles=legend_elements, loc="upper right", fontsize=self.font_sizes['legend'])
+        # --- Damage state colors ---
+        damage_state_colors = ['#1E88E5', '#43A047', '#FDD835', '#FB8C00', '#E53935']
 
-        # Animation update function
+        # --- Trackers for cumulative state ---
+        max_damage_state = 0
+        max_drift_val = 0.0
+        max_accel_val = 0.0
+
+        # --- Persistent Annotations ---
+        drift_annot = ax1.text(0.02, 0.9, "", transform=ax1.transAxes,
+                               fontsize=9, color="black", bbox=dict(facecolor='white', alpha=0.5))
+        accel_annot = ax2.text(0.02, 0.9, "", transform=ax2.transAxes,
+                               fontsize=9, color="black", bbox=dict(facecolor='white', alpha=0.5))
+
+        # --- Update function ---
         def update(frame):
+            nonlocal max_damage_state, max_drift_val, max_accel_val
+
             disp_values = nrha_disps[frame, :]
-            accel_values = nrha_accels[frame, :]
-            drift_values = np.abs(np.diff(disp_values))
+            accel_values = nrha_accels[frame, :] / 9.81  # convert to g
 
-            # Update line data
-            line1.set_data(disp_values, range(len(control_nodes)))
-            line2.set_data(accel_values, range(len(control_nodes)))
-            line3.set_data(dts[:frame], acc[:frame])
+            line_disp.set_data(disp_values, node_z_coords)
+            line_acc.set_data(accel_values, node_z_coords)
+            line_acc_time.set_data(dts[:frame], acc[:frame])
 
-            # Update line color based on maximum drift threshold exceeded
-            max_drift_threshold_index = np.max(np.where(np.max(drift_values) > drift_thresholds)[0]) if np.any(drift_values > drift_thresholds) else 0
-            line1.set_color(self.colors['damage_states'][max_drift_threshold_index])
+            # --- Interstory drift ---
+            interstory_drifts = np.abs(np.diff(disp_values)) / storey_heights
+            current_drift = np.max(interstory_drifts)
+            current_accel = np.max(np.abs(accel_values))
 
-            return line1, line2, line3
+            # --- Update cumulative maxima ---
+            max_drift_val = max(max_drift_val, current_drift)
+            max_accel_val = max(max_accel_val, current_accel)
 
-        # Create animation
-        ani = FuncAnimation(fig, update, frames=len(dts), interval=1, blit=True, repeat=False)
+            # --- Update annotations continuously ---
+            drift_annot.set_text(f"Max drift: {max_drift_val:.4f}")
+            accel_annot.set_text(f"Max accel: {max_accel_val:.3f} g")
 
-        # Save animation if output_directory is provided
-        if output_directory:
-            ani.save(f'{output_directory}/{plot_label}.mp4', writer='ffmpeg', fps=30, dpi=self.resolution)
+            # --- Cumulative damage state logic ---
+            if drift_thresholds is not None and len(drift_thresholds) > 0:
+                # Determine the current frame's damage state for all floors
+                frame_states = np.sum(interstory_drifts[:, None] > np.array(drift_thresholds), axis=1)
+                # Take the highest among all floors
+                frame_max_state = frame_states.max() if len(frame_states) > 0 else 0
+                # Update cumulative maximum damage state
+                if frame_max_state > max_damage_state:
+                    max_damage_state = frame_max_state
+                color = damage_state_colors[min(max_damage_state, len(damage_state_colors)-1)]
+            else:
+                color = "blue"
 
+            # Always apply the cumulative damage color
+            line_disp.set_color(color)
+            line_acc.set_color(color)
+            line_acc_time.set_color(color)
+
+            return line_disp, line_acc, line_acc_time, drift_annot, accel_annot
+
+        # --- Create animation ---
+        ani = FuncAnimation(fig, update, frames=len(dts), interval=10, blit=False, repeat=False)
         plt.tight_layout()
-        plt.show()
+
+        # --- Save or show ---
+        if export_path:
+            print(f"\nSaving animation to: {export_path}")
+            try:
+                if export_path.lower().endswith('.gif'):
+                    ani.save(export_path, writer='pillow', dpi=120)
+                elif export_path.lower().endswith('.mp4'):
+                    try:
+                        ani.save(export_path, writer='ffmpeg', dpi=120)
+                    except Exception:
+                        print("⚠️ FFmpeg not found — falling back to Pillow GIF encoding.")
+                        ani.save(export_path.replace('.mp4', '.gif'), writer='pillow', dpi=120)
+                else:
+                    print("WARNING: Unknown extension (.gif or .mp4 recommended). Saving as GIF.")
+                    ani.save(export_path + ".gif", writer='pillow', dpi=120)
+                plt.close(fig)
+            except Exception as e:
+                print(f"⚠️ Animation save failed: {e}")
+                plt.show()
+        else:
+            plt.show()
+
+        return ani
+
+
+    def plot_ida_suite_ims(self, ansys_dict, expanded_imls, imt_key, title=None):
+            """
+            Plots IDA curves using specific Intensity Measures with linear segments.
+            All individual records are plotted in gray with markers.
+
+            Parameters:
+            - ansys_dict: Dictionary containing 'max_peak_drift_list' and 'sf_matrix'.
+            - expanded_imls: Dictionary of (n_gmrs x n_runs) matrices for each IMT.
+            - imt_key: The string key for the IM to plot on the Y-axis (e.g., 'SA(1.0s)').
+            """
+            plt.figure(figsize=(10, 7))
+
+            drifts_data = ansys_dict['max_peak_drift_list']
+            sf_matrix = ansys_dict['sf_matrix']
+            im_matrix = expanded_imls[imt_key]
+
+            n_records = len(drifts_data)
+
+            for i in range(n_records):
+                # 1. Extract valid (Drift, IM) pairs for this record
+                record_drifts = []
+                record_ims = []
+
+                for j, sf in enumerate(sf_matrix[i, :]):
+                    if np.isnan(sf): continue
+
+                    if sf in drifts_data[i]:
+                        record_drifts.append(drifts_data[i][sf])
+                        record_ims.append(im_matrix[i, j])
+
+                # Convert to arrays
+                x = np.array(record_drifts)
+                y = np.array(record_ims)
+
+                # Skip if no data
+                if len(x) == 0: continue
+
+                # 2. Sort by Intensity Measure (Y-axis) so lines connect in order of scaling
+                idx = np.argsort(y)
+                x_plot = x[idx]
+                y_plot = y[idx]
+
+                # 3. Plot individual curves in gray with markers
+                # Using alpha to handle overlaps if many records exist
+                plt.plot(x_plot, y_plot, '-o', color='gray', alpha=0.4,
+                         lw=1.0, markersize=3, label='Individual Record' if i == 0 else "")
+
+            # Formatting
+            plt.xlabel('Maximum Storey Drift [rad]', fontsize=12)
+            plt.ylabel(f'Intensity Measure: {imt_key}', fontsize=12)
+            plt.ylim([0, 5])
+            plt.title(title if title else f'IDA Curves: {imt_key} vs Maximum Drift', fontsize=14, fontweight='bold')
+            plt.grid(True, which='both', linestyle='--', alpha=0.4)
+
+            # Legend only if specifically needed, showing only one entry for gray lines
+            if n_records < 15:
+                plt.legend(loc='upper left', fontsize='small')
+
+            plt.tight_layout()
+            plt.show()
