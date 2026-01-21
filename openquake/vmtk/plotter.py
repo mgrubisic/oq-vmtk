@@ -1,16 +1,12 @@
+import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import openseespy.opensees as ops
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 import matplotlib.gridspec as gridspec
-from scipy.interpolate import interp1d
-import matplotlib.animation as animation
 from matplotlib.animation import FuncAnimation
-from scipy.interpolate import make_interp_spline
-from matplotlib.collections import LineCollection
 
 class plotter:
     """
@@ -76,7 +72,7 @@ class plotter:
             'title': 16,
             'labels': 14,
             'ticks': 12,
-            'legend': 14
+            'legend': 10
         }
         self.line_widths = {
             'thick': 3,
@@ -245,6 +241,7 @@ class plotter:
 
         self._save_plot(output_directory, plot_label)
 
+
     def plot_demand_profiles(self,
                              peak_drift_list,
                              peak_accel_list,
@@ -407,134 +404,6 @@ class plotter:
         plt.tight_layout()
         self._save_plot(output_directory, plot_label)
 
-    def plot_vulnerability_analysis(self,
-                                    intensities,
-                                    loss,
-                                    cov,
-                                    xlabel,
-                                    ylabel,
-                                    output_directory=None,
-                                    plot_label='vulnerability_plot'):
-        """
-        Generate a plot to visualize the vulnerability analysis results, including
-        Beta distributions and a loss curve.
-
-        This function simulates Beta distributions for each intensity measure using the
-        mean loss and coefficient of variation (CoV) provided, then visualizes these
-        distributions as violin plots with an overlaid strip plot. It also plots the
-        loss curve on a secondary y-axis, showing the relationship between intensity
-        and the loss ratio.
-
-        The plot includes:
-        1. A violin plot representing the Beta distributions for each intensity measure.
-        2. A strip plot for better visualization of individual data points within the distributions.
-        3. A loss curve plotted on a secondary y-axis to show the loss ratio as a function of intensity.
-
-        Parameters:
-        ----------
-        intensities : list of float
-            A list of intensity measures (e.g., Peak Ground Acceleration, PGA) for which
-            the vulnerability analysis is performed.
-
-        loss : list of float
-            A list of mean loss ratios corresponding to each intensity measure.
-
-        cov : list of float
-            A list of coefficients of variation (CoV) corresponding to each intensity measure
-            that will be used to simulate the Beta distributions.
-
-        xlabel : str
-            The label for the x-axis, typically representing the intensity measure (e.g., 'PGA').
-
-        ylabel : str
-            The label for the y-axis representing the loss curve, typically describing the loss ratio.
-
-        output_directory : str, optional
-            Directory where the plot will be saved. If None, the plot is saved in the current working directory.
-
-        plot_label : str, optional
-            The label for the saved plot file (without file extension). Default is 'vulnerability_plot'.
-
-        Returns:
-        --------
-        None
-            This function saves the plot to a file in the specified output directory.
-
-        """
-        # Simulating Beta distributions for each intensity measure
-        simulated_data = []
-        intensity_labels = []
-        for j, mean_loss in enumerate(loss):
-
-            # Calculate variance using CoV
-            variance = (cov[j] * mean_loss) ** 2
-            alpha = mean_loss * (mean_loss * (1 - mean_loss) / variance - 1)
-            beta_param = (1 - mean_loss) * (mean_loss * (1 - mean_loss) / variance - 1)
-
-            # Generate samples from the Beta distribution
-            data = np.random.beta(alpha, beta_param, 10000)
-            simulated_data.append(data)
-            intensity_labels.extend([intensities[j]] * len(data))  # Repeat intensity measures for each sample
-
-        # Convert to DataFrame for seaborn visualization
-        df_sns = pd.DataFrame({
-            'Intensity Measure': intensity_labels,
-            'Simulated Data': np.concatenate(simulated_data)
-        })
-
-        # Create a figure and a set of axes for the violin plot
-        fig, ax1 = plt.subplots(figsize=(14, 8))
-
-        # --- Violin plot for Beta distributions ---
-        violin=sns.violinplot(
-                x='Intensity Measure', y='Simulated Data', data=df_sns,
-                scale='width', bw=0.2, inner=None, ax=ax1, zorder=1
-                )
-
-        # Overlay a strip plot for better visualization of individual samples
-        sns.stripplot(
-            x='Intensity Measure', y='Simulated Data', data=df_sns,
-            color='k', size=1, alpha=0.5, ax=ax1, zorder=3
-        )
-
-        # Customize the first y-axis (for the violin plot)
-        ax1.set_ylabel("Simulated Loss Ratio", color='blue')
-        ax1.set_xlabel(f"{xlabel}")
-        ax1.tick_params(axis='y', labelcolor='blue')
-        ax1.grid(True, which='both', linestyle='--', linewidth=0.5)
-        ax1.set_ylim(-0.1, 1.2)  # Adjust y-axis range for the violin plot
-
-        # Add the legend for the violin plots (Beta distribution)
-        # Create a dummy plot handle for the legend, since the violins are not directly plotted as lines
-        beta_patch = mpatches.Patch(color=violin.collections[0].get_facecolor()[0], label="Beta Distribution")
-        ax1.legend(handles=[beta_patch], loc='upper left', bbox_to_anchor=(0, 1), ncol=1)
-
-        # --- Add a second set of x and y axes for the Loss Curve ---
-        ax2 = ax1.twinx()  # Create a shared y-axis for the loss curve
-
-        # Plot the loss curve on ax2 (now in blue)
-        ax2.plot(
-            range(len(intensities)), loss, marker='o', linestyle='-', color='blue',
-            label="Loss Curve", zorder=2
-        )
-
-        # Customize the second y-axis (for the loss curve)
-        ax2.set_ylabel(f"{ylabel}", color='blue', rotation = 270, labelpad=20)
-        ax2.tick_params(axis='y', labelcolor='blue')
-        ax2.set_ylim(-0.1, 1.2)  # Adjust y-axis range for the loss curve if needed
-
-        # Customize both x-axes to match
-        ax1.set_xticks(range(len(intensities)))
-        ax1.set_xticklabels([f"{x:.3f}" for x in intensities], rotation=45, ha='right')
-
-        # Add a legend for the loss curve
-        ax2.legend(loc='upper left', bbox_to_anchor=(0, 0.95), ncol=1)
-
-        # Tight layout and show the combined plot
-        plt.tight_layout()
-
-        self._save_plot(output_directory, plot_label)
-
 
     def plot_slf_model(self,
                        out,
@@ -606,23 +475,28 @@ class plotter:
 
     def plot_modes(self, node_list, mode_shape_vectors, T, export_path=None):
         """
-        Plots the undeformed structure (3D, left) and 2D mode shape profiles (right).
+        Plots the undeformed structure (3D, left) and 2D mode shape profiles (right)
 
-        - 3D plot X and Y limits are set to encompass the structure coordinates and a minimum range of [-2, 2].
-        - 3D plot Z-limit is fixed to start at 0.0.
-        - Mode shape vectors are normalized by the X-displacement of the top node (max(Z)).
+        - 3D plot X and Y limits are set to encompass the structure coordinates and a minimum range of [-2,2]
+        - 3D plot Z-limit is fixed to start at 0.0
+        - Mode shape vectors are normalized by the X-displacement of the top node (max(Z))
 
-        Parameters:
-            node_list (list): List of node tags.
-            mode_shape_vectors (list of numpy.ndarray): Mode shape vectors (one per mode).
-            T (list): List of natural periods corresponding to the modes.
-            export_path (str, optional): If provided, saves the figure to this path
-                                         (e.g., 'modes.png') instead of displaying it.
+        Parameters
+        ----------
+        node_list : list
+            List of node tags
+        mode_shape_vectors : list of numpy.ndarray
+            Mode shape vectors (one per mode)
+        T : list
+            List of natural periods corresponding to the modes
+        export_path : str, optional
+            If provided, saves the figure to this path (e.g., 'modes.png') instead of displaying it
         """
 
+        # Extract number of modes from length of periods list
         num_modes = len(T)
 
-        # --- 1. Data Retrieval and Structuring ---
+        # Data retrieval and structuring
         node_coords_list = [ops.nodeCoord(tag) for tag in node_list]
         node_coords_undeformed = np.array(node_coords_list)
         element_list = ops.getEleTags()
@@ -665,11 +539,11 @@ class plotter:
         # Z Limits: Force minimum to 0.0
         z_lim_3d = (max(0.0, z_min_data), z_max * 1.1)
 
-        # --- 2. Create Figure and GridSpec Layout ---
+        # Create Figure and GridSpec Layout
         fig = plt.figure(figsize=(18, 10), facecolor='white')
         gs = gridspec.GridSpec(num_modes, 3, figure=fig, width_ratios=[2, 0.1, 1], wspace=0.1)
 
-        # --- TITLE ALIGNMENT: Set figure-wide title for 2D plots ---
+        # Set figure-wide title for 2D plots
         title_x_pos = 0.835 # Position centered over the right column
         fig.suptitle('2D Mode Shapes: Deformed Profile (X-Z View)',
                      fontsize=16,
@@ -678,7 +552,7 @@ class plotter:
                      y=0.95,
                      x=title_x_pos)
 
-        # --- 3. Plot the 3D Axes (Left Side - UNDEFORMED ONLY) ---
+        # Plot the 3D Axes
         ax3d = fig.add_subplot(gs[:, 0], projection='3d')
         ax3d.set_facecolor('white')
         fig.patch.set_facecolor('white')
@@ -714,7 +588,7 @@ class plotter:
 
                 ax3d.plot(x_u, y_u, z_u, color='blue', linewidth=1.5, linestyle='-', alpha=0.7, zorder=1)
 
-        # --- 4. Normalization and 2D Plot Setup ---
+        # Normalization and 2D plot setup
         normalized_mode_vectors = []
         for mode_vec in mode_shape_vectors:
             top_node_disp_x = mode_vec[top_node_indices, 0]
@@ -731,7 +605,7 @@ class plotter:
         x_lim_2d = (-max_disp_for_plotting * 1.5, max_disp_for_plotting * 1.5)
         z_lim_2d = (z_min - 0.5, z_max + 0.5)
 
-        # --- 5. Iterate through Modes for 2D Profile Plot (Right Side) ---
+        # Iterate through modes for 2D profile plot
 
         for mode_idx, mode_vector in enumerate(normalized_mode_vectors):
             mode_num = mode_idx + 1
@@ -745,7 +619,7 @@ class plotter:
                 z_indices = np.where(Z == z_level)[0]
                 node_displacements_x.append(np.mean(mode_vector[z_indices, 0]))
 
-            # --- Interpolation Kind Selection ---
+            # Interpolation for deformed mode shape function
             N_z = len(unique_z_levels)
             if N_z < 3:
                 interpolation_kind = 'linear'
@@ -774,7 +648,7 @@ class plotter:
 
             ax2d.plot(X_smooth, Z_smooth, color=deformed_color, linewidth=3.0, linestyle='-', zorder=4)
 
-            # 4. Plot Deformed Nodes (Black Square/Circle at DISPLACED position)
+            # Plot Deformed Nodes (Black square/circle at displaced position)
             for i, node_tag in enumerate(node_list):
                 z_u = node_coords_undeformed[i, 2]
                 if z_u not in unique_z_levels: continue
@@ -813,13 +687,14 @@ class plotter:
         fig.align_labels()
         plt.subplots_adjust(top=0.9)
 
-        # --- FIGURE EXPORT/SHOW LOGIC ---
+        # Export figure
         if export_path:
             print(f"Saving figure to {export_path}")
             plt.savefig(export_path, bbox_inches='tight')
             plt.show()
         else:
             plt.show()
+
 
     def animate_spo(self, spo_top_disp, spo_rxn, spo_disps, spo_midr, nodeList, elementList, push_dir, save_path):
         """Generates and saves the SPO animation using FuncAnimation."""
@@ -929,8 +804,7 @@ class plotter:
             while len(ax_model.collections) > num_static_collections:
                 ax_model.collections[-1].remove()
 
-            # --- 2D Model Plot Redraw (Deformed Shape) ---
-
+            # 2D Model Plot Redraw (Deformed Shape)
             # Get displacement data for the current frame
             current_disps_floor = spo_disps[frame]
             # Include ground floor (index 0) displacement = 0
@@ -965,10 +839,10 @@ class plotter:
 
             ax_model.set_title(f'Frame: {frame}/{num_frames-1} (Scale: {deform_factor}x)')
 
-            # --- Pushover Curve Update ---
+            # Pushover Curve Update
             curve_anim.set_data(spo_top_disp[:frame+1], spo_rxn[:frame+1])
 
-            # --- Max Drift vs Base Shear Update (Using spo_midr) ---
+            # Max Drift vs Base Shear Update (Using spo_midr)
             drift_anim.set_data(spo_midr[:frame+1], spo_rxn[:frame+1])
 
             # Return the artists that were modified
@@ -1323,25 +1197,25 @@ class plotter:
 
             return line_disp, line_acc, line_acc_time, drift_annot, accel_annot
 
-        # --- Create animation ---
+        # Create animation
         ani = FuncAnimation(fig, update, frames=len(dts), interval=10, blit=False, repeat=False)
         plt.tight_layout()
 
-        # --- Save or show ---
+        # Save or show
         if export_path:
             print(f"\nSaving animation to: {export_path}")
             try:
                 if export_path.lower().endswith('.gif'):
-                    ani.save(export_path, writer='pillow', dpi=120)
+                    ani.save(export_path, writer='pillow', dpi=self.resolution)
                 elif export_path.lower().endswith('.mp4'):
                     try:
-                        ani.save(export_path, writer='ffmpeg', dpi=120)
+                        ani.save(export_path, writer='ffmpeg', dpi=self.resolution)
                     except Exception:
                         print("⚠️ FFmpeg not found — falling back to Pillow GIF encoding.")
-                        ani.save(export_path.replace('.mp4', '.gif'), writer='pillow', dpi=120)
+                        ani.save(export_path.replace('.mp4', '.gif'), writer='pillow', dpi=self.resolution)
                 else:
                     print("WARNING: Unknown extension (.gif or .mp4 recommended). Saving as GIF.")
-                    ani.save(export_path + ".gif", writer='pillow', dpi=120)
+                    ani.save(export_path + ".gif", writer='pillow', dpi=self.resolution)
                 plt.close(fig)
             except Exception as e:
                 print(f"⚠️ Animation save failed: {e}")
@@ -1351,64 +1225,441 @@ class plotter:
 
         return ani
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                         PLOT NLTHA OUTPUT                                                   #
+    #                                                                                                             #
+    ###############################################################################################################
 
-    def plot_ida_suite_ims(self, ansys_dict, expanded_imls, imt_key, title=None):
+    def plot_ida_analysis(self,
+                          ida_dict,
+                          imt_label,
+                          edp_label,
+                          title=None,
+                          pFlag = True,
+                          export_path = None):
+
+        """
+        Visualizes the Incremental Dynamic Analysis (IDA) suite and statistical summary.
+
+        This method generates a comprehensive IDA plot featuring individual ground motion
+        record curves as a background "cloud" and overlays the statistical response
+        percentiles. It is designed to provide an immediate visual assessment of
+        structural performance across a range of intensities.
+
+        Parameters
+        ----------
+        ida_dict : dict
+            The processed results dictionary returned by `do_incremental_dynamic_analysis`.
+            Must contain the following nested keys:
+            - ['ida_inputs']['raw_curves']: List of (IM, EDP) pairs for each record.
+            - ['ida_inputs']['damage_thresholds']: EDP values for limit states.
+            - ['stats']: Dictionary containing 'fitted_edps', 'median_im', 'p16_im', and 'p84_im'.
+            - ['ida_inputs']['imt_key']: The label of the intensity measure used.
+
+        title : str, optional, default=None
+            A custom title for the figure. If not provided, a default title
+            incorporating the Intensity Measure (IM) label is used.
+
+        Returns
+        -------
+        None
+            Displays the matplotlib figure.
+
+        Notes
+        -----
+        - The statistical lines represent the interpolated "flatlining" behavior, ensuring
+          the curves correctly represent global dynamic instability (collapse) where
+          the intensity increases but the structural capacity is exhausted.
+        - The individual gray curves are plotted with low alpha transparency to allow
+          the summary percentiles and vertical thresholds to remain the focal point.
+        """
+
+        # Initialise the figure
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        inputs = ida_dict['ida_inputs']
+        stats  = ida_dict['stats']
+
+        # Plot Individual Raw IDA Curves (Background Cloud)
+        for i, curve in enumerate(inputs['raw_curves']):
+            ax.plot(curve['edp'], curve['im'], '-o', color='gray', alpha=0.15,
+                    lw=self.line_widths['thin'],
+                    markersize=3,
+                    label='Individual Record' if i == 0 else "")
+
+        # Plot Statistical Percentile Lines with requested colors
+        # 16th Percentile - Green (using class colors if applicable or specific request)
+        ax.plot(stats['fitted_edps'], stats['p16_im'],
+                color='green', ls='--', lw=self.line_widths['medium'],
+                label='$16^{th}$ Percentile')
+
+        # Median (50th) - Blue Solid (using GEM color or standard blue)
+        ax.plot(stats['fitted_edps'], stats['median_im'],
+                color='blue', lw=self.line_widths['thick'],
+                label='$50^{th}$ Percentile (Median)')
+
+        # 84th Percentile - Blue Dashed
+        ax.plot(stats['fitted_edps'], stats['p84_im'],
+                color='red', ls='--', lw=self.line_widths['medium'],
+                label='$84^{th}$ Percentile')
+
+        # Add Vertical Lines for Damage Thresholds
+        # Uses the 'fragility' color palette from the class
+        ds_colors = self.colors['fragility']
+
+        for i, thresh in enumerate(inputs['damage_thresholds']):
+            color = ds_colors[i % len(ds_colors)]
+            ax.axvline(thresh,
+                       color=color,
+                       ls=':',
+                       alpha=0.8,
+                       lw=self.line_widths['medium'],
+                       label=f'$DS_{{{i+1}}}$ Threshold: {thresh:.3f}')
+
+
+        # Apply consistent Class Styling
+        default_title = f"IDA: {imt_label} vs {edp_label}"
+        self._set_plot_style(ax,
+                             title=title if title else default_title,
+                             xlabel= edp_label,
+                             ylabel= imt_label)
+
+        # Final layout adjustments
+        ax.set_xlim([0, np.max(stats['fitted_edps'])])
+        ax.set_ylim(bottom=0)
+        ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
+        plt.tight_layout()
+
+        # Save or Show
+        if pFlag:
+            if export_path:
+                # Save to disk
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
+            # Show if no path OR if you want to see it after saving
+            if not export_path:
+                # Display but do not save to disk
+                plt.show()
+            else:
+                # Close the plot to free memory after saving if not showing
+                plt.close()
+
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                         PLOT FRAGILITY OUTPUT                                               #
+    #                                                                                                             #
+    ###############################################################################################################
+
+    def plot_fragility_from_ca(self,
+                               cloud_dict,
+                               imt_label,
+                               title,
+                               pFlag = True,
+                               export_path=None):
+
+        """
+        Generate a fragility analysis plot showing the probability of exceedance (PoE)
+        for various damage states as a function of Peak Ground Acceleration (PGA).
+
+        This method plots fragility curves for multiple damage states based on the
+        fragility data in the input dictionary. Each curve represents the probability
+        of exceedance for a specific damage state, and the plot is presented in a
+        linear scale for both axes.
+
+        Parameters:
+        ----------
+        cloud_dict : dict
+            A dictionary containing the data for the fragility analysis. The dictionary
+            should have the following keys:
+                - 'fragility': A dictionary containing:
+                    - 'intensities': List or array of intensity values (e.g., PGA levels).
+                    - 'poes': 2D array of probabilities of exceedance for each damage state.
+                - 'medians': List of medians for each damage state.
+
+        output_directory : str, optional
+            Directory where the plot will be saved. If None, the plot is saved
+            in the current working directory.
+
+        plot_label : str, optional
+            The label for the saved plot file (without file extension). Default is
+            'fragility_plot'.
+
+        xlabel : str, optional
+            The label for the x-axis. Default is 'Peak Ground Acceleration, PGA [g]'.
+
+        Returns:
+        --------
+        None
+            This function saves the plot to a file in the specified output directory.
+
+        """
+
+        # Setup data
+        frag_data   = cloud_dict['fragility']
+        intensities = frag_data['intensities']
+        poes        = frag_data['poes']
+        medians     = frag_data['medians']
+
+        # Initialise plot
+        fig, ax = plt.subplots(figsize=(12, 6))
+        self._set_plot_style(ax,
+                            xlabel=imt_label,
+                            ylabel='Probability of Exceedance')
+
+        for i in range(poes.shape[1]):
+            color = self.colors['fragility'][i % len(self.colors['fragility'])]
+            ax.plot(intensities, poes[:, i], linestyle='solid', color=color, lw=self.line_widths['thick'], label=f'$DS_{{{i+1}}}$ ($\mu_{{{i+1}}}={medians[i]:.2f}$g)')
+
+        ax.set_xlim([0, 5])
+        ax.set_ylim([0, 1])
+        ax.legend(fontsize=self.font_sizes['legend'], loc='lower right', frameon=True)
+        plt.tight_layout()
+
+        # Save or Show
+        if pFlag:
+            if export_path:
+                # Save to disk
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+            # Show if no path OR if you want to see it after saving
+            if not export_path:
+                # Display but do not save to disk
+                plt.show()
+            else:
+                # Close the plot to free memory after saving if not showing
+                plt.close()
+
+    def plot_fragility_from_ida(self,
+                                ida_dict,
+                                imt_label,
+                                title = None,
+                                pFlag = True,
+                                export_path = None):
+
+        """
+        Generate a fragility analysis plot showing the probability of exceedance (PoE)
+        for multiple damage states derived from IDA results.
+        This method visualizes the lognormal fragility functions fitted during the
+        Incremental Dynamic Analysis. Each curve represents the probability that a
+        specific engineering demand parameter (EDP) threshold (e.g., drift limit)
+        is exceeded given a specific intensity measure (IM) level.
+
+        Parameters
+        ----------
+        ida_dict : dict
+            A nested dictionary containing the processed IDA results.
+            Required structure:
+            - 'fragility': A dictionary containing:
+                - 'intensities': 1D array of IM levels used for sampling.
+                - 'poes': 2D array [n_intensities x n_thresholds] of probabilities.
+                - 'medians': List of the estimated median capacities for each state.
+            - 'ida_inputs': A dictionary containing:
+                - 'imt_key': String label of the intensity measure (e.g., 'Sa(T1)').
+
+        output_directory : str, optional
+            The filesystem path where the plot will be saved. If None, the plot
+            is displayed but not saved to disk.
+
+        plot_label : str, optional, default='ida_fragility_plot'
+            The filename (without extension) for the exported PNG file.
+
+        xlabel : str, optional
+            Custom label for the x-axis. If None, the label is automatically
+            constructed from the 'imt_key' found in the ida_dict.
+
+        Returns
+        -------
+        None
+            The method renders the plot using Matplotlib and handles saving
+            via the internal `_save_plot` utility.
+        """
+
+        # Setup Data
+        frag_data   = ida_dict['fragility']
+        inputs      = ida_dict['ida_inputs']
+        intensities = frag_data['intensities']
+        poes        = frag_data['poes']        # 2D array [n_intensities x n_thresholds]
+        medians     = frag_data['medians']
+
+        # Initialize Plot
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        default_title = f"Fragility Functions for {imt_label}"
+        self._set_plot_style(ax,
+                             title=title if title else default_title,
+                             xlabel=imt_label,
+                             ylabel='Probability of Exceedance (PoE)')
+
+        # Plot Each Damage State Curve
+        # We cycle through colors defined in self.colors['fragility']
+        for i in range(poes.shape[1]):
+            color = self.colors['fragility'][i % len(self.colors['fragility'])]
+            # Plot the fragility curve
+            ax.plot(intensities, poes[:, i], linestyle='solid', color=color, lw=self.line_widths['thick'], label=f'$DS_{{{i+1}}}$ ($\mu_{{{i+1}}}={medians[i]:.2f}$g)')
+        ax.set_xlim([0, 5.0])
+        ax.set_ylim([0, 1.0]) # Small buffer above 1.0
+        ax.legend(fontsize=self.font_sizes['legend'], loc='lower right', frameon=True)
+        plt.tight_layout()
+
+        # Save or Show
+        if pFlag:
+            if export_path:
+                # Save to disk
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
+            # Show if no path OR if you want to see it after saving
+            if not export_path:
+                # Display but do not save to disk
+                plt.show()
+            else:
+                # Close the plot to free memory after saving if not showing
+                plt.close()
+
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                           PLOT VULNERABILITY OUTPUT                                         #
+    #                                                                                                             #
+    ###############################################################################################################
+
+    def plot_vulnerability_function(self,
+                                    intensities,
+                                    loss,
+                                    cov,
+                                    imt_label,
+                                    ylabel,
+                                    title=None,
+                                    pFlag=True,
+                                    export_path=None):
             """
-            Plots IDA curves using specific Intensity Measures with linear segments.
-            All individual records are plotted in gray with markers.
+            Generate a vulnerability analysis plot featuring Beta distributions and a mean loss curve.
 
-            Parameters:
-            - ansys_dict: Dictionary containing 'max_peak_drift_list' and 'sf_matrix'.
-            - expanded_imls: Dictionary of (n_gmrs x n_runs) matrices for each IMT.
-            - imt_key: The string key for the IM to plot on the Y-axis (e.g., 'SA(1.0s)').
+            This method visualizes the uncertainty in loss ratios across different seismic intensities.
+            It simulates Beta distributions based on mean loss and CoV, rendering them as
+            truncated violin plots (strictly bounded 0-1) to represent the physical limits
+            of structural damage.
+
+            Parameters
+            ----------
+            intensities : list of float
+                Intensity Measure (IM) levels (e.g., PGA, Sa) analyzed.
+            loss : list of float
+                Mean loss ratios (0.0 to 1.0) corresponding to each intensity.
+            cov : list of float
+                Coefficient of Variation for loss at each intensity.
+            imt_label : str
+                Label for the X-axis (e.g., 'PGA [g]').
+            ylabel : str
+                Label for the primary Y-axis loss curve (e.g., 'Mean Damage Ratio').
+            title : str, optional
+                Custom plot title.
+            pFlag : bool, optional, default=True
+                If True, the plot is processed (saved/shown).
+            export_path : str, optional
+                Full path including filename to save the plot. Creates directories if missing.
+
+            Returns
+            -------
+            None
             """
-            plt.figure(figsize=(10, 7))
+            # Simulating Beta distributions for each intensity measure
+            simulated_data = []
+            intensity_labels = []
 
-            drifts_data = ansys_dict['max_peak_drift_list']
-            sf_matrix = ansys_dict['sf_matrix']
-            im_matrix = expanded_imls[imt_key]
+            for j, mean_loss in enumerate(loss):
+                # Beta distribution requires mean in (0, 1)
+                mu = np.clip(mean_loss, 0.0001, 0.9999)
+                variance = (cov[j] * mu) ** 2
 
-            n_records = len(drifts_data)
+                # Constraint: Variance must be < mu * (1 - mu)
+                limit = mu * (1 - mu)
+                if variance >= limit:
+                    variance = limit * 0.99  # Cap variance to allow distribution fitting
 
-            for i in range(n_records):
-                # 1. Extract valid (Drift, IM) pairs for this record
-                record_drifts = []
-                record_ims = []
+                alpha = mu * (mu * (1 - mu) / variance - 1)
+                beta_param = (1 - mu) * (mu * (1 - mu) / variance - 1)
 
-                for j, sf in enumerate(sf_matrix[i, :]):
-                    if np.isnan(sf): continue
+                # Generate samples and clip to ensure physical bounds
+                data = np.random.beta(alpha, beta_param, 10000)
+                simulated_data.append(data)
+                intensity_labels.extend([intensities[j]] * len(data))
 
-                    if sf in drifts_data[i]:
-                        record_drifts.append(drifts_data[i][sf])
-                        record_ims.append(im_matrix[i, j])
+            # We name the column 'Loss_Val' for consistent reference in Seaborn
+            df_sns = pd.DataFrame({'Intensity Measure': intensity_labels,
+                                   'Loss_Val': np.concatenate(simulated_data)})
 
-                # Convert to arrays
-                x = np.array(record_drifts)
-                y = np.array(record_ims)
+            # Initialise Plot
+            fig, ax1 = plt.subplots(figsize=(12, 6))
 
-                # Skip if no data
-                if len(x) == 0: continue
+            # Set plot style
+            default_title = f"Vulnerability Function: {imt_label}"
+            self._set_plot_style(ax1,
+                                 title=title if title else default_title,
+                                 xlabel=imt_label,
+                                 ylabel="Loss Distribution")
 
-                # 2. Sort by Intensity Measure (Y-axis) so lines connect in order of scaling
-                idx = np.argsort(y)
-                x_plot = x[idx]
-                y_plot = y[idx]
+            # Violin plot for Beta distributions
+            # We use 'Loss_Val' to match the DataFrame column
+            violin = sns.violinplot(x='Intensity Measure', y='Loss_Val', data=df_sns,
+                                    density_norm='width', bw_method=0.2,
+                                    cut=0,
+                                    inner=None,
+                                    ax=ax1,
+                                    zorder=1,
+                                    color='skyblue')
 
-                # 3. Plot individual curves in gray with markers
-                # Using alpha to handle overlaps if many records exist
-                plt.plot(x_plot, y_plot, '-o', color='gray', alpha=0.4,
-                         lw=1.0, markersize=3, label='Individual Record' if i == 0 else "")
+            # Overlay a strip plot for sample density
+            sns.stripplot(x='Intensity Measure', y='Loss_Val', data=df_sns, color='black',
+                          size=1,
+                          alpha=0.2,
+                          ax=ax1,
+                          zorder=2)
 
-            # Formatting
-            plt.xlabel('Maximum Storey Drift [rad]', fontsize=12)
-            plt.ylabel(f'Intensity Measure: {imt_key}', fontsize=12)
-            plt.ylim([0, 5])
-            plt.title(title if title else f'IDA Curves: {imt_key} vs Maximum Drift', fontsize=14, fontweight='bold')
-            plt.grid(True, which='both', linestyle='--', alpha=0.4)
+            # Style the primary axis (Distributions)
+            ax1.set_ylim(0, 1.0)
+            ax1.yaxis.label.set_color('blue')
+            ax1.tick_params(axis='y', labelcolor='blue')
 
-            # Legend only if specifically needed, showing only one entry for gray lines
-            if n_records < 15:
-                plt.legend(loc='upper left', fontsize='small')
+            # Secondary Axis for the Mean Loss Curve
+            ax2 = ax1.twinx()
+            ax2.plot(range(len(intensities)), loss, marker='s', ls='-', color='red',
+                     lw=self.line_widths['medium'], label="Mean Loss Ratio", zorder=5)
+
+            # Style the secondary axis (Loss Curve)
+            ax2.set_ylabel(ylabel, color='red', rotation=270, labelpad=20,
+                           fontsize=self.font_sizes['labels'], fontname=self.font_name)
+            ax2.tick_params(axis='y', labelcolor='red', labelsize=self.font_sizes['ticks'])
+            ax2.set_ylim(0, 1.0)
+
+            # Sync X-axis ticks with intensity values
+            ax1.set_xticks(range(len(intensities)))
+            ax1.set_xticklabels([f"{x:.3f}" for x in intensities], rotation=45, ha='right', fontsize=8)
+
+            # Combined Legend
+            beta_patch = mpatches.Patch(color='skyblue', label="Beta Distribution (Uncertainty)")
+            ax1.legend(handles=[beta_patch], loc='upper left', fontsize=self.font_sizes['legend'])
+            ax2.legend(loc='upper left', bbox_to_anchor=(0, 0.93), fontsize=self.font_sizes['legend'])
 
             plt.tight_layout()
-            plt.show()
+
+            # Save or show
+            if pFlag:
+                if export_path:
+                    directory = os.path.dirname(export_path)
+                    if directory and not os.path.exists(directory):
+                        os.makedirs(directory, exist_ok=True)
+                    plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                    print(f"Vulnerability plot saved to: {export_path}")
+                    plt.show()
+                else:
+                    plt.show()
+            else:
+                plt.close()
