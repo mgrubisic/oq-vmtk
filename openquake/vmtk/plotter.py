@@ -3,9 +3,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import openseespy.opensees as ops
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 import matplotlib.gridspec as gridspec
+from scipy.interpolate import interp1d
 from matplotlib.animation import FuncAnimation
 
 class plotter:
@@ -242,12 +244,18 @@ class plotter:
         self._save_plot(output_directory, plot_label)
 
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                         PLOT DEMAND PROFILES                                                #
+    #                                                                                                             #
+    ###############################################################################################################
+
     def plot_demand_profiles(self,
                              peak_drift_list,
                              peak_accel_list,
                              control_nodes,
-                             output_directory=None,
-                             plot_label='demand_profiles'):
+                             pFlag,
+                             export_path):
 
         """
         Generate demand profile plots for peak storey drifts and peak floor accelerations.
@@ -269,11 +277,11 @@ class plotter:
         control_nodes : list
             A list of floor numbers or nodes that represent the control points in the structure.
 
-        output_directory : str, optional
-            Directory where the plot will be saved. If None, the plot is saved in the current working directory.
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
 
-        plot_label : str, optional
-            The label for the saved plot file (without file extension). Default is 'demand_profiles'.
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
 
         Returns:
         --------
@@ -282,6 +290,7 @@ class plotter:
 
         """
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
         self._set_plot_style(ax1, xlabel=r'Peak Storey Drift, $\theta_{max}$ [%]', ylabel='Floor No.')
         self._set_plot_style(ax2, xlabel=r'Peak Floor Acceleration, $a_{max}$ [g]', ylabel='Floor No.')
 
@@ -298,111 +307,18 @@ class plotter:
         ax1.set_xlim([0, 5.0])
         ax2.set_xlim([0, 5.0])
 
-        self._save_plot(output_directory, plot_label)
-
-
-    def plot_ansys_results(self,
-                           cloud_dict,
-                           peak_drift_list,
-                           peak_accel_list,
-                           control_nodes,
-                           output_directory=None,
-                           plot_label='ansys_results',
-                           cloud_xlabel='PGA',
-                           cloud_ylabel='MPSD'):
-        """
-        Generate a 2x2 grid of plots to visualize analysis results, including cloud analysis,
-        fragility analysis, and demand profiles for both peak drifts and peak accelerations.
-
-        This function generates four plots in a 2x2 grid layout:
-        1. **Cloud Analysis**: Scatter plot of cloud data, fitted regression line, and censoring limits.
-        2. **Fragility Analysis**: Plot of probability of exceedance (PoE) for different damage states.
-        3. **Demand Profiles for Drifts**: Plot of peak storey drift (%) versus floor number.
-        4. **Demand Profiles for Accelerations**: Plot of peak floor acceleration (g) versus floor number.
-
-        Each plot is customized with appropriate labels, legends, and color schemes for clarity.
-
-        Parameters:
-        ----------
-        cloud_dict : dict
-            A dictionary containing the data for the cloud and fragility analyses. The dictionary should contain:
-                - 'imls': Intensity Measure Levels for cloud analysis.
-                - 'edps': Engineering Demand Parameters for cloud analysis.
-                - 'cloud inputs': Dictionary with damage thresholds, upper and lower limits.
-                - 'fragility': Dictionary with fragility intensities and probabilities of exceedance.
-                - 'regression': Fitted x and y values for the cloud regression line.
-                - 'medians': List of median values for each damage state.
-
-        peak_drift_list : list of np.ndarray
-            A list of arrays where each array contains peak drift values for each floor. The first column should be the drift values and the second column the floor numbers.
-
-        peak_accel_list : list of np.ndarray
-            A list of arrays where each array contains peak acceleration values for each floor. The first column should be the acceleration values and the second column the floor numbers.
-
-        control_nodes : list
-            A list of control node (floor) numbers for the structure.
-
-        output_directory : str, optional
-            Directory where the plot will be saved. If None, the plot is saved in the current working directory.
-
-        plot_label : str, optional
-            The label for the saved plot file (without file extension). Default is 'ansys_results'.
-
-        cloud_xlabel : str, optional
-            The label for the x-axis of the cloud analysis plot. Default is 'PGA'.
-
-        cloud_ylabel : str, optional
-            The label for the y-axis of the cloud analysis plot. Default is 'MPSD'.
-
-        Returns:
-        --------
-        None
-            This function saves the 2x2 grid of plots to a file in the specified output directory.
-
-        """
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 10))
-        plt.rcParams['axes.axisbelow'] = True
-
-        # Cloud Analysis
-        self._set_plot_style(ax1, xlabel=cloud_xlabel, ylabel=cloud_ylabel)
-        ax1.scatter(cloud_dict['cloud inputs']['imls'], cloud_dict['cloud inputs']['edps'], color=self.colors['gem'][2], s=self.marker_sizes['medium'], alpha=0.5, label='Cloud Data', zorder=0)
-        for i in range(len(cloud_dict['cloud inputs']['damage_thresholds'])):
-            ax1.scatter(cloud_dict['fragility']['medians'][i], cloud_dict['cloud inputs']['damage_thresholds'][i], color=self.colors['fragility'][i], s=self.marker_sizes['large'], alpha=1.0, zorder=2)
-        ax1.plot(cloud_dict['regression']['fitted_x'], cloud_dict['regression']['fitted_y'], linestyle='solid', color=self.colors['gem'][1], lw=self.line_widths['thick'], label='Cloud Regression', zorder=1)
-        ax1.plot([min(cloud_dict['cloud inputs']['imls']), max(cloud_dict['cloud inputs']['imls'])], [cloud_dict['cloud inputs']['upper_limit'], cloud_dict['cloud inputs']['upper_limit']], '--', color=self.colors['gem'][-1], label='Upper Censoring Limit')
-        ax1.plot([min(cloud_dict['cloud inputs']['imls']), max(cloud_dict['cloud inputs']['imls'])], [cloud_dict['cloud inputs']['lower_limit'], cloud_dict['cloud inputs']['lower_limit']], '-.', color=self.colors['gem'][-1], label='Lower Censoring Limit')
-        ax1.set_xscale('log')
-        ax1.set_yscale('log')
-        ax1.legend(fontsize=self.font_sizes['legend'])
-
-        # Fragility Analysis
-        self._set_plot_style(ax2, xlabel=cloud_xlabel, ylabel='Probability of Exceedance')
-        for i in range(len(cloud_dict['fragility']['medians'])):
-            ax2.plot(cloud_dict['fragility']['intensities'], cloud_dict['fragility']['poes'][:, i], linestyle='solid', color=self.colors['fragility'][i], lw=self.line_widths['thick'], label=f'DS{i+1}')
-        ax2.set_xlim([0, 5])
-        ax2.set_ylim([0, 1])
-        ax2.legend(fontsize=self.font_sizes['legend'])
-
-        # Demand Profiles: Drifts
-        self._set_plot_style(ax3, xlabel=r'Peak Storey Drift, $\theta_{max}$ [%]', ylabel='Floor No.')
-        nst = len(control_nodes) - 1
-        for i in range(len(peak_drift_list)):
-            x, y = self.duplicate_for_drift(peak_drift_list[i][:, 0], control_nodes)
-            ax3.plot([float(i) * 100 for i in x], y, linewidth=self.line_widths['medium'], linestyle='solid', color=self.colors['gem'][1], alpha=0.7)
-        ax3.set_yticks(np.linspace(0, nst, nst + 1), labels=np.linspace(0, nst, nst + 1), minor=False)
-        ax3.set_xticks(np.linspace(0, 5, 11), labels=np.linspace(0, 5, 11), minor=False)
-        ax3.set_xlim([0, 5.0])
-
-        # Demand Profiles: Accelerations
-        self._set_plot_style(ax4, xlabel=r'Peak Floor Acceleration, $a_{max}$ [g]', ylabel='Floor No.')
-        for i in range(len(peak_accel_list)):
-            ax4.plot([float(x) for x in peak_accel_list[i][:, 0]], control_nodes, linewidth=self.line_widths['medium'], linestyle='solid', color=self.colors['gem'][0], alpha=0.3)
-        ax4.set_yticks(np.linspace(0, nst, nst + 1), labels=np.linspace(0, nst, nst + 1), minor=False)
-        ax4.set_xticks(np.linspace(0, 5, 11), labels=np.linspace(0, 5, 11), minor=False)
-        ax4.set_xlim([0, 5.0])
-
-        plt.tight_layout()
-        self._save_plot(output_directory, plot_label)
+        # Save or show
+        if pFlag:
+            if export_path:
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
+            else:
+                plt.show()
+        else:
+            plt.close()
 
 
     def plot_slf_model(self,
@@ -472,6 +388,14 @@ class plotter:
 
             ax.legend(fontsize=self.font_sizes['legend'])
             self._save_plot(output_directory, f"{plot_label}_{current_key}")
+
+
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                         PLOT MODAL ANALYSIS                                                 #
+    #                                                                                                             #
+    ###############################################################################################################
+
 
     def plot_modes(self, node_list, mode_shape_vectors, T, export_path=None):
         """
@@ -694,6 +618,7 @@ class plotter:
             plt.show()
         else:
             plt.show()
+
 
 
     def animate_spo(self, spo_top_disp, spo_rxn, spo_disps, spo_midr, nodeList, elementList, push_dir, save_path):
@@ -1257,9 +1182,22 @@ class plotter:
             - ['stats']: Dictionary containing 'fitted_edps', 'median_im', 'p16_im', and 'p84_im'.
             - ['ida_inputs']['imt_key']: The label of the intensity measure used.
 
+        imt_label : str
+            Intensity Measure Label for the Y-axis (e.g., 'PGA [g]').
+
+        edp_label : str
+            Engineering Demand Parameter Label for the X-axis (e.g., 'PGA [g]').
+
         title : str, optional, default=None
             A custom title for the figure. If not provided, a default title
             incorporating the Intensity Measure (IM) label is used.
+
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
+
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
+
 
         Returns
         -------
@@ -1380,16 +1318,17 @@ class plotter:
                     - 'poes': 2D array of probabilities of exceedance for each damage state.
                 - 'medians': List of medians for each damage state.
 
-        output_directory : str, optional
-            Directory where the plot will be saved. If None, the plot is saved
-            in the current working directory.
+        imt_label : str
+            Label for the X-axis (e.g., 'PGA [g]').
 
-        plot_label : str, optional
-            The label for the saved plot file (without file extension). Default is
-            'fragility_plot'.
+        title : str, optional
+            Custom plot title.
 
-        xlabel : str, optional
-            The label for the x-axis. Default is 'Peak Ground Acceleration, PGA [g]'.
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
+
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
 
         Returns:
         --------
@@ -1406,9 +1345,12 @@ class plotter:
 
         # Initialise plot
         fig, ax = plt.subplots(figsize=(12, 6))
+
+        default_title = f"Fragility Functions for {imt_label}"
         self._set_plot_style(ax,
-                            xlabel=imt_label,
-                            ylabel='Probability of Exceedance')
+                             title=title if title else default_title,
+                             xlabel=imt_label,
+                             ylabel='Probability of Exceedance (PoE)')
 
         for i in range(poes.shape[1]):
             color = self.colors['fragility'][i % len(self.colors['fragility'])]
@@ -1462,16 +1404,18 @@ class plotter:
             - 'ida_inputs': A dictionary containing:
                 - 'imt_key': String label of the intensity measure (e.g., 'Sa(T1)').
 
-        output_directory : str, optional
-            The filesystem path where the plot will be saved. If None, the plot
-            is displayed but not saved to disk.
 
-        plot_label : str, optional, default='ida_fragility_plot'
-            The filename (without extension) for the exported PNG file.
+        imt_label : str
+            Label for the X-axis (e.g., 'PGA [g]').
 
-        xlabel : str, optional
-            Custom label for the x-axis. If None, the label is automatically
-            constructed from the 'imt_key' found in the ida_dict.
+        title : str, optional
+            Custom plot title.
+
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
+
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
 
         Returns
         -------
@@ -1551,18 +1495,25 @@ class plotter:
             ----------
             intensities : list of float
                 Intensity Measure (IM) levels (e.g., PGA, Sa) analyzed.
+
             loss : list of float
                 Mean loss ratios (0.0 to 1.0) corresponding to each intensity.
+
             cov : list of float
                 Coefficient of Variation for loss at each intensity.
+
             imt_label : str
                 Label for the X-axis (e.g., 'PGA [g]').
+
             ylabel : str
                 Label for the primary Y-axis loss curve (e.g., 'Mean Damage Ratio').
+
             title : str, optional
                 Custom plot title.
+
             pFlag : bool, optional, default=True
                 If True, the plot is processed (saved/shown).
+
             export_path : str, optional
                 Full path including filename to save the plot. Creates directories if missing.
 
@@ -1657,7 +1608,6 @@ class plotter:
                     if directory and not os.path.exists(directory):
                         os.makedirs(directory, exist_ok=True)
                     plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
-                    print(f"Vulnerability plot saved to: {export_path}")
                     plt.show()
                 else:
                     plt.show()
