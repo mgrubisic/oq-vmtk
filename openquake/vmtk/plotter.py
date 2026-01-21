@@ -8,6 +8,7 @@ from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 import matplotlib.gridspec as gridspec
 from scipy.interpolate import interp1d
+import matplotlib.animation as animation
 from matplotlib.animation import FuncAnimation
 
 class plotter:
@@ -623,7 +624,7 @@ class plotter:
         # Max Interstorey Drift History (passed as spo_midr)
         max_drift_history = np.maximum.accumulate(spo_midr)
 
-        # ------------------ Initialize the Figure and Subplots ------------------
+        # Initialize the Figure and Subplots
         fig = plt.figure(figsize=(16, 8))
 
         # Layout: (1, 2, 1) is big left plot; (2, 2, 2) is top right; (2, 2, 4) is bottom right
@@ -637,7 +638,7 @@ class plotter:
         num_static_lines = len(elementList)
         num_static_collections = 1 # For the single undeformed nodes scatter plot
 
-        # ------------------ Set up static plot elements ------------------
+        # Set up static plot elements
         # 2D Model Plot (Undeformed - static gray background)
         ax_model.scatter(plot_coords_und[0], plot_coords_und[1],
                           marker='o', s=50, color='gray', alpha=0.5, label='Undeformed Nodes')
@@ -679,11 +680,11 @@ class plotter:
         ax_drift.grid(True)
 
 
-        # ------------------ The update function for FuncAnimation ------------------
+        # The update function for FuncAnimation
         def update(frame):
             nonlocal num_static_lines, num_static_collections
 
-            # --- 2D Model Plot Cleanup ---
+            # 2D Model Plot Cleanup
             # Remove dynamically drawn lines (deformed elements) from the LAST frame
             while len(ax_model.lines) > num_static_lines:
                 ax_model.lines[-1].remove()
@@ -739,16 +740,26 @@ class plotter:
         # Create the animation object
         ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=50, blit=False)
 
+        # Directory check
+        if save_path:
+            directory = os.path.dirname(save_path)
+            if directory and not os.path.exists(directory):
+                print(f"Creating directory: {directory}")
+                os.makedirs(directory, exist_ok=True)
+
         # Save the animation
         print(f"\nSaving animation to: {save_path}")
 
-        if save_path.lower().endswith('.gif'):
-            ani.save(save_path, writer='pillow', dpi=150)
-        elif save_path.lower().endswith('.mp4'):
-            ani.save(save_path, writer='ffmpeg', dpi=200)
-        else:
-            print("WARNING: Animation path extension not recognized (.gif or .mp4 recommended). Saving as default.")
-            ani.save(save_path, dpi=150)
+        try:
+            if save_path.lower().endswith('.gif'):
+                ani.save(save_path, writer='pillow', dpi=150)
+            elif save_path.lower().endswith('.mp4'):
+                ani.save(save_path, writer='ffmpeg', dpi=200)
+            else:
+                print("WARNING: Animation path extension not recognized. Saving as GIF.")
+                ani.save(save_path + ".gif", writer='pillow', dpi=150)
+        except Exception as e:
+            print(f"⚠️ Failed to save animation: {e}")
 
         plt.close(fig)
 
@@ -774,7 +785,7 @@ class plotter:
             File path to save the animation (e.g., 'cpo_animation.gif' or 'cpo_animation.mp4').
         """
 
-        # ------------------ Data Extraction and Processing ------------------
+        # Data Extraction and Processing
         cpo_top_disp = cpo_dict['cpo_top_disp']
         cpo_rxn = cpo_dict['cpo_rxn']
         cpo_disps = cpo_dict['cpo_disps']
@@ -820,7 +831,7 @@ class plotter:
         model_x_lim = (-max_abs_coord_x * 3.0, max_abs_coord_x * 3.0)
         model_y_lim = (0, max_abs_coord_y * 1.5)
 
-        # ------------------ Initialize the Figure and Subplots ------------------
+        # Initialize the Figure and Subplots
         fig = plt.figure(figsize=(16, 8))
 
         # Layout: (1, 2, 1) is big left plot; (2, 2, 2) is top right; (2, 2, 4) is bottom right
@@ -834,7 +845,7 @@ class plotter:
         num_static_lines = len(elementList)
         num_static_collections = 1 # For the single undeformed nodes scatter plot
 
-        # ------------------ Set up static plot elements (Undeformed Shape) ------------------
+        # Set up static plot elements (Undeformed Shape)
         ax_model.scatter(plot_coords_und[0], plot_coords_und[1],
                          marker='o', s=50, color='gray', alpha=0.5, label='Undeformed Nodes')
         for eleTag in elementList:
@@ -887,18 +898,18 @@ class plotter:
         ax_drift.grid(True)
 
 
-        # ------------------ The update function for FuncAnimation ------------------
+        # The update function for FuncAnimation
         def update(frame):
             nonlocal num_static_lines, num_static_collections
 
-            # --- 2D Model Plot Cleanup ---
+            # 2D Model Plot Cleanup
             while len(ax_model.lines) > num_static_lines:
                 ax_model.lines[-1].remove()
 
             while len(ax_model.collections) > num_static_collections:
                 ax_model.collections[-1].remove()
 
-            # --- 2D Model Plot Redraw (Deformed Shape) ---
+            # 2D Model Plot Redraw (Deformed Shape)
             current_disps_floor = cpo_disps[frame]
             # Include ground floor (index 0) displacement = 0
             full_node_disps = np.insert(current_disps_floor, 0, 0, axis=0)
@@ -936,10 +947,10 @@ class plotter:
 
             ax_model.set_title(f'Frame: {frame}/{num_frames-1} (Scale: {deform_factor}x)')
 
-            # --- Hysteretic Curve Update (Top Disp) ---
+            # Hysteretic Curve Update (Top Disp)
             curve_anim.set_data(cpo_top_disp[:frame+1], cpo_rxn[:frame+1])
 
-            # --- Governing Drift Hysteresis Update ---
+            # Governing Drift Hysteresis Update
             drift_anim.set_data(governing_drift_history[:frame+1], cpo_rxn[:frame+1])
 
             # Return the artists that were modified
@@ -948,16 +959,26 @@ class plotter:
         # Create the animation object
         ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=50, blit=False)
 
+        # Directory check
+        if save_path:
+            directory = os.path.dirname(save_path)
+            if directory and not os.path.exists(directory):
+                print(f"Creating directory: {directory}")
+                os.makedirs(directory, exist_ok=True)
+
         # Save the animation
         print(f"\nSaving animation to: {save_path}")
 
-        if save_path.lower().endswith('.gif'):
-            ani.save(save_path, writer='pillow', dpi=300)
-        elif save_path.lower().endswith('.mp4'):
-            ani.save(save_path, writer='ffmpeg', dpi=300)
-        else:
-            print("WARNING: Animation path extension not recognized (.gif or .mp4 recommended). Saving as default.")
-            ani.save(save_path, dpi=300)
+        try:
+            if save_path.lower().endswith('.gif'):
+                ani.save(save_path, writer='pillow', dpi=150)
+            elif save_path.lower().endswith('.mp4'):
+                ani.save(save_path, writer='ffmpeg', dpi=200)
+            else:
+                print("WARNING: Animation path extension not recognized. Saving as GIF.")
+                ani.save(save_path + ".gif", writer='pillow', dpi=150)
+        except Exception as e:
+            print(f"⚠️ Failed to save animation: {e}")
 
         plt.close(fig)
 
