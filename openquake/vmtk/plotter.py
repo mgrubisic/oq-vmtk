@@ -254,8 +254,9 @@ class plotter:
                              peak_drift_list,
                              peak_accel_list,
                              control_nodes,
-                             pFlag,
-                             export_path):
+                             title = None,
+                             pFlag = True,
+                             export_path = None):
 
         """
         Generate demand profile plots for peak storey drifts and peak floor accelerations.
@@ -277,6 +278,9 @@ class plotter:
         control_nodes : list
             A list of floor numbers or nodes that represent the control points in the structure.
 
+        title : str, optional
+            Custom plot title.
+
         pFlag : bool, optional, default=True
             If True, the plot is processed (saved/shown).
 
@@ -289,25 +293,46 @@ class plotter:
             This function saves the plot to a file in the specified output directory.
 
         """
+
+        # Initialise Plot with two subplots
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
+        # Apply standard styles to subplots
         self._set_plot_style(ax1, xlabel=r'Peak Storey Drift, $\theta_{max}$ [%]', ylabel='Floor No.')
         self._set_plot_style(ax2, xlabel=r'Peak Floor Acceleration, $a_{max}$ [g]', ylabel='Floor No.')
 
         nst = len(control_nodes) - 1
         for i in range(len(peak_drift_list)):
-            x, y = self.duplicate_for_drift(peak_drift_list[i][:, 0], control_nodes)
-            ax1.plot([float(i) * 100 for i in x], y, linewidth=self.line_widths['medium'], linestyle='solid', color=self.colors['gem'][1], alpha=0.7)
-            ax2.plot([float(x) / 9.81 for x in peak_accel_list[i][:, 0]], control_nodes, linewidth=self.line_widths['medium'], linestyle='solid', color=self.colors['gem'][0], alpha=0.7)
+            # Process and plot Drifts
+            x_drift, y_drift = self.duplicate_for_drift(peak_drift_list[i][:, 0], control_nodes)
+            ax1.plot([float(val) * 100 for val in x_drift], y_drift,
+                     linewidth=self.line_widths['medium'],
+                     linestyle='solid', color=self.colors['gem'][1], alpha=0.7)
 
-        ax1.set_yticks(np.linspace(0, nst, nst + 1), labels=np.linspace(0, nst, nst + 1), minor=False)
-        ax2.set_yticks(np.linspace(0, nst, nst + 1), labels=np.linspace(0, nst, nst + 1), minor=False)
-        ax1.set_xticks(np.linspace(0, 5, 11), labels=np.linspace(0, 5, 11), minor=False)
-        ax2.set_xticks(np.linspace(0, 5, 11), labels=np.linspace(0, 5, 11), minor=False)
-        ax1.set_xlim([0, 5.0])
-        ax2.set_xlim([0, 5.0])
+            # Process and plot Accelerations (converted to g)
+            ax2.plot([float(val) / 9.81 for val in peak_accel_list[i][:, 0]], control_nodes,
+                     linewidth=self.line_widths['medium'],
+                     linestyle='solid', color=self.colors['gem'][0], alpha=0.7)
 
-        # Save or show
+        # Axis Customization
+        for ax in [ax1, ax2]:
+            ax.set_yticks(np.linspace(0, nst, nst + 1))
+            ax.set_yticklabels([int(i) for i in np.linspace(0, nst, nst + 1)],
+                               fontsize=self.font_sizes['ticks'], fontname=self.font_name)
+
+            # Use smaller font for X-ticks as profiles can be dense
+            ax.tick_params(axis='x', labelsize=self.font_sizes['ticks'] - 2)
+            ax.set_xlim([0, 5.0])
+
+        # Add title
+        default_title = "Seismic Demand Profiles"
+        fig.suptitle(title if title else default_title,
+                     fontsize=self.font_sizes['title'],
+                     fontname=self.font_name)
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to make room for suptitle
+
+        # Save or Show
         if pFlag:
             if export_path:
                 directory = os.path.dirname(export_path)
