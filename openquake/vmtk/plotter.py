@@ -91,7 +91,7 @@ class plotter:
             'damage_states': ['blue', 'green', 'yellow', 'orange', 'red'],
             'gem': ["#0A4F4E", "#0A4F5E", "#54D7EB", "#54D6EB", "#399283", "#399264", "#399296"]
         }
-        self.resolution = 500
+        self.resolution = 400
         self.font_name = 'Arial'
 
     def _set_plot_style(self, ax, title=None, xlabel=None, ylabel=None, grid=True):
@@ -125,68 +125,6 @@ class plotter:
         x.append(0.0)
 
         return x, y
-
-    def plot_cloud_analysis(self,
-                            cloud_dict,
-                            output_directory=None,
-                            plot_label='cloud_analysis_plot',
-                            xlabel='Peak Ground Acceleration, PGA [g]',
-                            ylabel=r'Maximum Peak Storey Drift, $\theta_{max}$ [%]'):
-
-        """
-        Generate a cloud analysis plot with scatter points and regression line,
-        visualizing the relationship between Peak Ground Acceleration (PGA)
-        and Maximum Peak Storey Drift.
-
-        This method plots cloud data, damage thresholds, a fitted regression line,
-        and upper and lower censoring limits. The data is presented in logarithmic
-        scale for both axes.
-
-        Parameters:
-        ----------
-        cloud_dict : dict
-            A dictionary containing the data for the cloud analysis. The dictionary
-            should have the following keys (direct output from do_cloud_analysis method)
-
-        output_directory : str, optional
-            Directory where the plot will be saved. If None, the plot is saved
-            in the current working directory.
-
-        plot_label : str, optional
-            The label for the saved plot file (without file extension). Default is
-            'cloud_analysis_plot'.
-
-        xlabel : str, optional
-            The label for the x-axis. Default is 'Peak Ground Acceleration, PGA [g]'.
-
-        ylabel : str, optional
-            The label for the y-axis. Default is 'Maximum Peak Storey Drift, $\theta_{max}$ [%]'.
-
-        Returns:
-        --------
-        None
-            This function saves the plot to a file in the specified output directory.
-
-        """
-
-        fig, ax = plt.subplots(figsize=(6, 6))
-        self._set_plot_style(ax, xlabel=xlabel, ylabel=ylabel)
-
-        ax.scatter(cloud_dict['cloud inputs']['imls'], cloud_dict['cloud inputs']['edps'], color=self.colors['gem'][2], s=self.marker_sizes['medium'], alpha=0.5, label='Cloud Data', zorder=0)
-        for i in range(len(cloud_dict['cloud inputs']['damage_thresholds'])):
-            ax.scatter(cloud_dict['fragility']['medians'][i], cloud_dict['cloud inputs']['damage_thresholds'][i], color=self.colors['fragility'][i], s=self.marker_sizes['large'], alpha=1.0, zorder=2)
-
-        ax.plot(cloud_dict['regression']['fitted_x'], cloud_dict['regression']['fitted_y'], linestyle='solid', color=self.colors['gem'][1], lw=self.line_widths['thick'], label='Cloud Regression', zorder=1)
-        ax.plot([min(cloud_dict['cloud inputs']['imls']), max(cloud_dict['cloud inputs']['imls'])], [cloud_dict['cloud inputs']['upper_limit'], cloud_dict['cloud inputs']['upper_limit']], '--', color=self.colors['gem'][-1], label='Upper Censoring Limit')
-        ax.plot([min(cloud_dict['cloud inputs']['imls']), max(cloud_dict['cloud inputs']['imls'])], [cloud_dict['cloud inputs']['lower_limit'], cloud_dict['cloud inputs']['lower_limit']], '-.', color=self.colors['gem'][-1], label='Lower Censoring Limit')
-
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.set_xlim([min(cloud_dict['cloud inputs']['imls']), max(cloud_dict['cloud inputs']['imls'])])
-        ax.set_ylim([min(cloud_dict['cloud inputs']['edps']), max(cloud_dict['cloud inputs']['edps'])])
-        ax.legend(fontsize=self.font_sizes['legend'])
-
-        self._save_plot(output_directory, plot_label)
 
     def plot_fragility_analysis(self,
                                 cloud_dict,
@@ -1092,18 +1030,18 @@ class plotter:
         # --- Damage state colors ---
         damage_state_colors = ['#1E88E5', '#43A047', '#FDD835', '#FB8C00', '#E53935']
 
-        # --- Trackers for cumulative state ---
+        # Trackers for cumulative state
         max_damage_state = 0
         max_drift_val = 0.0
         max_accel_val = 0.0
 
-        # --- Persistent Annotations ---
+        # Persistent Annotations
         drift_annot = ax1.text(0.02, 0.9, "", transform=ax1.transAxes,
                                fontsize=9, color="black", bbox=dict(facecolor='white', alpha=0.5))
         accel_annot = ax2.text(0.02, 0.9, "", transform=ax2.transAxes,
                                fontsize=9, color="black", bbox=dict(facecolor='white', alpha=0.5))
 
-        # --- Update function ---
+        # Update function
         def update(frame):
             nonlocal max_damage_state, max_drift_val, max_accel_val
 
@@ -1112,7 +1050,14 @@ class plotter:
 
             line_disp.set_data(disp_values, node_z_coords)
             line_acc.set_data(accel_values, node_z_coords)
-            line_acc_time.set_data(dts[:frame], acc[:frame])
+
+            #line_acc_time.set_data(dts[:frame], acc[:frame])
+
+            # --- REPLACE THE OLD line_acc_time HERE ---
+            current_t = dts[:frame+1]
+            current_a = acc[:frame+1]
+            line_acc_time.set_data(current_t, current_a)
+            # ------------------------------------------
 
             # --- Interstory drift ---
             interstory_drifts = np.abs(np.diff(disp_values)) / storey_heights
@@ -1180,6 +1125,135 @@ class plotter:
     #                                         PLOT NLTHA OUTPUT                                                   #
     #                                                                                                             #
     ###############################################################################################################
+
+    def plot_cloud_analysis(self,
+                            cloud_dict,
+                            imt_label,
+                            edp_label,
+                            title = None,
+                            pFlag = True,
+                            export_path = None):
+
+        """
+        Visualizes the Cloud Analysis (CA) suite and statistical summary.
+
+        This method generates a comprehensive CA plot featuring individual ground motion
+        record curves as a background "cloud" and overlays the statistically fitted IM-EDP
+        relationship corresponding to the median response. It is designed to provide an
+        immediate visual assessment of structural performance across a range of intensities.
+
+        Parameters
+        ----------
+        cloud_dict : dict
+            The processed results dictionary returned by `do_cloud_analysis`.
+
+        This method plots cloud data, damage thresholds, a fitted regression line,
+        and upper and lower censoring limits. The data is presented in logarithmic
+        scale for both axes.
+
+        Parameters:
+        ----------
+        cloud_dict : dict
+            A dictionary containing the data for the cloud analysis. The dictionary
+            should have the following keys (direct output from do_cloud_analysis method)
+
+        imt_label : str
+            Intensity Measure Label for the Y-axis (e.g., 'PGA [g]').
+
+        edp_label : str
+            Engineering Demand Parameter Label for the X-axis (e.g., 'PGA [g]').
+
+        title : str, optional, default=None
+            A custom title for the figure. If not provided, a default title
+            incorporating the Intensity Measure (IM) label is used.
+
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
+
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
+
+        Returns:
+        --------
+        None
+            This function saves the plot to a file in the specified output directory.
+
+        """
+
+
+        # Setup Data
+        inputs = cloud_dict['cloud inputs']
+        reg = cloud_dict['regression']
+
+        # Initialise Plot
+        fig, ax = plt.subplots(figsize=(12, 6))
+        self._set_plot_style(ax, xlabel=imt_label, ylabel=edp_label)
+
+        # Plot Individual Data Points (The Cloud)
+        ax.scatter(inputs['imls'], inputs['edps'],
+                   color=self.colors['gem'][2], s=self.marker_sizes['medium'],
+                   alpha=0.4, label='Cloud Data', zorder=0)
+
+        # Plot Regression Line and Sigma Uncertainty
+        fitted_x = np.array(reg['fitted_x'])
+        fitted_y = np.array(reg['fitted_y'])
+        sigma = reg['sigma']
+
+        if sigma is not None:
+            # Calculate +/- 1 Sigma bounds in log-space
+            # y_upper = exp(ln(fitted_y) + sigma)
+            # y_lower = exp(ln(fitted_y) - sigma)
+            y_upper = np.exp(np.log(fitted_y) + sigma)
+            y_lower = np.exp(np.log(fitted_y) - sigma)
+
+            ax.fill_between(fitted_x, y_lower, y_upper,
+                            color=self.colors['gem'][1], alpha=0.2,
+                            label=r'Uncertainty ($\pm 1\sigma$)', zorder=1)
+
+        ax.plot(fitted_x, fitted_y, linestyle='solid',
+                color=self.colors['gem'][1], lw=self.line_widths['thick'],
+                label='Cloud Regression (Median)', zorder=2)
+
+        # Plot Damage Thresholds with DS subscripts
+        for i in range(len(inputs['damage_thresholds'])):
+            ax.scatter(cloud_dict['fragility']['medians'][i], inputs['damage_thresholds'][i],
+                       color=self.colors['fragility'][i % len(self.colors['fragility'])],
+                       s=self.marker_sizes['large'], edgecolor='black',
+                       label=f'$DS_{{{i+1}}}$ Threshold', zorder=5)
+
+        # Censoring Limits (only if they exist)
+        if inputs['upper_limit']:
+            ax.axhline(inputs['upper_limit'], color=self.colors['gem'][-1],ls='--', lw=1, label='Upper Censoring Limit', zorder=3)
+        if inputs['lower_limit']:
+            ax.axhline(inputs['lower_limit'], color=self.colors['gem'][-1],ls='-.', lw=1, label='Lower Censoring Limit', zorder=3)
+
+        # Formatting
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+
+        # Dynamic limits to ensure data is visible
+        ax.set_xlim([min(inputs['imls']) * 0.9, max(inputs['imls']) * 1.1])
+        ax.set_ylim([min(inputs['edps']) * 0.9, max(inputs['edps']) * 1.1])
+
+        default_title = f"Cloud Analysis: {imt_label} vs {edp_label}"
+        ax.set_title(title if title else default_title,
+                     fontsize=self.font_sizes['title'], fontname=self.font_name)
+        ax.legend(fontsize=self.font_sizes['legend'], loc='lower right')
+        plt.tight_layout()
+
+        # Save or Show
+        if pFlag:
+            if export_path:
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
+                plt.close(fig)
+            else:
+                plt.show()
+        else:
+            plt.close(fig)
 
     def plot_ida_analysis(self,
                           ida_dict,
