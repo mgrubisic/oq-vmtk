@@ -42,11 +42,13 @@ class modeller():
         Performs gravity analysis on the MDOF system.
     do_modal_analysis(num_modes=3, solver='-genBandArpack', doRayleigh=False, pflag=False)
         Performs modal analysis to determine natural frequencies and mode shapes.
-    do_spo_analysis(ref_disp, disp_scale_factor, push_dir, phi, pflag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='EnergyIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton')
+    do_spo_analysis(ref_disp, disp_scale_factor, push_dir, phi, pflag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='EnergyIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton', save_animation_path)
         Performs static pushover analysis (SPO) on the MDOF system.
-    do_cpo_analysis(ref_disp, mu_levels, push_dir, dispIncr, pflag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton')
+    do_cpo_analysis(ref_disp, mu_levels, push_dir, dispIncr, pflag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton', safe_animation_path)
         Performs cyclic pushover analysis (CPO) on the MDOF system.
-    do_nrha_analysis(fnames, dt_gm, sf, t_max, dt_ansys, nrha_outdir, pflag=True, xi=0.05, ansys_soe='BandGeneral', constraints_handler='Plain', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50, algorithm_type='Newton')
+    do_nrha_analysis(fnames, dt_gm, sf, t_max, dt_ansys, pflag=True, xi=0.05, ansys_soe='BandGeneral', constraints_handler='Plain', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50, algorithm_type='Newton', save_animation_path, drift_thresholds)
+        Performs nonlinear time-history analysis (NRHA) on the MDOF system.
+    do_incremental_dynamic_analysis(fnames, dt_gm, t_max, dt_ansys,target_drift=0.05, initial_sf = 0.1, hunt_step =2.0,max_fill_gap=0.2, max_runs =15, capping_drift = 0.10, xi=0.05, pFlag=False))
         Performs nonlinear time-history analysis (NRHA) on the MDOF system.
 
     """
@@ -579,7 +581,8 @@ class modeller():
                         test_type='EnergyIncr',
                         init_tol=1.0e-5,
                         init_iter=1000,
-                        algorithm_type='KrylovNewton'):
+                        algorithm_type='KrylovNewton',
+                        save_animation_path=None):
         """
         Perform static pushover analysis (SPO) on a multi-degree-of-freedom (MDOF) system.
 
@@ -635,153 +638,127 @@ class modeller():
         algorithm_type: string, optional
             The type of algorithm used to solve the system. Default is 'KrylovNewton'.
 
+        save_animation_path: string, optional,
+            If provided, saves the figure to this path (e.g., 'spo.gif')
+
         Returns
         -------
-        spo_disps: array
-            Displacements at each floor level during the pushover analysis.
-
-        spo_rxn: array
-            Base shear recorded as the sum of reactions at the base during the pushover analysis.
-
-        spo_disps_spring: array
-            Displacements in the storey zero-length elements (non-linear springs).
-
-        spo_forces_spring: array
-            Shear forces in the storey zero-length elements (non-linear springs).
-
+        spo_dict: dict
+            A dictionary containing the SPO results with the following keys:
+            'spo_disps': array - Displacements at each floor level (TimeSteps x Floors).
+            'spo_rxn': array - Base shear recorded at the base (TimeSteps).
+            'spo_disps_spring': array - Displacements in the storey zero-length elements (TimeSteps x Springs).
+            'spo_forces_spring': array - Shear forces in the storey zero-length elements (TimeSteps x Springs).
+            'spo_idr': array - Interstorey drift ratio history for each storey (TimeSteps x Storeys).
+            'spo_midr': array - Maximum interstorey drift ratio history (max IDR across all stories at each step, TimeSteps).
         """
 
-        # apply the load pattern
-        ops.timeSeries("Linear", 1) # create timeSeries
-        ops.pattern("Plain", 1, 1) # create a plain load pattern
+        # --- Setup OpenSees Model for Analysis ---
+        ops.timeSeries("Linear", 1)
+        ops.pattern("Plain", 1, 1)
 
-        # define control nodes
         nodeList = ops.getNodeTags()
         control_node = nodeList[-1]
         pattern_nodes = nodeList[1:]
-        rxn_nodes = [nodeList[0]]
+        rxn_nodes = [nodeList[0]] # Base node for reaction calculation
 
-
-        # we can integrate modal patterns, inverse triangular, etc.
+        # Apply the lateral load pattern
         for i in np.arange(len(pattern_nodes)):
+            load_val = 1.0 if len(pattern_nodes)==1 else phi[i]*self.floor_masses[i]
             if push_dir == 1:
-                if len(pattern_nodes)==1:
-                    ops.load(pattern_nodes[i], 1.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-                else:
-                    ops.load(pattern_nodes[i], phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0, 0.0, 0.0) ######### IT STARTS FROM ZERO
-
+                ops.load(pattern_nodes[i], load_val, 0.0, 0.0, 0.0, 0.0, 0.0)
             elif push_dir == 2:
-                if len(pattern_nodes)==1:
-                    ops.load(pattern_nodes[i], 0.0, 1.0, 0.0, 0.0, 0.0, 0.0)
-                else:
-                    ops.load(pattern_nodes[i], 0.0, phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0, 0.0)
-
+                ops.load(pattern_nodes[i], 0.0, load_val, 0.0, 0.0, 0.0, 0.0)
             elif push_dir == 3:
-                if len(pattern_nodes)==1:
-                    ops.load(pattern_nodes[i], 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
-                else:
-                    ops.load(pattern_nodes[i], 0.0, 0.0, phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0)
+                ops.load(pattern_nodes[i], 0.0, 0.0, load_val, 0.0, 0.0, 0.0)
 
-        # Set up the initial objects
+        # Set analysis objects
         ops.system(ansys_soe)
         ops.constraints(constraints_handler)
         ops.numberer(numberer)
         ops.test(test_type, init_tol, init_iter)
         ops.algorithm(algorithm_type)
 
-        # Set the integrator
+        # Set integrator
         target_disp = float(ref_disp)*float(disp_scale_factor)
         delta_disp = target_disp/(1.0*num_steps)
         ops.integrator('DisplacementControl', control_node, push_dir, delta_disp)
         ops.analysis('Static')
 
-        # Get a list of all the element tags (zero-length springs)
         elementList = ops.getEleTags()
 
-        # Give some feedback if requested
         if pflag is True:
             print(f"\n------ Static Pushover Analysis of Node # {control_node} to {target_disp} ---------")
-        # Set up the analysis
+
         ok = 0
         step = 1
         loadf = 1.0
 
-        # Recording base shear
+        # Initialize result arrays with current state (usually 0.0)
         spo_rxn = np.array([0.])
-        # Recording top displacement
-        spo_top_disp = np.array([ops.nodeResponse(control_node, push_dir,1)])
-        # Recording all displacements to estimate drifts
+        spo_top_disp = np.array([ops.nodeResponse(control_node, push_dir,1)]) # Used for animation and Pushover Curve
         spo_disps = np.array([[ops.nodeResponse(node, push_dir, 1) for node in pattern_nodes]])
-
-        # Recording displacements and forces in non-linear zero-length springs [the zero is needed to get the exact required value]
         spo_disps_spring = np.array([[ops.eleResponse(ele, 'deformation')[0] for ele in elementList]])
         spo_forces_spring = np.array([[ops.eleResponse(ele, 'force')[0] for ele in elementList]])
 
-
-        # Start the adaptive convergence scheme
+        # Main Analysis Loop
         while step <= num_steps and ok == 0 and loadf > 0:
 
-            # Push it by one step
             ok = ops.analyze(1)
 
-            # If the analysis fails, try the following changes to achieve convergence
+            # Adaptive Convergence Scheme
             if ok != 0:
-                print('FAILED: Trying relaxing convergence...')
+                if pflag: print('FAILED: Trying relaxing convergence...')
                 ops.test(test_type, init_tol*0.01, init_iter)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
-                print('FAILED: Trying relaxing convergence with more iterations...')
+                if pflag: print('FAILED: Trying relaxing convergence with more iterations...')
                 ops.test(test_type, init_tol*0.01, init_iter*10)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
-                print('FAILED: Trying relaxing convergence with more iteration and Newton with initial then current...')
+                if pflag: print('FAILED: Trying relaxing convergence with more iteration and Newton with initial then current...')
                 ops.test(test_type, init_tol*0.01, init_iter*10)
                 ops.algorithm('Newton', 'initialThenCurrent')
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
-                print('FAILED: Trying relaxing convergence with more iteration and Newton with initial...')
+                if pflag: print('FAILED: Trying relaxing convergence with more iteration and Newton with initial...')
                 ops.test(test_type, init_tol*0.01, init_iter*10)
                 ops.algorithm('Newton', 'initial')
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
-                print('FAILED: Attempting a Hail Mary...')
+                if pflag: print('FAILED: Attempting a Hail Mary...')
                 ops.test('FixedNumIter', init_iter*10)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
+                if ok != 0: # Final check before breaking
+                    break
 
-            # This feature of disabling the possibility of having a negative loading has been included.
             loadf = ops.getTime()
 
-            # Give some feedback if requested
             if pflag is True:
                 curr_disp = ops.nodeDisp(control_node, push_dir)
-                print('Currently pushed node ' + str(control_node) + ' to ' + str(curr_disp) + ' with ' + str(loadf))
+                print(f'Currently pushed node {control_node} to {curr_disp:.4f} with load factor {loadf:.4f}')
 
-            # Increment to the next step
             step += 1
 
-            # Get the results
-            spo_top_disp = np.append(spo_top_disp, ops.nodeResponse(
-            control_node, push_dir, 1))
+            # Record Results
+            spo_top_disp = np.append(spo_top_disp, ops.nodeResponse(control_node, push_dir, 1))
 
-            spo_disps = np.append(spo_disps, np.array([
-            [ops.nodeResponse(node, push_dir, 1) for node in pattern_nodes]
-            ]), axis=0)
-
+            current_disps = np.array([ops.nodeResponse(node, push_dir, 1) for node in pattern_nodes])
+            spo_disps = np.append(spo_disps, np.array([current_disps]), axis=0)
 
             spo_disps_spring = np.append(spo_disps_spring, np.array([
-            [ops.eleResponse(ele, 'deformation')[0] for ele in elementList]
+                [ops.eleResponse(ele, 'deformation')[0] for ele in elementList]
             ]), axis=0)
 
-
             spo_forces_spring = np.append(spo_forces_spring, np.array([
-            [ops.eleResponse(ele, 'force')[0] for ele in elementList]
+                [ops.eleResponse(ele, 'force')[0] for ele in elementList]
             ]), axis=0)
 
             ops.reactions()
@@ -791,7 +768,7 @@ class modeller():
             spo_rxn = np.append(spo_rxn, -temp)
 
 
-        # Give some feedback on what happened
+        # Final Cleanup and Output
         if ok != 0:
             print('------ ANALYSIS FAILED --------')
         elif ok == 0:
@@ -799,10 +776,45 @@ class modeller():
         if loadf < 0:
             print('Stopped because of load factor below zero')
 
-        ### Wipe the analysis objects
         ops.wipeAnalysis()
 
-        return spo_disps, spo_rxn, spo_disps_spring, spo_forces_spring
+        # Calculate Interstorey Drift Ratio (IDR) and Max IDR (MIDR)
+        # Use a COPY of the original displacement history for IDR calculation
+        idr_disps = spo_disps.copy()
+
+        if not hasattr(self, 'floor_heights'):
+            raise AttributeError("Cannot calculate IDR: 'floor_heights' property is required but not defined in the class.")
+
+        # Prepend ground floor (zero displacement)
+        ground_disps = np.zeros((idr_disps.shape[0], 1))
+        full_idr_disps = np.hstack([ground_disps, idr_disps])
+
+        # Compute interstorey displacements (ISD)
+        spo_isd = np.diff(full_idr_disps, axis=1)
+
+        # Convert floor_heights to a numpy array for division
+        floor_heights = np.array(self.floor_heights)
+
+        # Normalize by corresponding floor heights to get IDR (x100 requested)
+        spo_idr = (spo_isd / floor_heights) * 100
+
+        # Take the maximum interstorey drift ratio per step
+        spo_midr = np.max(np.abs(spo_idr), axis=1)
+
+        # Handle Animation (Call updated function with spo_midr)
+        if save_animation_path:
+            pl = plotter()
+            pl.animate_spo(spo_top_disp, spo_rxn, spo_disps, spo_midr, nodeList, elementList, push_dir, save_animation_path)
+
+        # Pack and Return results into a dictionary
+        spo_dict = {'spo_disps': spo_disps,
+                    'spo_rxn': spo_rxn,
+                    'spo_disps_spring': spo_disps_spring,
+                    'spo_forces_spring': spo_forces_spring,
+                    'spo_idr': spo_idr,
+                    'spo_midr': spo_midr}
+
+        return spo_dict
 
     def do_cpo_analysis(self,
                         ref_disp,
@@ -811,235 +823,229 @@ class modeller():
                         dispIncr,
                         phi,
                         pflag=True,
-                        num_steps=200,
                         ansys_soe='BandGeneral',
                         constraints_handler='Transformation',
                         numberer='RCM',
                         test_type='NormDispIncr',
                         init_tol=1.0e-5,
                         init_iter=1000,
-                        algorithm_type='KrylovNewton'):
+                        algorithm_type='KrylovNewton',
+                        save_animation_path=None):
         """
         Perform cyclic pushover (CPO) analysis on a Multi-Degree-of-Freedom (MDOF) system.
-
-        This method performs a cyclic pushover analysis where the structure is subjected
-        to a series of incremental displacements in the specified direction, both positive
-        and negative, to simulate cyclic loading (e.g., earthquake-like loading conditions).
-        The pushover analysis is carried out over a specified number of cycles, with each cycle
-        involving displacement increments to achieve the desired ductility.
 
         Parameters
         ----------
         ref_disp: float
-            Reference displacement for the pushover analysis (e.g., yield displacement, or a baseline displacement).
-
+            Reference displacement (e.g., yield displacement) for scaling the cycles.
         mu_levels: list
-            Target ductility factors, which is used to scale the displacement at each cycle.
-
-        dispIncr: int
-            The number of displacement increments for each loading cycle.
-
+            Target ductility factors (mu) for each cycle level.
         push_dir: int
-            Direction of the pushover analysis.
-            - 1 = X direction
-            - 2 = Y direction
-            - 3 = Z direction
-
+            Direction of the pushover analysis (1=X, 2=Y, 3=Z).
+        dispIncr: int
+            The number of displacement increments for each loading cycle target.
         phi: list of floats
-            The lateral load pattern shape. This is typically a mode shape or a predefined load distribution.
-            For example, it can be the first-mode shape from the calibrateModel function.
-
+            The lateral load pattern shape vector (scaled by mass).
         pflag: bool, optional, default=True
             If True, prints feedback during the analysis steps.
-
-        num_steps: int, optional, default=200
-            The number of steps for the cyclic pushover analysis.
-
+        save_animation_path: str, optional, default=None
+            If provided, the path to save the animation (e.g., 'cpo.gif' or 'cpo.mp4').
         ansys_soe: string, optional, default='BandGeneral'
-            System of equations solver to be used for the analysis.
-
+            System of equations solver.
         constraints_handler: string, optional, default='Transformation'
-            The method used for handling constraint equations, such as enforcing displacement boundary conditions.
-
+            Constraint handler method.
         numberer: string, optional, default='RCM'
-            The numberer method used to assign equation numbers to degrees of freedom.
-
+            The numberer method.
         test_type: string, optional, default='NormDispIncr'
-            The type of test to be used for convergence in the solution of the linear system of equations.
-
+            Convergence test type.
         init_tol: float, optional, default=1e-5
             The initial tolerance for convergence.
-
         init_iter: int, optional, default=1000
-            The maximum number of iterations for the solver to check convergence.
-
+            The maximum number of iterations for the solver.
         algorithm_type: string, optional, default='KrylovNewton'
-            The type of algorithm used to solve the system of equations (e.g., Krylov-Newtown method).
+            The type of algorithm used to solve the system of equations.
+        save_animation_path: string, optional,
+            If provided, saves the figure to this path (e.g., 'cpo.gif')
 
         Returns
         -------
-        cpo_disps: numpy.ndarray
-            An array containing the displacements at each floor at each step of the analysis.
-
-        cpo_rxn: numpy.ndarray
-            An array containing the base shear values, calculated as the sum of the reactions at the base.
-
+        cpo_dict: dict
+            A dictionary containing all the analysis results (displacements, base_shear, etc.).
         """
 
-        # check ductility targets
         if mu_levels is None:
             mu_levels = [1, 2, 4, 6, 8, 10]
 
-        # apply the load pattern
-        ops.timeSeries("Linear", 1) # create timeSeries
-        ops.pattern("Plain",1,1) # create a plain load pattern
+        # Apply the load pattern
+        ops.timeSeries("Linear", 1)
+        ops.pattern("Plain",1,1)
 
-        # define control nodes
+        # Get all tags needed for analysis and animation
         nodeList = ops.getNodeTags()
-        control_node = nodeList[-1]
-        pattern_nodes = nodeList[1:]
-        rxn_nodes = [nodeList[0]]
+        elementList = ops.getEleTags()
 
-        # quality control
+        # Ensure model has nodes
+        if not nodeList:
+            print("ERROR: No nodes found in the OpenSees model.")
+            return None
+
+        control_node = nodeList[-1]
+        pattern_nodes = nodeList[1:] # All nodes above ground
+        rxn_nodes = [nodeList[0]] # Ground node
+
+        # Quality control
         assert len(phi) == len(pattern_nodes), "phi length must match pattern_nodes"
         assert len(self.floor_masses) == len(pattern_nodes), "floor_masses length mismatch"
 
-        # we can integrate modal patterns, inverse triangular, etc.
+        # Apply lateral load pattern scaled by mass
         for i in np.arange(len(pattern_nodes)):
             if push_dir == 1:
-                if len(pattern_nodes)==1:
-                    ops.load(pattern_nodes[i], 1.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-                else:
-                    ops.load(pattern_nodes[i], phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0, 0.0, 0.0) ######### IT STARTS FROM ZERO
-
+                ops.load(pattern_nodes[i], phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0, 0.0, 0.0)
             elif push_dir == 2:
-                if len(pattern_nodes)==1:
-                    ops.load(pattern_nodes[i], 0.0, 1.0, 0.0, 0.0, 0.0, 0.0)
-                else:
-                    ops.load(pattern_nodes[i], 0.0, phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0, 0.0)
-
+                ops.load(pattern_nodes[i], 0.0, phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0, 0.0)
             elif push_dir == 3:
-                if len(pattern_nodes)==1:
-                    ops.load(pattern_nodes[i], 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
-                else:
-                    ops.load(pattern_nodes[i], 0.0, 0.0, phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0)
+                ops.load(pattern_nodes[i], 0.0, 0.0, phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0)
 
-        # Set up the initial objects
+        # Set up the analysis objects
         ops.system(ansys_soe)
         ops.constraints(constraints_handler)
         ops.numberer(numberer)
         ops.test(test_type, init_tol, init_iter)
         ops.algorithm(algorithm_type)
 
-        # Internally create push-pull cycle list with positive and negative displacements
+        # Create the list of target displacements (e.g., +1mu, -1mu, +2mu, -2mu, ...)
         cycleDispList = []
         for mu in mu_levels:
             cycleDispList.append(ref_disp * mu)   # push positive
-            cycleDispList.append(-ref_disp * mu)  # push negative
+            cycleDispList.append(-ref_disp * mu)  # pull negative
         dispNoMax = len(cycleDispList)
 
-
-        # Give some feedback if requested
         if pflag:
             print(f"\n------ Cyclic Pushover with ductility levels: {mu_levels} ------")
 
-        # Recording base shear
+        # Recording data arrays
         cpo_rxn = [0.0]
-        cpo_rxn = np.array(cpo_rxn)
-
-        # Recording top displacement
         cpo_top_disp = [ops.nodeDisp(control_node, push_dir)]
-        cpo_top_disp = np.array(cpo_top_disp)
-
-        # Recording all displacements to estimate drifts
         cpo_disps = [[ops.nodeDisp(node, push_dir) for node in pattern_nodes]]
-        cpo_disps = np.array(cpo_disps)
-
-        # Initialize dissipated energy tracker
-        energy_steps = [0.0]  # Initial energy is zero
+        energy_steps = [0.0]
 
         for d in range(dispNoMax):
             numIncr = dispIncr
             current_disp = ops.nodeDisp(control_node, push_dir)
             target_disp = cycleDispList[d]
             dU = (target_disp - current_disp) / numIncr
+
+            # Use DisplacementControl integrator
             ops.integrator('DisplacementControl', control_node, push_dir, dU)
             ops.analysis('Static')
 
+            # Loop over displacement increments
             for l in range(numIncr):
                 ok = ops.analyze(1)
 
-                # If the analysis fails, try the following changes to achieve convergence
+                # Convergence Failure Handling (Extended Recovery)
+                if ok != 0:
+                    print(f'FAILED at cycle {d+1}/{dispNoMax}, increment {l}/{numIncr}: Starting complex recovery attempts...')
+
+                # Try relaxing convergence tolerance
                 if ok != 0:
                     print('FAILED: Trying relaxing convergence...')
                     ops.test(test_type, init_tol*0.01, init_iter)
                     ok = ops.analyze(1)
                     ops.test(test_type, init_tol, init_iter)
+
+                # Try relaxing convergence tolerance with more iterations
                 if ok != 0:
                     print('FAILED: Trying relaxing convergence with more iterations...')
                     ops.test(test_type, init_tol*0.01, init_iter*10)
                     ok = ops.analyze(1)
                     ops.test(test_type, init_tol, init_iter)
+
+                # Try relaxing tolerance, more iterations, and Newton with 'initialThenCurrent'
                 if ok != 0:
                     print('FAILED: Trying relaxing convergence with more iteration and Newton with initial then current...')
                     ops.test(test_type, init_tol*0.01, init_iter*10)
                     ops.algorithm('Newton', 'initialThenCurrent')
                     ok = ops.analyze(1)
                     ops.test(test_type, init_tol, init_iter)
-                    ops.algorithm(algorithm_type)
+                    ops.algorithm(algorithm_type) # Restore original algorithm
+
+                # Try relaxing tolerance, more iterations, and Newton with 'initial'
                 if ok != 0:
                     print('FAILED: Trying relaxing convergence with more iteration and Newton with initial...')
                     ops.test(test_type, init_tol*0.01, init_iter*10)
                     ops.algorithm('Newton', 'initial')
                     ok = ops.analyze(1)
                     ops.test(test_type, init_tol, init_iter)
-                    ops.algorithm(algorithm_type)
+                    ops.algorithm(algorithm_type) # Restore original algorithm
+
+                # Attempt a Hail Mary (FixedNumIter)
                 if ok != 0:
                     print('FAILED: Attempting a Hail Mary...')
                     ops.test('FixedNumIter', init_iter*10)
                     ok = ops.analyze(1)
-                    ops.test(test_type, init_tol, init_iter)
+                    ops.test(test_type, init_tol, init_iter) # Restore original test type
+
+                # Final failure check
                 if ok != 0:
                     print('Analysis Failed')
                     break
 
-            # Give some feedback if requested
+                # Data Recording (only if successful)
+                if ok == 0:
+                    curr_disp = ops.nodeDisp(control_node, push_dir)
+                    cpo_top_disp.append(curr_disp)
+
+                    current_floor_disps = [ops.nodeDisp(node, push_dir) for node in pattern_nodes]
+                    cpo_disps.append(current_floor_disps)
+
+                    ops.reactions()
+                    temp = sum(ops.nodeReaction(n, push_dir) for n in rxn_nodes)
+                    curr_rxn = -temp
+                    cpo_rxn.append(curr_rxn)
+
+                    if len(cpo_top_disp) >= 2:
+                        dU_step = cpo_top_disp[-1] - cpo_top_disp[-2]
+                        avg_F = 0.5 * (cpo_rxn[-1] + cpo_rxn[-2])
+                        dE = abs(avg_F * dU_step)
+                        energy_steps.append(energy_steps[-1] + dE)
+                    else:
+                        energy_steps.append(energy_steps[-1])
+
             if pflag is True:
                 curr_disp = ops.nodeDisp(control_node, push_dir)
-                print('Currently pushed node ' + str(control_node) + ' to ' + str(curr_disp))
+                print(f"Cycle target {d+1}/{dispNoMax}: Pushed node {control_node} to {curr_disp:.4f}")
 
-            # Get current displacement and base shear
-            curr_disp = ops.nodeResponse(control_node, push_dir, 1)
-            cpo_top_disp = np.append(cpo_top_disp, curr_disp)
-
-            # Append displacement vector for all floors
-            cpo_disps = np.append(cpo_disps, np.array([
-                [ops.nodeResponse(node, push_dir, 1) for node in pattern_nodes]
-            ]), axis=0)
-
-            # Calculate current base shear
-            ops.reactions()
-            temp = 0
-            for n in rxn_nodes:
-                temp += ops.nodeReaction(n, push_dir)
-            curr_rxn = -temp
-            cpo_rxn = np.append(cpo_rxn, curr_rxn)
-
-            # Calculate incremental energy (trapezoid rule)
-            if len(cpo_top_disp) >= 2:
-                dU = cpo_top_disp[-1] - cpo_top_disp[-2]
-                avg_F = 0.5 * (cpo_rxn[-1] + cpo_rxn[-2])
-                dE = abs(avg_F * dU)  # Energy in kN·m (assuming displacements in meters and force in kN)
-                energy_steps.append(energy_steps[-1] + dE)
-
-        pseudo_steps = np.arange(len(energy_steps))  # or use actual step counter if you prefer
+        # Convert lists to numpy arrays
+        cpo_rxn = np.array(cpo_rxn)
+        cpo_top_disp = np.array(cpo_top_disp)
+        cpo_disps = np.array(cpo_disps)
+        pseudo_steps = np.arange(len(energy_steps))
         cpo_energy = np.column_stack((pseudo_steps, energy_steps))
-        assert np.all(np.diff(cpo_energy[:,1]) >= 0), "Energy should be cumulative and increasing"
 
-        ### Wipe the analysis objects
+        # Calculate Interstorey Drifts
+        base_disps = np.zeros((cpo_disps.shape[0], 1))
+        padded_disps = np.hstack((base_disps, cpo_disps))
+        cpo_drifts = np.diff(padded_disps, axis=1)
+        max_interstorey_drift = np.max(np.abs(cpo_drifts))
+
         ops.wipeAnalysis()
 
-        return cpo_disps, cpo_rxn, cpo_energy
+        # Final output dictionary (cpo_dict)
+        cpo_dict = {'cpo_disps': cpo_disps,
+                    'cpo_rxn': cpo_rxn,
+                    'cpo_top_disp': cpo_top_disp,
+                    'cpo_energy': cpo_energy,
+                    'cpo_idr': cpo_drifts,
+                    'cpo_midr': max_interstorey_drift}
+
+        # Animation Call
+        if save_animation_path:
+
+            pl = plotter()
+            pl.animate_cpo(cpo_dict, nodeList, elementList, push_dir, save_animation_path)
+
+        return cpo_dict
 
     def do_nrha_analysis(self, fnames, dt_gm, sf, t_max, dt_ansys,
                          pFlag=True, xi=0.05, ansys_soe='BandGeneral',
@@ -1392,6 +1398,15 @@ class modeller():
                 gm_time = np.arange(len(acc_input_full)) * dt_gm
                 acc_resampled = np.interp(time_array, gm_time, acc_input_full) / 9.81  # convert to g
 
+                # --- INSERT SYNCHRONIZATION HERE ---
+                min_len = min(len(time_array), len(acc_resampled), node_disps.shape[0], node_accels.shape[0])
+
+                time_array = time_array[:min_len]
+                acc_resampled = acc_resampled[:min_len]
+                node_disps = node_disps[:min_len, :]
+                node_accels = node_accels[:min_len, :]
+                # ------------------------------------
+
                 # Decide downsampling for animation frames (keep animation reasonably fast)
                 # Aim ~200-600 frames depending on duration; choose factor so frames <= 400
                 max_frames = 200   # instead of 400–600
@@ -1401,11 +1416,19 @@ class modeller():
                 # Call animate_nrha with downsample info by sending the full arrays; animate_nrha will create animation.
                 # If animate_nrha supports internal downsampling, it can be used; else it will be given full arrays.
                 pl = plotter()
+                # pl.animate_nrha(control_nodes=control_nodes,
+                #                 acc=acc_resampled,
+                #                 dts=time_array,
+                #                 nrha_disps=node_disps,
+                #                 nrha_accels=node_accels,
+                #                 drift_thresholds=drift_thresholds,
+                #                 export_path=save_animation_path)
+
                 pl.animate_nrha(control_nodes=control_nodes,
-                                acc=acc_resampled,
-                                dts=time_array,
-                                nrha_disps=node_disps,
-                                nrha_accels=node_accels,
+                                acc=acc_resampled[frames],
+                                dts=time_array[frames],
+                                nrha_disps=node_disps[frames, :],
+                                nrha_accels=node_accels[frames, :],
                                 drift_thresholds=drift_thresholds,
                                 export_path=save_animation_path)
             except Exception as e:
