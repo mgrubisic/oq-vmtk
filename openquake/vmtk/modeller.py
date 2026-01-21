@@ -1042,7 +1042,7 @@ class modeller():
         return cpo_disps, cpo_rxn, cpo_energy
 
     def do_nrha_analysis(self, fnames, dt_gm, sf, t_max, dt_ansys,
-                         pflag=True, xi=0.05, ansys_soe='BandGeneral',
+                         pFlag=True, xi=0.05, ansys_soe='BandGeneral',
                          constraints_handler='Plain', numberer='RCM',
                          test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50,
                          algorithm_type='Newton', save_animation_path=None, drift_thresholds=None):
@@ -1073,10 +1073,7 @@ class modeller():
             The time-step at which the analysis will be conducted. Typically smaller than the ground motion time-step to
             ensure accurate results.
 
-        nrha_outdir: string
-            Directory where temporary output files (e.g., acceleration records) are saved during the analysis.
-
-        pflag: bool, optional, default=True
+        pFlag: bool, optional, default=True
             Flag to print progress updates during the analysis. If True, the function prints information about the analysis
             steps and progress.
 
@@ -1230,7 +1227,7 @@ class modeller():
             control_time = ops.getTime()
 
             # Throttled progress output
-            if pflag and (step % print_every == 0 or control_time >= t_max):
+            if pFlag and (step % print_every == 0 or control_time >= t_max):
                 print(f'Completed {control_time:.3f} of {t_max:.3f} seconds')
 
             # If analysis fails, run the exact adaptive recovery sequence (kept identical)
@@ -1271,7 +1268,7 @@ class modeller():
                 conv_index = -1
                 break
 
-            # --- Efficiently query node responses once per node and store locally ---
+            # Efficiently query node responses once per node and store locally
             # We'll query X and Y displacements and acceleration response (dof=1 accel) once per node,
             # store in the arrays, then compute drifts vectorized (avoid repeated calls).
             for i, node in enumerate(control_nodes):
@@ -1373,7 +1370,7 @@ class modeller():
         else:
             print('~~~~~~~ ANALYSIS SUCCESSFUL ~~~~~~~~~')
 
-        if pflag:
+        if pFlag:
             print('Final state = {:d} (-1 for non-converged, 0 for stable)'.format(conv_index))
             print('Maximum peak storey drift {:.3f} radians at storey {:d} in the {:s} direction (Storeys = 1, 2, 3,...)'.format(
                 max_peak_drift, max_peak_drift_loc, max_peak_drift_dir))
@@ -1423,7 +1420,7 @@ class modeller():
 
     def do_incremental_dynamic_analysis(self, fnames, dt_gm, t_max, dt_ansys,
                                         target_drift=0.05, initial_sf = 0.1, hunt_step =2.0,
-                                        max_fill_gap=0.2, max_runs =15, capping_drift = 0.10, xi=0.05):
+                                        max_fill_gap=0.2, max_runs =15, capping_drift = 0.10, xi=0.05, pFlag=False):
         """
         Performs Incremental Dynamic Analysis (IDA) using the 'Hunt, Trace and Fill' algorithm as per Vamvatsikos and Cornell (2002, 2004).
 
@@ -1502,7 +1499,7 @@ class modeller():
             self.do_gravity_analysis()
 
             # Execute the nonlinear time-history analysis
-            res = self.do_nrha_analysis(fnames, dt_gm, sf_value*units.g, t_max, dt_ansys, pflag=False, xi=xi)
+            res = self.do_nrha_analysis(fnames, dt_gm, sf_value*units.g, t_max, dt_ansys, pFlag=pFlag, xi=xi)
 
             # # Check convergence state and extract max drift
             raw_max_drift = res[4]
