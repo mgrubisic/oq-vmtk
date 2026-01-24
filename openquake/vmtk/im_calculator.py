@@ -3,9 +3,9 @@ from scipy import signal, integrate
 
 class IMCalculator:
     """
-    A class to compute various intensity measures (IMs) from a ground-motion record, such as response spectrum, 
-    spectral acceleration, amplitude-based IMs, Arias Intensity, Cumulative Absolute Velocity (CAV), 
-    and significant duration. The class also supports calculating velocity and displacement histories, as well as 
+    A class to compute various intensity measures (IMs) from a ground-motion record, such as response spectrum,
+    spectral acceleration, amplitude-based IMs, Arias Intensity, Cumulative Absolute Velocity (CAV),
+    and significant duration. The class also supports calculating velocity and displacement histories, as well as
     advanced IMs like the filtered incremental velocity (FIV3).
 
     Attributes
@@ -43,14 +43,14 @@ class IMCalculator:
         Computes duration-based intensity measures: Arias Intensity, CAV, and 5%-95% significant duration.
     get_FIV3(period, alpha, beta)
         Computes the filtered incremental velocity (FIV3) based on a ground motion record and specified parameters.
-    
-    """   
-    
-    
+
+    """
+
+
     def __init__(self, acc, dt, damping=0.05):
         """
         Initialize the intensity measure calculator with the acceleration data and time step.
-        
+
         Parameters
         ----------
         acc : list or np.array
@@ -64,17 +64,17 @@ class IMCalculator:
         self.dt = dt
         self.damping = damping
 
-    def get_spectrum(self, periods=np.linspace(1e-5, 4.0, 100), damping_ratio=0.05):
+    def get_spectrum(self, periods=np.linspace(1e-5, 4.0, 500), damping_ratio=0.05):
         """
         Compute the response spectrum using the Newmark-beta method.
-    
+
         Parameters
         ----------
         periods : np.array
             List of periods to compute spectral response (s).
         damping_ratio : float
             Damping ratio (default is 5%).
-    
+
         Returns
         -------
         periods : np.array
@@ -91,33 +91,33 @@ class IMCalculator:
         beta = 0.25
         ms = 1.0  # Unit mass (kg)
         g = 9.81  # Gravity constant
-    
+
         # Convert ground acceleration to m/s² and create force vector
         acc = np.array(self.acc) * g
         p = -ms * acc
-    
+
         # Time vector
         time_steps = len(acc)
-    
+
         # Initialize response arrays
         num_periods = len(periods)
         u = np.zeros((num_periods, time_steps))  # Displacement
         v = np.zeros((num_periods, time_steps))  # Velocity
         a = np.zeros((num_periods, time_steps))  # Acceleration
-    
+
         # Compute stiffness, frequency, and damping for all periods at once
         omega = 2 * np.pi / periods  # Circular frequency
         k = ms * omega**2  # Stiffness (N/m)
         c = 2 * damping_ratio * ms * omega  # Damping coefficient
-    
+
         # Initial acceleration
         a[:, 0] = p[0] / ms
-    
+
         # Precompute stiffness term for numerical stability
         k_bar = k + (gamma / (beta * self.dt)) * c + (ms / (beta * self.dt**2))
         A = ms / (beta * self.dt) + (gamma / beta) * c
         B = ms / (2 * beta) + (self.dt * c * (gamma / (2 * beta) - 1))
-    
+
         # Newmark time integration (vectorized loop)
         for i in range(time_steps - 1):
             dp = p[i + 1] - p[i]
@@ -125,16 +125,16 @@ class IMCalculator:
             du = dp_bar / k_bar
             dv = (gamma / (beta * self.dt)) * du - (gamma / beta) * v[:, i] + self.dt * (1 - gamma / (2 * beta)) * a[:, i]
             da = du / (beta * self.dt**2) - v[:, i] / (beta * self.dt) - a[:, i] / (2 * beta)
-    
+
             u[:, i + 1] = u[:, i] + du
             v[:, i + 1] = v[:, i] + dv
             a[:, i + 1] = a[:, i] + da
-    
+
         # Compute spectral values (vectorized)
         sd = np.max(np.abs(u), axis=1)  # Spectral displacement
         sv = sd * omega  # Spectral velocity
         sa = sd * omega**2 / g  # Spectral acceleration (normalized by gravity)
-        
+
         return periods, sd, sv, sa
 
     def get_sa(self, period):
@@ -178,8 +178,8 @@ class IMCalculator:
         sa_values = np.clip(sa_values, 1e-6, None)  # Prevent underflow
 
         return np.exp(np.mean(np.log(sa_values)))  # Geometric mean
-    
-    
+
+
     def get_saavg_user_defined(self, periods_list):
         """
         Compute geometric mean of spectral accelerations for user-defined list of periods.
@@ -198,17 +198,17 @@ class IMCalculator:
 
         # Interpolate SA values for user-defined periods
         sa_values = np.interp(periods_list, periods, sa)
-        
+
         # Avoid multiplying zero values in geometric mean
         sa_values = np.clip(sa_values, 1e-6, None)  # Prevent underflow
 
         return np.exp(np.mean(np.log(sa_values)))  # Geometric mean
-        
+
 
     def get_velocity_displacement_history(self):
         """
         Compute velocity and displacement history with drift correction.
-        
+
         Returns
         -------
         vel : np.array
@@ -217,22 +217,22 @@ class IMCalculator:
             Displacement time-history (m)
         """
         acc_m_s2 = self.acc * 9.81  # Convert g to m/s² if needed
-    
+
         # High-pass filter to remove baseline drift
         sos = signal.butter(4, 0.1, btype='highpass', fs=1/self.dt, output='sos')
         acc_filtered = signal.sosfilt(sos, acc_m_s2)
-    
+
         # Integrate acceleration to get velocity
         vel = integrate.cumulative_trapezoid(acc_filtered, dx=self.dt, initial=0)
         vel = signal.detrend(vel, type='linear')  # Remove linear drift
-    
+
         # Integrate velocity to get displacement
         disp = integrate.cumulative_trapezoid(vel, dx=self.dt, initial=0)
         disp = signal.detrend(disp, type='linear')  # Remove residual drift
-    
+
         return vel, disp
-    
-    
+
+
     def get_amplitude_ims(self):
         """
         Compute amplitude-based intensity measures.
@@ -246,7 +246,7 @@ class IMCalculator:
         pgd : float
             Peak ground displacement (m)
         """
-        
+
         acc_m_s2 = self.acc * 9.81  # Convert g to m/s²
         vel = integrate.cumulative_trapezoid(acc_m_s2, dx=self.dt, initial=0)
         disp = integrate.cumulative_trapezoid(vel, dx=self.dt, initial=0)
@@ -256,7 +256,7 @@ class IMCalculator:
     def get_arias_intensity(self):
         """
         Compute Arias Intensity.
-    
+
         Returns
         -------
         AI : float
@@ -293,7 +293,7 @@ class IMCalculator:
         t_end = np.where(ai_norm >= end)[0][0] * self.dt
 
         return t_end - t_start
-        
+
     def get_duration_ims(self):
         """
         Compute duration-based intensity measures: Arias Intensity (AI), CAV, and t_595.
@@ -311,20 +311,20 @@ class IMCalculator:
         cav = self.get_cav()
         t_595 = self.get_significant_duration()
         return ai, cav, t_595
-    
+
     def get_FIV3(self, period, alpha, beta):
         """
         Computes the filtered incremental velocity (FIV3) intensity measure for a given ground motion record.
-    
-        This method calculates the FIV3 based on the approach described by Dávalos and Miranda (2019) using a 
-        filtered incremental velocity (FIV) method. The FIV3 is an intensity measure that is used in seismic 
-        collapse estimation. The method applies a low-pass Butterworth filter to the acceleration time series 
-        and then calculates the incremental velocity using a specified period, alpha (period factor), and beta 
-        (cut-off frequency factor). 
-    
-        The FIV3 is computed by considering the three largest peaks and the three smallest troughs of the 
+
+        This method calculates the FIV3 based on the approach described by Dávalos and Miranda (2019) using a
+        filtered incremental velocity (FIV) method. The FIV3 is an intensity measure that is used in seismic
+        collapse estimation. The method applies a low-pass Butterworth filter to the acceleration time series
+        and then calculates the incremental velocity using a specified period, alpha (period factor), and beta
+        (cut-off frequency factor).
+
+        The FIV3 is computed by considering the three largest peaks and the three smallest troughs of the
         filtered incremental velocity time series.
-    
+
         Parameters
         ----------
         period : float
@@ -333,7 +333,7 @@ class IMCalculator:
             A period factor that defines the length of the time window used for filtering.
         beta : float
             A cut-off frequency factor that influences the low-pass filter applied to the ground motion record.
-    
+
         Returns
         -------
         FIV3 : float
@@ -348,11 +348,11 @@ class IMCalculator:
             The three largest peak values from the filtered incremental velocity time series, used to compute FIV3.
         trs : np.array
             The three smallest trough values from the filtered incremental velocity time series, used to compute FIV3.
-    
+
         References
         ----------
-        Dávalos H, Miranda E. "Filtered incremental velocity: A novel approach in intensity measures for 
-        seismic collapse estimation." *Earthquake Engineering & Structural Dynamics*, 2019, 48(12), 1384–1405. 
+        Dávalos H, Miranda E. "Filtered incremental velocity: A novel approach in intensity measures for
+        seismic collapse estimation." *Earthquake Engineering & Structural Dynamics*, 2019, 48(12), 1384–1405.
         DOI: 10.1002/eqe.3205.
         """
 
