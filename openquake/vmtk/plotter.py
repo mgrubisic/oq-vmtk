@@ -2,13 +2,16 @@ import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from scipy import stats
 import matplotlib.pyplot as plt
 import openseespy.opensees as ops
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
+from scipy.stats import norm, lognorm
 import matplotlib.gridspec as gridspec
 from scipy.interpolate import interp1d
 import matplotlib.animation as animation
+from matplotlib.ticker import AutoMinorLocator
 from matplotlib.animation import FuncAnimation
 
 class plotter:
@@ -42,30 +45,22 @@ class plotter:
         Saves the plot to the specified directory.
     duplicate_for_drift(peak_drift_list, control_nodes)
         Creates data for box plots of peak storey drifts.
-    plot_cloud_analysis(cloud_dict, output_directory=None, plot_label='cloud_analysis_plot', xlabel='Peak Ground Acceleration, PGA [g]', ylabel=r'Maximum Peak Storey Drift, $\theta_{max}$ [%]')
+    plot_mca_analysis(cloud_dict, output_directory=None, plot_label='mca_plot', xlabel='Peak Ground Acceleration, PGA [g]', ylabel=r'Maximum Peak Storey Drift, $\theta_{max}$ [%]')
         Plots cloud analysis results.
+    plot_ida_analysis(ida_dict, output_directory=None, plot_label='ida_plot', xlabel='Peak Ground Acceleration, PGA [g]', ylabel=r'Maximum Peak Storey Drift, $\theta_{max}$ [%]')
+        Plots incremental dynamic analysis results.
+    plot_msa_analysis(imls, edps, output_directory=None, plot_label='cloud_analysis_plot', xlabel='Peak Ground Acceleration, PGA [g]', ylabel=r'Maximum Peak Storey Drift, $\theta_{max}$ [%]')
+        Plots incremental dynamic analysis results.
     plot_fragility_analysis(cloud_dict, output_directory=None, plot_label='fragility_plot', xlabel='Peak Ground Acceleration, PGA [g]')
         Plots fragility analysis results.
     plot_demand_profiles(peak_drift_list, peak_accel_list, control_nodes, output_directory=None, plot_label='demand_profiles')
         Plots demand profiles for peak drifts and accelerations.
-    plot_ansys_results(cloud_dict, peak_drift_list, peak_accel_list, control_nodes, output_directory=None, plot_label='ansys_results', cloud_xlabel='PGA', cloud_ylabel='MPSD')
-        Plots a 2x2 grid of analysis results, including cloud, fragility, and demand profiles.
     plot_vulnerability_analysis(intensities, loss, cov, xlabel, ylabel, output_directory=None, plot_label='vulnerability_plot')
         Plots vulnerability analysis results, including Beta distributions and loss curves.
     plot_slf_model(out, cache, xlabel, output_directory=None, plot_label='slf')
         Plots Storey Loss Function (SLF) model results.
     animate_model_run(control_nodes, acc, dts, nrha_disps, nrha_accels, drift_thresholds, output_directory=None, plot_label='animation')
         Animates the seismic demands for a single nonlinear time-history analysis (NRHA) run.
-
-    Notes
-    -----
-    - The class uses Matplotlib and Seaborn for plotting.
-    - The `_set_plot_style` method ensures consistent styling across all plots.
-    - The `_save_plot` method handles saving plots with high resolution.
-    - The `plot_cloud_analysis`, `plot_fragility_analysis`, and `plot_demand_profiles` methods are used for visualizing structural analysis results.
-    - The `plot_vulnerability_analysis` method visualizes loss distributions and loss curves.
-    - The `plot_slf_model` method visualizes Storey Loss Function (SLF) results.
-    - The `animate_model_run` method creates animations of seismic responses.
 
     """
 
@@ -126,61 +121,6 @@ class plotter:
         x.append(0.0)
 
         return x, y
-
-    def plot_fragility_analysis(self,
-                                cloud_dict,
-                                output_directory=None,
-                                plot_label='fragility_plot',
-                                xlabel='Peak Ground Acceleration, PGA [g]'):
-
-        """
-        Generate a fragility analysis plot showing the probability of exceedance (PoE)
-        for various damage states as a function of Peak Ground Acceleration (PGA).
-
-        This method plots fragility curves for multiple damage states based on the
-        fragility data in the input dictionary. Each curve represents the probability
-        of exceedance for a specific damage state, and the plot is presented in a
-        linear scale for both axes.
-
-        Parameters:
-        ----------
-        cloud_dict : dict
-            A dictionary containing the data for the fragility analysis. The dictionary
-            should have the following keys:
-                - 'fragility': A dictionary containing:
-                    - 'intensities': List or array of intensity values (e.g., PGA levels).
-                    - 'poes': 2D array of probabilities of exceedance for each damage state.
-                - 'medians': List of medians for each damage state.
-
-        output_directory : str, optional
-            Directory where the plot will be saved. If None, the plot is saved
-            in the current working directory.
-
-        plot_label : str, optional
-            The label for the saved plot file (without file extension). Default is
-            'fragility_plot'.
-
-        xlabel : str, optional
-            The label for the x-axis. Default is 'Peak Ground Acceleration, PGA [g]'.
-
-        Returns:
-        --------
-        None
-            This function saves the plot to a file in the specified output directory.
-
-        """
-
-        fig, ax = plt.subplots(figsize=(6, 6))
-        self._set_plot_style(ax, xlabel=xlabel, ylabel='Probability of Exceedance')
-
-        for i in range(len(cloud_dict['fragility']['medians'])):
-            ax.plot(cloud_dict['fragility']['intensities'], cloud_dict['fragility']['poes'][:, i], linestyle='solid', color=self.colors['fragility'][i], lw=self.line_widths['thick'], label=f'DS{i+1}')
-
-        ax.set_xlim([0, 5])
-        ax.set_ylim([0, 1])
-        ax.legend(fontsize=self.font_sizes['legend'])
-
-        self._save_plot(output_directory, plot_label)
 
 
     ###############################################################################################################
@@ -284,6 +224,11 @@ class plotter:
         else:
             plt.close()
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                              PLOT STOREY LOSS FUNCTION GENERATOR OUTPUT                                     #
+    #                                                                                                             #
+    ###############################################################################################################
 
     def plot_slf_model(self,
                        out,
@@ -356,11 +301,9 @@ class plotter:
 
     ###############################################################################################################
     #                                                                                                             #
-    #                                         PLOT MODAL ANALYSIS                                                 #
+    #                                      PLOT MODAL ANALYSIS OUTPUT                                             #
     #                                                                                                             #
     ###############################################################################################################
-
-
     def plot_modes(self, node_list, mode_shape_vectors, T, export_path=None):
         """
         Plots the undeformed structure (3D, left) and 2D mode shape profiles (right)
@@ -494,7 +437,6 @@ class plotter:
         z_lim_2d = (z_min - 0.5, z_max + 0.5)
 
         # Iterate through modes for 2D profile plot
-
         for mode_idx, mode_vector in enumerate(normalized_mode_vectors):
             mode_num = mode_idx + 1
             period = T[mode_idx]
@@ -516,10 +458,10 @@ class plotter:
             else:
                 interpolation_kind = 'cubic'
 
-            # 1. Undeformed Reference Line (Solid Gray Line)
+            # Undeformed Reference Line (Solid Gray Line)
             ax2d.plot([0] * N_z, unique_z_levels, color='gray', linewidth=3.0, linestyle='-', alpha=0.7, zorder=1)
 
-            # 2. Plot Undeformed Nodes (Black Square/Circle at X=0)
+            # Plot Undeformed Nodes (Black Square/Circle at X=0)
             for i, node_tag in enumerate(node_list):
                 z_u = node_coords_undeformed[i, 2]
                 if z_u not in unique_z_levels: continue
@@ -529,7 +471,7 @@ class plotter:
 
                 ax2d.scatter(0, z_u, marker=marker_style, s=marker_size, color='black', edgecolor='black', linewidth=0.5, zorder=2)
 
-            # 3. Smooth Deformed Profile (Fixed Blue Line)
+            # Smooth Deformed Profile (Fixed Blue Line)
             f_interp = interp1d(unique_z_levels, node_displacements_x, kind=interpolation_kind)
             Z_smooth = np.linspace(z_min, z_max, 100)
             X_smooth = f_interp(Z_smooth)
@@ -584,7 +526,11 @@ class plotter:
             plt.show()
 
 
-
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                   ANIMATE STATIC PUSHOVER ANALYSES                                          #
+    #                                                                                                             #
+    ###############################################################################################################
     def animate_spo(self, spo_top_disp, spo_rxn, spo_disps, spo_midr, nodeList, elementList, push_dir, save_path):
         """Generates and saves the SPO animation using FuncAnimation."""
         deform_factor = 1 # Scaling factor for visualization
@@ -763,7 +709,11 @@ class plotter:
 
         plt.close(fig)
 
-    # Helper function to create and save the animation for cyclic pushover analysis
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                   ANIMATE CYCLIC PUSHOVER ANALYSES                                          #
+    #                                                                                                             #
+    ###############################################################################################################
     def animate_cpo(self, cpo_dict, nodeList, elementList, push_dir, save_path):
         """
         Generates and saves the CPO animation using FuncAnimation, showing:
@@ -982,6 +932,11 @@ class plotter:
 
         plt.close(fig)
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                   ANIMATE NONLINEAR TIME-HISTORY ANALYSES                                   #
+    #                                                                                                             #
+    ###############################################################################################################
     def animate_nrha(self,
                      control_nodes,
                      acc,
@@ -995,7 +950,7 @@ class plotter:
         Automatically infers storey heights and applies cumulative color and annotation updates.
         """
 
-        # --- Compute storey heights from Z coordinates ---
+        # Compute storey heights from Z coordinates ---
         node_z_coords = np.array([ops.nodeCoord(n, 3) for n in control_nodes])
         sorted_idx = np.argsort(node_z_coords)
         control_nodes = np.array(control_nodes)[sorted_idx]
@@ -1005,7 +960,7 @@ class plotter:
         if np.any(storey_heights <= 1e-6):
             print("⚠️ Warning: Zero or near-zero storey height detected")
 
-        # --- Initialize Figure and Axes ---
+        # Initialize Figure and Axes ---
         fig = plt.figure(figsize=(10, 8))
         gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 0.6])
 
@@ -1013,19 +968,19 @@ class plotter:
         ax2 = fig.add_subplot(gs[1])  # Acceleration
         ax3 = fig.add_subplot(gs[2])  # Ground motion
 
-        # --- Plot undeformed shape (gray background) ---
+        # Plot undeformed shape (gray background)
         ax1.plot(np.zeros_like(control_nodes), node_z_coords, color='gray', lw=1.0, alpha=0.6)
         ax2.plot(np.zeros_like(control_nodes), node_z_coords, color='gray', lw=1.0, alpha=0.6)
 
-        # --- Plot ground motion background ---
+        # Plot ground motion background
         ax3.plot(dts, acc, color='lightgray', lw=1.0, alpha=0.6)
 
-        # --- Initialize Lines ---
+        # Initialize Lines
         line_disp, = ax1.plot([], [], 'o-', color="blue", lw=2.0, markersize=6)
         line_acc, = ax2.plot([], [], 'o-', color="red", lw=2.0, markersize=6)
         line_acc_time, = ax3.plot([], [], color="green", lw=1.8)
 
-        # --- Grid and formatting ---
+        # Grid and formatting
         for ax in (ax1, ax2, ax3):
             ax.grid(True, ls='--', alpha=0.4)
 
@@ -1048,7 +1003,7 @@ class plotter:
         ax3.set_xlim(0, dts[-1])
         ax3.set_ylim(np.floor(acc.min()), np.ceil(acc.max()))
 
-        # --- Damage state colors ---
+        # Damage state colors
         damage_state_colors = ['#1E88E5', '#43A047', '#FDD835', '#FB8C00', '#E53935']
 
         # Trackers for cumulative state
@@ -1073,27 +1028,24 @@ class plotter:
             line_acc.set_data(accel_values, node_z_coords)
 
             #line_acc_time.set_data(dts[:frame], acc[:frame])
-
-            # --- REPLACE THE OLD line_acc_time HERE ---
             current_t = dts[:frame+1]
             current_a = acc[:frame+1]
             line_acc_time.set_data(current_t, current_a)
-            # ------------------------------------------
 
-            # --- Interstory drift ---
+            # Interstory drift
             interstory_drifts = np.abs(np.diff(disp_values)) / storey_heights
             current_drift = np.max(interstory_drifts)
             current_accel = np.max(np.abs(accel_values))
 
-            # --- Update cumulative maxima ---
+            # Update cumulative maxima
             max_drift_val = max(max_drift_val, current_drift)
             max_accel_val = max(max_accel_val, current_accel)
 
-            # --- Update annotations continuously ---
+            # Update annotations continuously
             drift_annot.set_text(f"Max drift: {max_drift_val:.4f}")
             accel_annot.set_text(f"Max accel: {max_accel_val:.3f} g")
 
-            # --- Cumulative damage state logic ---
+            # Cumulative damage state logic
             if drift_thresholds is not None and len(drift_thresholds) > 0:
                 # Determine the current frame's damage state for all floors
                 frame_states = np.sum(interstory_drifts[:, None] > np.array(drift_thresholds), axis=1)
@@ -1143,139 +1095,180 @@ class plotter:
 
     ###############################################################################################################
     #                                                                                                             #
-    #                                         PLOT NLTHA OUTPUT                                                   #
+    #                                   PLOT MODIFIED CLOUD ANALYSES OUTPUTS                                      #
     #                                                                                                             #
     ###############################################################################################################
+    def plot_mca_analysis(self,
+                          cloud_dict,
+                          imt_label,
+                          edp_label,
+                          title=None,
+                          pFlag=True,
+                          export_path=None):
+            """
+            Visualizes the Modified Cloud Analysis (MCA) regression including bootstrapping.
+            This plot accounts for collapse cases using logistic regression, showing the
+            'softening' effect on the median and percentile structural response.
 
-    def plot_cloud_analysis(self,
-                            cloud_dict,
-                            imt_label,
-                            edp_label,
-                            title = None,
-                            pFlag = True,
-                            export_path = None):
+            Parameters
+            ----------
+            cloud_dict : dict
+                The processed results dictionary returned by `do_cloud_analysis`.
 
-        """
-        Visualizes the Cloud Analysis (CA) suite and statistical summary.
+            This method plots cloud data, damage thresholds, a fitted regression line,
+            and upper and lower censoring limits. The data is presented in logarithmic
+            scale for both axes.
 
-        This method generates a comprehensive CA plot featuring individual ground motion
-        record curves as a background "cloud" and overlays the statistically fitted IM-EDP
-        relationship corresponding to the median response. It is designed to provide an
-        immediate visual assessment of structural performance across a range of intensities.
+            Parameters:
+            ----------
+            cloud_dict : dict
+                A dictionary containing the data for the cloud analysis. The dictionary
+                should have the following keys (direct output from do_cloud_analysis method)
 
-        Parameters
-        ----------
-        cloud_dict : dict
-            The processed results dictionary returned by `do_cloud_analysis`.
+            imt_label : str
+                Intensity Measure Label for the Y-axis (e.g., 'PGA [g]').
 
-        This method plots cloud data, damage thresholds, a fitted regression line,
-        and upper and lower censoring limits. The data is presented in logarithmic
-        scale for both axes.
+            edp_label : str
+                Engineering Demand Parameter Label for the X-axis (e.g., 'PGA [g]').
 
-        Parameters:
-        ----------
-        cloud_dict : dict
-            A dictionary containing the data for the cloud analysis. The dictionary
-            should have the following keys (direct output from do_cloud_analysis method)
+            title : str, optional, default=None
+                A custom title for the figure. If not provided, a default title
+                incorporating the Intensity Measure (IM) label is used.
 
-        imt_label : str
-            Intensity Measure Label for the Y-axis (e.g., 'PGA [g]').
+            pFlag : bool, optional, default=True
+                If True, the plot is processed (saved/shown).
 
-        edp_label : str
-            Engineering Demand Parameter Label for the X-axis (e.g., 'PGA [g]').
+            export_path : str, optional
+                Full path including filename to save the plot. Creates directories if missing.
 
-        title : str, optional, default=None
-            A custom title for the figure. If not provided, a default title
-            incorporating the Intensity Measure (IM) label is used.
+            Returns:
+            --------
+            None
+                This function saves the plot to a file in the specified output directory.
 
-        pFlag : bool, optional, default=True
-            If True, the plot is processed (saved/shown).
+            """
 
-        export_path : str, optional
-            Full path including filename to save the plot. Creates directories if missing.
+            # Setup Data
+            inputs = cloud_dict['cloud inputs']
+            reg    = cloud_dict['regression']
+            frag   = cloud_dict['fragility']
+            boot   = cloud_dict['bootstraps']
+            raw    = cloud_dict['raw_data']
+            c_limit = inputs['upper_limit']
 
-        Returns:
-        --------
-        None
-            This function saves the plot to a file in the specified output directory.
+            # Define Dynamic Range
+            all_ims = inputs['imls']
+            x_min, x_max = all_ims.min() * 0.8, all_ims.max() * 1.2
+            im_vector = np.geomspace(x_min, x_max, 100)
 
-        """
+            # Helper Functions for MCA logic
+            # Predicted EDP from Cloud: a * IM^b
+            f_edp_nc = lambda a, im, b: a * (im**b)
+            # Predicted Prob. of Collapse from Logistic: 1 / (1 + exp(-(a0 + a1*lnIM)))
+            f_p_coll = lambda a0, a1, im: 1 / (1 + np.exp(-(a0 + a1 * np.log(im))))
+            # MCA median: EDP_nc * exp(sigma * norm_inv(0.5 / (1 - P_collapse)))
+            f_mca    = lambda edp, sig, p_c, percentile: edp * np.exp(sig * norm.ppf(percentile / (1 - p_c)))
 
+            # Initialise Plot
+            fig, ax = plt.subplots(figsize=(12, 6))
 
-        # Setup Data
-        inputs = cloud_dict['cloud inputs']
-        reg = cloud_dict['regression']
+            # Apply consistent Class Styling
+            default_title = f"MCA: {imt_label} vs {edp_label}"
+            self._set_plot_style(ax,
+                                title=title if title else default_title,
+                                xlabel= edp_label,
+                                ylabel= imt_label)
 
-        # Initialise Plot
-        fig, ax = plt.subplots(figsize=(12, 6))
-        self._set_plot_style(ax, xlabel=imt_label, ylabel=edp_label)
+            # Plot Bootstrap Samples (Background Cloud)
+            n_boot = len(boot['a'])
+            for i in range(n_boot):
+                p_c_b = f_p_coll(boot['alpha0'][i], boot['alpha1'][i], im_vector)
+                # Filter p_c_b to avoid NaNs in norm.ppf (must be < 0.5 for median calculation)
+                mask = p_c_b < 0.49
+                edp_b = f_edp_nc(boot['a'][i], im_vector[mask], boot['b1'][i])
+                mca_b = f_mca(edp_b, boot['sigma_rr'][i], p_c_b[mask], 0.50)
 
-        # Plot Individual Data Points (The Cloud)
-        ax.scatter(inputs['imls'], inputs['edps'],
-                   color=self.colors['gem'][2], s=self.marker_sizes['medium'],
-                   alpha=0.4, label='Cloud Data', zorder=0)
+                ax.plot(im_vector[mask], mca_b, color='silver', alpha=0.1, lw=0.5, zorder=1)
 
-        # Plot Regression Line and Sigma Uncertainty
-        fitted_x = np.array(reg['fitted_x'])
-        fitted_y = np.array(reg['fitted_y'])
-        sigma = reg['sigma']
+            # Plot Mean MCA Regression and Confidence Intervals
+            # We use the averaged coefficients stored in 'regression' and 'bootstraps'
+            a_m, b_m = np.exp(reg['b0']), reg['b1'] # b0 was stored as log(a)
+            sig_m = reg['sigma']
+            a0_m, a1_m = boot['alpha0'].mean(), boot['alpha1'].mean()
 
-        if sigma is not None:
-            # Calculate +/- 1 Sigma bounds in log-space
-            # y_upper = exp(ln(fitted_y) + sigma)
-            # y_lower = exp(ln(fitted_y) - sigma)
-            y_upper = np.exp(np.log(fitted_y) + sigma)
-            y_lower = np.exp(np.log(fitted_y) - sigma)
+            p_c_m = f_p_coll(a0_m, a1_m, im_vector)
+            # Calculate for percentiles where P(Collapse) hasn't taken over
+            mask_m = p_c_m < 0.45
+            edp_m = f_edp_nc(a_m, im_vector[mask_m], b_m)
 
-            ax.fill_between(fitted_x, y_lower, y_upper,
-                            color=self.colors['gem'][1], alpha=0.2,
-                            label=r'Uncertainty ($\pm 1\sigma$)', zorder=1)
+            mca_median = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.50)
+            mca_16     = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.16)
+            mca_84     = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.84)
 
-        ax.plot(fitted_x, fitted_y, linestyle='solid',
-                color=self.colors['gem'][1], lw=self.line_widths['thick'],
-                label='Cloud Regression (Median)', zorder=2)
+            ax.plot(im_vector[mask_m], mca_median, color=self.colors['gem'][1],
+                    lw=self.line_widths['thick'], label='Robust MCA Median', zorder=4)
+            ax.plot(im_vector[mask_m], mca_16, color=self.colors['gem'][1],
+                    lw=1, ls='--', label=r'16/84% Percentiles', zorder=4)
+            ax.plot(im_vector[mask_m], mca_84, color=self.colors['gem'][1],
+                    lw=1, ls='--', zorder=4)
 
-        # Plot Damage Thresholds with DS subscripts
-        for i in range(len(inputs['damage_thresholds'])):
-            ax.scatter(cloud_dict['fragility']['medians'][i], inputs['damage_thresholds'][i],
-                       color=self.colors['fragility'][i % len(self.colors['fragility'])],
-                       s=self.marker_sizes['large'], edgecolor='black',
-                       label=f'$DS_{{{i+1}}}$ Threshold', zorder=5)
+            # Plot Raw Data
+            ax.scatter(raw['im_nc'], raw['edp_nc'], color=self.colors['gem'][2],
+                       s=self.marker_sizes['medium'], alpha=0.6, label='Non-collapse Data', zorder=3)
+            ax.scatter(raw['im_c'], [c_limit]*len(raw['im_c']), color='darkred',
+                       marker='x', s=self.marker_sizes['medium'], label='Collapse Data', zorder=3)
 
-        # Censoring Limits (only if they exist)
-        if inputs['upper_limit']:
-            ax.axhline(inputs['upper_limit'], color=self.colors['gem'][-1],ls='--', lw=1, label='Upper Censoring Limit', zorder=3)
-        if inputs['lower_limit']:
-            ax.axhline(inputs['lower_limit'], color=self.colors['gem'][-1],ls='-.', lw=1, label='Lower Censoring Limit', zorder=3)
+            # Formatting & Limits
+            ax.axhline(c_limit, color='red', ls=':', lw=1.5, label='Collapse Threshold')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlim([x_min, x_max])
+            ax.set_ylim([inputs['edps'].min() * 0.5, c_limit * 1.5])
 
-        # Formatting
-        ax.set_xscale('log')
-        ax.set_yscale('log')
+            # Text Stats Box
+            # a is exp(b0), b is b1, beta is sigma
+            a_mean_val = np.exp(reg['b0'])
+            b_mean_val = reg['b1']
+            beta_val   = reg['sigma']
 
-        # Dynamic limits to ensure data is visible
-        ax.set_xlim([min(inputs['imls']) * 0.9, max(inputs['imls']) * 1.1])
-        ax.set_ylim([min(inputs['edps']) * 0.9, max(inputs['edps']) * 1.1])
+            # alpha means from bootstrap arrays
+            a0_m = boot['alpha0'].mean()
+            a1_m = boot['alpha1'].mean()
 
-        default_title = f"Cloud Analysis: {imt_label} vs {edp_label}"
-        ax.set_title(title if title else default_title,
-                     fontsize=self.font_sizes['title'], fontname=self.font_name)
-        ax.legend(fontsize=self.font_sizes['legend'], loc='lower right')
-        plt.tight_layout()
+            stats_text = (
+                f"Classical Cloud Regression Params:\n"
+                f"a-coefficient: {a_mean_val:.2E}\n"
+                f"b-coefficient: {b_mean_val:.2f}\n"
+                f"beta: {beta_val:.2f}\n"
+                f"Logistic Regression Params:\n"
+                f"$\\alpha_0$: {a0_m:.2f}\n"
+                f"$\\alpha_1$: {a1_m:.2f}"
+            )
 
-        # Save or Show
-        if pFlag:
-            if export_path:
-                directory = os.path.dirname(export_path)
-                if directory and not os.path.exists(directory):
-                    os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
-                plt.show()
-                plt.close(fig)
+            ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=9,
+                    verticalalignment='top', bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+
+            ax.legend(loc='lower right', fontsize=self.font_sizes['legend'])
+
+            # Save or Show
+            if pFlag:
+                if export_path:
+                    directory = os.path.dirname(export_path)
+                    if directory and not os.path.exists(directory):
+                        os.makedirs(directory, exist_ok=True)
+                    plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                    plt.show()
+                    plt.close(fig)
+                else:
+                    plt.show()
             else:
-                plt.show()
-        else:
-            plt.close(fig)
+                plt.close(fig)
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                   PLOT INCREMENTAL DYNAMIC ANALYSES OUTPUTS                                 #
+    #                                                                                                             #
+    ###############################################################################################################
     def plot_ida_analysis(self,
                           ida_dict,
                           imt_label,
@@ -1408,77 +1401,72 @@ class plotter:
 
     ###############################################################################################################
     #                                                                                                             #
-    #                                         PLOT FRAGILITY OUTPUT                                               #
+    #                                   PLOT MULTIPLE STRIPE ANALYSES OUTPUTS                                     #
     #                                                                                                             #
     ###############################################################################################################
-
-    def plot_fragility_from_ca(self,
-                               cloud_dict,
-                               imt_label,
-                               title,
-                               pFlag = True,
-                               export_path=None):
-
+    def plot_msa_analysis(self,
+                          stripe_imls,
+                          stripe_edps,
+                          damage_thresholds,
+                          imt_label,
+                          edp_label,
+                          title=None,
+                          pFlag =True,
+                          export_path = None):
         """
-        Generate a fragility analysis plot showing the probability of exceedance (PoE)
-        for various damage states as a function of Peak Ground Acceleration (PGA).
-
-        This method plots fragility curves for multiple damage states based on the
-        fragility data in the input dictionary. Each curve represents the probability
-        of exceedance for a specific damage state, and the plot is presented in a
-        linear scale for both axes.
-
-        Parameters:
-        ----------
-        cloud_dict : dict
-            A dictionary containing the data for the fragility analysis. The dictionary
-            should have the following keys:
-                - 'fragility': A dictionary containing:
-                    - 'intensities': List or array of intensity values (e.g., PGA levels).
-                    - 'poes': 2D array of probabilities of exceedance for each damage state.
-                - 'medians': List of medians for each damage state.
-
-        imt_label : str
-            Label for the X-axis (e.g., 'PGA [g]').
-
-        title : str, optional
-            Custom plot title.
-
-        pFlag : bool, optional, default=True
-            If True, the plot is processed (saved/shown).
-
-        export_path : str, optional
-            Full path including filename to save the plot. Creates directories if missing.
-
-        Returns:
-        --------
-        None
-            This function saves the plot to a file in the specified output directory.
-
+        Plots MSA stripes and overlays the lognormal PDF for each stripe
+        to show the distribution of response.
         """
+        num_gmrs, num_stripes = stripe_edps.shape
+        unique_imls = stripe_imls[0, :] # Discrete IM levels (y-axis values)
 
-        # Setup data
-        frag_data   = cloud_dict['fragility']
-        intensities = frag_data['intensities']
-        poes        = frag_data['poes']
-        medians     = frag_data['medians']
+        fig, ax = plt.subplots(figsize=(12, 7))
 
-        # Initialise plot
-        fig, ax = plt.subplots(figsize=(12, 6))
+        # Plot the raw data points (The Stripes)
+        for j in range(num_stripes):
+            im_level = unique_imls[j]
+            edp_values = stripe_edps[:, j]
 
-        default_title = f"Fragility Functions for {imt_label}"
+            # Scatter individual GM results: x=EDP, y=IML
+            ax.scatter(edp_values, [im_level] * num_gmrs, color='gray', alpha=0.3, s=15, zorder=2)
+
+            # 2. Calculate Log-Normal PDF for this stripe
+            log_edp = np.log(edp_values[edp_values > 0]) # Ensure no log(0)
+            mu_ln = np.mean(log_edp)
+            sigma_ln = np.std(log_edp)
+
+            # Create x-range for the PDF (along the EDP axis)
+            x_range = np.linspace(min(edp_values)*0.5, max(edp_values)*1.5, 300)
+            pdf_values = stats.lognorm.pdf(x_range, s=sigma_ln, scale=np.exp(mu_ln))
+
+            # Scale and Shift the PDF vertically (along the IML axis)
+            # Scale factor determines how "tall" the PDF looks relative to the Y-axis
+            if len(unique_imls) > 1:
+                scale_factor = np.diff(unique_imls).min() * 0.6
+            else:
+                scale_factor = im_level * 0.2
+
+            pdf_scaled = (pdf_values / max(pdf_values)) * scale_factor
+
+            # Plot the PDF curve: x=EDP range, y=IM Level + PDF height
+            ax.plot(x_range, im_level + pdf_scaled, color='royalblue', lw=1.5, zorder=4)
+            # Fill the PDF vertically
+            ax.fill_between(x_range, im_level, im_level + pdf_scaled, color='royalblue', alpha=0.2, zorder=3)
+
+        # Plot Damage Thresholds as Vertical lines (since EDP is on X)
+        colors = plt.cm.Reds(np.linspace(0.4, 1, len(damage_thresholds)))
+        for i, thresh in enumerate(damage_thresholds):
+            ax.axvline(thresh, color=colors[i], linestyle='--', lw=2, label=f'Threshold {i+1}: {thresh}')
+
+        # Styling
+        default_title = f"MSA: {imt_label} vs {edp_label}"
         self._set_plot_style(ax,
                              title=title if title else default_title,
-                             xlabel=imt_label,
-                             ylabel='Probability of Exceedance (PoE)')
+                             xlabel= edp_label,
+                             ylabel= imt_label)
 
-        for i in range(poes.shape[1]):
-            color = self.colors['fragility'][i % len(self.colors['fragility'])]
-            ax.plot(intensities, poes[:, i], linestyle='solid', color=color, lw=self.line_widths['thick'], label=f'$DS_{{{i+1}}}$ ($\mu_{{{i+1}}}={medians[i]:.2f}$g)')
-
-        ax.set_xlim([0, 5])
-        ax.set_ylim([0, 1])
-        ax.legend(fontsize=self.font_sizes['legend'], loc='lower right', frameon=True)
+        ax.grid(True, which="both", ls="-", alpha=0.15)
+        ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
         plt.tight_layout()
 
         # Save or Show
@@ -1489,6 +1477,7 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
             # Show if no path OR if you want to see it after saving
             if not export_path:
                 # Display but do not save to disk
@@ -1497,6 +1486,156 @@ class plotter:
                 # Close the plot to free memory after saving if not showing
                 plt.close()
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                              PLOT MODIFIED CLOUD ANALYSES FRAGILITY OUTPUTS                                 #
+    #                                                                                                             #
+    ###############################################################################################################
+    def plot_fragility_from_ca(self,
+                               cloud_dict,
+                               imt_label,
+                               title=None,
+                               plot_bootstrap=False,
+                               pFlag=True,
+                               export_path=None):
+        """
+        Generates a fragility analysis plot showing the Probability of Exceedance (PoE)
+        for multiple damage states using Modified Cloud Analysis (MCA) results.
+
+        This method visualizes the mean robust fragility curves derived from the
+        combined linear (for standard damage states) and logistic (for collapse)
+        regression models. It optionally displays the underlying bootstrap
+        realizations as a background 'cloud' to visualize statistical uncertainty.
+
+        Parameters
+        ----------
+        cloud_dict : dict
+            Standardized dictionary containing analysis results. Required keys:
+            - 'fragility': dict containing 'intensities' (1D array) and 'poes' (2D array).
+            - 'regression': dict containing 'b0' (intercept) and 'b1' (slope).
+            - 'bootstraps': dict containing 'alpha0', 'alpha1' arrays and
+              optionally 'poes_all' (3D array of bootstrap curves).
+        imt_label : str
+            The label for the X-axis, typically the Intensity Measure type and
+            unit (e.g., 'PGA [g]' or 'Sa(T1) [g]').
+        title : str, optional
+            Custom title for the plot. If None, a default MCA title is used.
+        plot_bootstrap : bool, default False
+            If True, plots all bootstrap fragility realizations with a low
+            alpha (transparency) to illustrate uncertainty bounds.
+            Note: This may increase rendering time for large bootstrap samples.
+        pFlag : bool, default True
+            If True, the plot is rendered and either shown or saved.
+            If False, the figure is closed without display to save memory.
+        export_path : str, optional
+            The full file path (including extension) where the plot should be saved.
+            The method automatically creates the target directory if it does not exist.
+
+        Returns
+        -------
+        None
+            The function renders the plot to the active Matplotlib backend or
+            exports it to a file.
+
+        Notes
+        -----
+        - Standard Damage States (DS1, DS2, etc.) use the classic power-law
+          parameters (a, b) in the legend.
+        - The final damage state is treated as 'Collapse' and displays the
+          logistic regression parameters (alpha0, alpha1) in the legend.
+        - The plot style (fonts, colors, line widths) is controlled by the
+          parent class attributes.
+        """
+
+        # Setup Data from cloud_dict
+        frag = cloud_dict['fragility']
+        boot = cloud_dict['bootstraps']
+        reg = cloud_dict['regression']
+
+        intensities = frag['intensities']
+        poes_mean = frag['poes']  # Mapped from 'poes' in your dict
+        boot_poes = boot.get('poes_all', [])
+        medians = frag['medians']
+        betas = frag['betas_total']
+
+        # Extract mean params for the legend labels
+        # a is exp(b0), b is b1
+        a_mean = np.exp(reg['b0'])
+        b_mean = reg['b1']
+        # Logistic mean params
+        alpha0_mean = boot['alpha0'].mean()
+        alpha1_mean = boot['alpha1'].mean()
+
+        # 2. Initialise Plot
+        fig, ax = plt.subplots(figsize=(12, 6))
+        self._set_plot_style(ax,
+                             xlabel=imt_label,
+                             ylabel=r'Probability of Exceedance $P(DS \geq ds | IM)$')
+
+        n_ds = poes_mean.shape[1]
+
+        # Plot Bootstrap Samples (Optional Background)
+        if plot_bootstrap and len(boot_poes) > 0:
+            for i in range(len(boot_poes)):
+                for ds in range(n_ds):
+                    color = 'black' if ds == n_ds - 1 else self.colors['fragility'][ds % len(self.colors['fragility'])]
+                    ax.plot(intensities, boot_poes[i][:, ds],
+                            color=color, alpha=0.05, lw=0.5, zorder=1)
+
+        # Plot Mean Robust Fragility Curves
+        for ds in range(n_ds):
+            if ds == n_ds - 1:
+                # Last state is always Collapse (Black)
+                c = 'black'
+                # Use mean logistic parameters as they define the shape
+                label = rf"Collapse: $\alpha_0$={alpha0_mean:.2f}, $\alpha_1$={alpha1_mean:.2f}"
+            else:
+                # Standard Damage States
+                c = self.colors['fragility'][ds % len(self.colors['fragility'])]
+
+                # Get the median (theta) and dispersion (beta) for this DS
+                theta_val = medians[ds]
+                beta_val = betas[ds]
+
+                # Label using Theta and Beta symbols
+                label = rf"DS{ds+1}: $\theta$={theta_val:.2f}, $\beta$={beta_val:.2f}"
+
+            ax.plot(intensities, poes_mean[:, ds],
+                    color=c,
+                    linewidth=self.line_widths['thick'],
+                    label=label,
+                    zorder=3)
+        # Final Formatting
+        ax.set_ylim(0, 1.00)
+        ax.set_xlim(0, 5.00)
+        ax.xaxis.set_minor_locator(AutoMinorLocator())
+        ax.yaxis.set_minor_locator(AutoMinorLocator())
+
+        default_title = "Fragility Functions from Modified Cloud Analysis"
+        ax.set_title(title if title else default_title, fontsize=self.font_sizes['title'])
+        ax.legend(loc='lower right', fontsize=self.font_sizes['legend'], frameon=True, framealpha=0.9, edgecolor='black')
+
+        plt.tight_layout()
+
+        # 6. Save or Show
+        if pFlag:
+            if export_path:
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
+                plt.close(fig)
+            else:
+                plt.show()
+        else:
+            plt.close(fig)
+
+    ###############################################################################################################
+    #                                                                                                             #
+    #                              PLOT INCREMENTAL DYNAMIC ANALYSES FRAGILITY OUTPUTS                            #
+    #                                                                                                             #
+    ###############################################################################################################
     def plot_fragility_from_ida(self,
                                 ida_dict,
                                 imt_label,
@@ -1558,7 +1697,7 @@ class plotter:
         self._set_plot_style(ax,
                              title=title if title else default_title,
                              xlabel=imt_label,
-                             ylabel='Probability of Exceedance (PoE)')
+                             ylabel=r'Probability of Exceedance $P(DS \geq ds | IM)$')
 
         # Plot Each Damage State Curve
         # We cycle through colors defined in self.colors['fragility']
@@ -1593,7 +1732,6 @@ class plotter:
     #                                           PLOT VULNERABILITY OUTPUT                                         #
     #                                                                                                             #
     ###############################################################################################################
-
     def plot_vulnerability_function(self,
                                     intensities,
                                     loss,
