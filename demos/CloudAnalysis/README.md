@@ -1,4 +1,4 @@
-# Cloud Analysis Demo
+# Modified Cloud Analysis Demo
 
 This Jupyter Notebook presents an example of nonlinear dynamic analysis, focusing on cloud analysis of a multi-degree-of-freedom (MDOF) stick model. Both global and local response quantities, such as peak storey drifts and peak floor accelerations, are extracted. A probabilistic seismic demand model (PSDM) is then fitted to the intensity measure (IM) and engineering demand parameter (EDP) data using linear regression in log–log space. From this model, fragility functions are derived for arbitrary demand-based damage states. A vulnerability, or loss model, is subsequently developed by combining the fragility-based probabilities of exceedance with a deterministic consequence model through damage-to-loss ratios, while also accounting for uncertainty in losses at a given shaking intensity using a beta distribution. Visual outputs of the PSDM, seismic demand profiles, fragility functions, and vulnerability models are included.
 
