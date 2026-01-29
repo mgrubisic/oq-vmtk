@@ -59,6 +59,7 @@ class postprocessor():
                                       theta,
                                       sigma_record2record,
                                       sigma_build2build = 0.30,
+                                      sigma_ds = 0.30,
                                       intensities = np.round(np.geomspace(0.05, 10.0, 50), 3)):
         """
         Computes the probability of exceeding a damage state using a lognormal cumulative distribution function (CDF).
@@ -73,6 +74,10 @@ class postprocessor():
 
         sigma_build2build : float, optional
             The logarithmic standard deviation representing building-to-building (or model) variability.
+            Default value is 0.30.
+
+        sigma_ds : float, optional
+            The logarithmic standard deviation representing uncertainty in damage-state thresholds.
             Default value is 0.30.
 
         intensities : array-like, optional
@@ -102,7 +107,7 @@ class postprocessor():
         """
 
         # Calculate the total uncertainty
-        beta_total = np.sqrt(sigma_record2record**2+sigma_build2build**2)
+        beta_total = np.sqrt(sigma_record2record**2+sigma_build2build**2+sigma_ds**2)
 
         # Calculate probabilities of exceedance for a range of intensity measure levels
         return lognorm.cdf(intensities, s=beta_total, loc=0, scale=theta)
@@ -112,6 +117,7 @@ class postprocessor():
                                     theta,
                                     sigma_record2record,
                                     sigma_build2build = 0.30,
+                                    sigma_ds = 0.30,
                                     intensities = np.round(np.geomspace(0.05, 10.0, 50), 3)):
         """
         Calculates a rotated fragility function based on a lognormal cumulative distribution function (CDF),
@@ -138,6 +144,10 @@ class postprocessor():
 
         sigma_build2build : float, optional, default=0.30
             The uncertainty associated with modeling variability between different buildings or building types.
+
+        sigma_ds : float, optional
+            The logarithmic standard deviation representing uncertainty in damage-state thresholds.
+            Default value is 0.30.
 
         intensities : array-like, optional, default=np.round(np.geomspace(0.05, 10.0, 50), 3)
             A list or array of intensity measure levels at which to evaluate the fragility function, typically representing
@@ -167,7 +177,7 @@ class postprocessor():
         """
 
         # Calculate the combined logarithmic standard deviation (total uncertainty)
-        beta_total = np.sqrt(sigma_record2record**2 + sigma_build2build**2)
+        beta_total = np.sqrt(sigma_record2record**2 + sigma_build2build**2 + sigma_ds**2)
 
         # Adjust the median intensity based on the target percentile
         theta_prime = theta * np.exp(-stats.norm.ppf(percentile) * (beta_total - sigma_record2record))
@@ -364,6 +374,7 @@ class postprocessor():
                                    lower_limit,
                                    censored_limit,
                                    sigma_build2build = 0.3,
+                                   sigma_ds = 0.3,
                                    intensities = np.geomspace(0.05, 10, 50),
                                    n_bootstrap=200,
                                    random_seed=None,
@@ -381,29 +392,43 @@ class postprocessor():
         ----------
         imls : array_like
             Intensity Measure Levels (e.g., Sa, AvgSA) from the cloud of data.
+
         edps : array_like
             Engineering Demand Parameters (e.g., maximum interstory drift) from the cloud.
+
         damage_thresholds : list of float
             The demand-based thresholds defining the onset of different damage states.
+
         lower_limit : float
             The EDP value below which data is ignored for regression (demand is
             considered negligible for damage).
+
         censored_limit : float
             The "Collapse" threshold. EDP values above this are treated as collapse
             instances in the logistic regression.
+
         sigma_build2build : float, optional
             Additional modeling uncertainty (building-to-building variability).
             Default is 0.3.
+
+        sigma_ds : float, optional
+            The logarithmic standard deviation representing uncertainty in damage-state thresholds.
+            Default value is 0.30.
+
         intensities : np.array, optional
             The seismic intensity range over which to evaluate the fragility functions.
             Default is a geometric space from 0.05 to 10.
+
         n_bootstrap : int, optional
             Number of bootstrap samples to draw for statistical stability. Default is 200.
+
         random_seed : int, optional
             Seed for reproducibility of the bootstrap sampling. Default is None.
+
         fragility_rotation : float, optional
             Parameter for rotating fragility functions around a specific percentile
             to adjust for target reliability. Default is 0.1.
+
         fragility_method : {'lognormal', 'ordinal', 'probit', 'logit'}, optional
             The methodology used to fit the fragility functions. Default is 'lognormal'.
 
@@ -484,10 +509,11 @@ class postprocessor():
             poes = self.calculate_glm_fragility(imls, edps, damage_thresholds, fragility_method=fragility_method)
 
             # Compute equivalent lognormal fragility parameters from the GLM model
-            thetas               = [np.interp(0.50, poes[:,ds], intensities)  for ds in range(len(damage_thresholds))]                                                                       # Dummy Median intensities
-            sigmas_record2record = [np.abs(0.50*(np.log(np.interp(0.84,poes[:,ds], intensities))-np.log(np.interp(0.16,poes[:,ds], intensities)))) for ds in range(len(damage_thresholds))]  # Dummy Record-to-record variability
+            thetas               = [np.interp(0.50, poes[:,ds], intensities)  for ds in range(len(damage_thresholds))]                                                                       # Equivalent median intensities
+            sigmas_record2record = [np.abs(0.50*(np.log(np.interp(0.84,poes[:,ds], intensities))-np.log(np.interp(0.16,poes[:,ds], intensities)))) for ds in range(len(damage_thresholds))]  # Equivalent record-to-record variability
             sigmas_build2build   = np.full(len(damage_thresholds), sigma_build2build)                                                                                                        # Modelling uncertainty
-            betas_total          = [np.sqrt(sigma_record2record**2+sigma_build2build**2) for sigma_record2record, sigma_build2build in zip (sigmas_record2record, sigmas_build2build)]       # Dummy Total Dispersion
+            sigmas_ds            = np.full(len(damage_thresholds), sigma_ds)                                                                                                                 # Uncertainty in DS thresholds
+            betas_total          = [np.sqrt(sigma_record2record**2+sigma_build2build**2+sigma_ds**2) for sigma_record2record, sigma_build2build, sigma_ds in zip (sigmas_record2record, sigmas_build2build, sigmas_ds)]       # Dummy Total Dispersion
 
             # Create the dictionary
             cloud_dict = {
@@ -505,6 +531,7 @@ class postprocessor():
                               'medians'            : thetas,                   # Store the median seismic intensities
                               'sigma_record2record': sigmas_record2record,     # Store the record-to-record variability
                               'sigma_build2build'  : sigmas_build2build,       # Store the modelling uncertainty
+                              'sigma_ds'           : sigmas_ds,                # Store the DS threshold uncertainty
                               'betas_total'        : betas_total},             # Store the total variability accounting for record-to-record and modelling uncertainties
 
                 # Add a nested dictionary for regression coefficients
@@ -522,10 +549,11 @@ class postprocessor():
             poes = self.calculate_ordinal_fragility(imls, edps, damage_thresholds)
 
             # Compute equivalent lognormal fragility parameters from the GLM model
-            thetas               = [np.interp(0.50, poes[:,ds], intensities)  for ds in range(len(damage_thresholds))]                                                                       # Dummy Median intensities
-            sigmas_record2record = [np.abs(0.50*(np.log(np.interp(0.84,poes[:,ds], intensities))-np.log(np.interp(0.16,poes[:,ds], intensities)))) for ds in range(len(damage_thresholds))]  # Dummy Record-to-record variability
+            thetas               = [np.interp(0.50, poes[:,ds], intensities)  for ds in range(len(damage_thresholds))]                                                                       # Equivalent median intensities
+            sigmas_record2record = [np.abs(0.50*(np.log(np.interp(0.84,poes[:,ds], intensities))-np.log(np.interp(0.16,poes[:,ds], intensities)))) for ds in range(len(damage_thresholds))]  # Equivalent record-to-record variability
             sigmas_build2build   = np.full(len(damage_thresholds), sigma_build2build)                                                                                                        # Modelling uncertainty
-            betas_total          = [np.sqrt(sigma_record2record**2+sigma_build2build**2) for sigma_record2record, sigma_build2build in zip (sigmas_record2record, sigmas_build2build)]       # Dummy Total Dispersion
+            sigmas_ds            = np.full(len(damage_thresholds), sigma_ds)                                                                                                                 # Uncertainty in DS thresholds
+            betas_total          = [np.sqrt(sigma_record2record**2+sigma_build2build**2+sigma_ds**2) for sigma_record2record, sigma_build2build, sigma_ds in zip (sigmas_record2record, sigmas_build2build, sigmas_ds)]       # Dummy Total Dispersion
 
             # Create the dictionary
             cloud_dict = {
@@ -543,6 +571,7 @@ class postprocessor():
                               'medians'            : thetas,                   # Store the median seismic intensities
                               'sigma_record2record': sigmas_record2record,     # Store the record-to-record variability
                               'sigma_build2build'  : sigmas_build2build,       # Store the modelling uncertainty
+                              'sigma_ds'           : sigmas_ds,                # Store the DS threshold uncertainty
                               'betas_total'        : betas_total},             # Store the total variability accounting for record-to-record and modelling uncertainties
 
                 # Add a nested dictionary for regression coefficients
@@ -574,9 +603,9 @@ class postprocessor():
 
                 # Prepare bootstrap samples
                 im_nc_b, edp_nc_b, im_c_b = prepare_mca_data(imls,
-                                                                  edps,
-                                                                  censored_limit,
-                                                                  bootstrap=True)
+                                                             edps,
+                                                             censored_limit,
+                                                             bootstrap=True)
 
                 # Do classical cloud regression considering non-collapse cases only
                 # Only keeping the EDPs above the lower limit (below the lower limit, the EDPs do not contribute to damage)
@@ -601,7 +630,7 @@ class postprocessor():
                 # Calculate the probabilities of exceedance
                 p_collapse = logit_mod.predict(sm.add_constant(np.log(intensities))) # The probability of collapse
                 mu_ln      = np.log(a* intensities**b)                               # The cloud regression
-                sig_total = np.sqrt(sig**2 + sigma_build2build)                      # Total uncertainty (inflated with the building-to-building variability)
+                sig_total = np.sqrt(sig**2 + sigma_build2build**2+sigma_ds**2)       # Total uncertainty (inflated with the building-to-building variability and DS threshold uncertainty)
 
                 # Loop over damage states
                 for ds in range(n_ds):
@@ -620,6 +649,7 @@ class postprocessor():
             params_a, params_b = np.zeros(n_ds+1), np.zeros(n_ds+1)
             medians            = np.zeros(n_ds+1)
             betas_total        = np.zeros(n_ds+1)
+            sigmas_ds          = np.full(len(damage_thresholds), sigma_ds)
 
             # Loop over damage states and collapse
             for ds in range(n_ds+1):
@@ -659,11 +689,13 @@ class postprocessor():
                     medians[ds],betas_total[ds],poes_fitted[:,ds] = self.calculate_rotated_fragility(rotation_percentile,
                                                                                                      medians[ds],
                                                                                                      betas_total[ds],
-                                                                                                     sigma_build2build = 0.0)
+                                                                                                     sigma_build2build = 0.0,
+                                                                                                     sigma_ds = 0.0)
                 else:
                     poes_fitted[:,ds] = self.calculate_lognormal_fragility(medians[ds],
                                                                            betas_total[ds],
-                                                                           sigma_build2build = 0.0)
+                                                                           sigma_build2build = 0.0,
+                                                                           sigma_ds = 0.0)
 
             # Final cleanup: Make sure fragility functions are not crossing due to fit
             # Work backwards from Collapse to DS1 to ensure PoE(DS_i) is always
@@ -691,6 +723,7 @@ class postprocessor():
                               'medians'            : medians,                  # Store the median seismic intensities
                               'sigma_record2record': sig_s.mean(),             # Store the record-to-record variability
                               'sigma_build2build'  : sigma_build2build,        # Store the modelling uncertainty
+                              'sigma_ds'           : sigmas_ds,                # Store the DS threshold uncertainty
                               'betas_total'        : betas_total},             # Store the total variability accounting for record-to-record and modelling uncertainties
 
                 # Add a nested dictionary for regression coefficients
@@ -720,6 +753,7 @@ class postprocessor():
                                     edps,
                                     damage_thresholds,
                                     sigma_build2build=0.3,
+                                    sigma_ds = 0.3,
                                     intensities=np.round(np.geomspace(0.05, 10.0, 50), 3),
                                     fragility_rotation=False,
                                     rotation_percentile=0.10):
@@ -751,6 +785,10 @@ class postprocessor():
         sigma_build2build : float, optional, default=0.3
             The building-to-building variability or modeling uncertainty. It accounts for differences in performance
             between buildings with similar characteristics due to random variations or model uncertainties.
+
+        sigma_ds : float, optional
+            The logarithmic standard deviation representing uncertainty in damage-state thresholds.
+            Default value is 0.30.
 
         intensities : array, optional, default=np.geomspace(0.05, 10.0, 50)
             An array of intensity measure levels over which the fragility function will be sampled. By default,
@@ -790,7 +828,7 @@ class postprocessor():
         num_stripes = len(stripe_imls)
         num_gmrs_per_stripe = np.array([len(edps[:, i]) for i in range(num_stripes)])
 
-        def likelihood(params, x, n, z, sigma_b2b):
+        def likelihood(params, x, n, z, sigma_b2b, sigma_ds):
             """
             Negative Log-Likelihood for Binomial Distribution.
             x: stripe IMs, n: total GMs per stripe, z: exceedances per stripe
@@ -798,7 +836,7 @@ class postprocessor():
             theta = params[0]
             beta_r2r = params[1]
 
-            beta_tot = np.sqrt(beta_r2r**2 + sigma_b2b**2)
+            beta_tot = np.sqrt(beta_r2r**2 + sigma_b2b**2 + sigma_ds**2)
 
             # Probability of exceedance based on lognormal CDF
             p = stats.norm.cdf(np.log(x / theta) / beta_tot)
@@ -808,8 +846,11 @@ class postprocessor():
             log_f = stats.binom.logpmf(z, n, p)
             return -np.sum(log_f)
 
+        # Create storage lists
         thetas = []
         sigmas_record2record = []
+        sigmas_build2build = []
+        sigmas_ds = []
         betas_total = []
 
         # Iterate through each Damage State threshold
@@ -823,15 +864,17 @@ class postprocessor():
                                      [10.0 * np.max(stripe_imls), 1.5])
 
             sol = optimize.minimize(likelihood, initial_guess,
-                                    args=(stripe_imls, num_gmrs_per_stripe, num_exc, sigma_build2build),
+                                    args=(stripe_imls, num_gmrs_per_stripe, num_exc, sigma_build2build, sigma_ds),
                                     bounds=bounds, method='L-BFGS-B')
 
             t_val = sol.x[0]
             s_val = sol.x[1]
-            b_val = np.sqrt(s_val**2 + sigma_build2build**2)
+            b_val = np.sqrt(s_val**2 + sigma_build2build**2 + sigma_ds**2)
 
             thetas.append(t_val)
             sigmas_record2record.append(s_val)
+            sigmas_build2build.append(sigma_build2build)
+            sigmas_ds.append(sigma_ds)
             betas_total.append(b_val)
 
         # Calculate Fragility Curves (POEs)
@@ -841,11 +884,13 @@ class postprocessor():
                 poes[:, i] = self.calculate_rotated_fragility(thetas[i],
                                                              rotation_percentile,
                                                              sigmas_record2record[i],
-                                                             sigma_build2build=sigma_build2build)
+                                                             sigma_build2build=sigma_build2build,
+                                                             sigma_ds = sigma_ds)
             else:
                 poes[:, i] = self.calculate_lognormal_fragility(thetas[i],
                                                                sigmas_record2record[i],
-                                                               sigma_build2build=sigma_build2build)
+                                                               sigma_build2build=sigma_build2build,
+                                                               sigma_ds = sigma_ds)
 
         # Output dictionary following requested nested structure
         msa_dict = {
@@ -854,16 +899,18 @@ class postprocessor():
                 'edps': edps,
                 'damage_thresholds': damage_thresholds,
                 'sigma_build2build': sigma_build2build,
+                'sigma_ds'         : sigma_ds,
                 'is_rotated': fragility_rotation
             },
             'fragility': {
                 'fragility_method': 'mle',
-                'intensities': intensities,
-                'poes': poes,
-                'medians': thetas,
+                'intensities'        : intensities,
+                'poes'               : poes,
+                'medians'            : thetas,
                 'sigma_record2record': sigmas_record2record,
-                'sigma_build2build': sigma_build2build,
-                'betas_total': betas_total
+                'sigma_build2build'  : sigmas_build2build,
+                'sigma_ds'           : sigmas_ds,
+                'betas_total'        : betas_total
             }
         }
 
@@ -875,6 +922,7 @@ class postprocessor():
                                         damage_thresholds,
                                         edp_key,
                                         sigma_build2build=0.3,
+                                        sigma_ds = 0.3,
                                         intensities=np.round(np.geomspace(0.05, 10.0, 50), 3),
                                         edp_range = np.linspace(0.00, 0.05, 101),
                                         fragility_rotation=False,
@@ -911,6 +959,10 @@ class postprocessor():
         sigma_build2build : float, optional, default=0.3
             The modeling uncertainty or building-to-building variability. This is combined
             with the record-to-record variability to calculate total fragility dispersion.
+
+        sigma_ds : float, optional
+            The logarithmic standard deviation representing uncertainty in damage-state thresholds.
+            Default value is 0.30.
 
         intensities : numpy.ndarray, optional, default=np.geomspace(0.05, 10.0, 50)
             The array of intensity measure levels over which the final fragility functions (POEs)
@@ -984,6 +1036,8 @@ class postprocessor():
         im_max = np.nanmax(im_matrix)
         thetas = []
         sigmas_rec2rec = []
+        sigmas_build2build = []
+        sigmas_ds = []
 
         for threshold in damage_thresholds:
             thresh_idx = np.argmin(np.abs(edp_range - threshold))
@@ -1008,6 +1062,8 @@ class postprocessor():
 
             thetas.append(theta)
             sigmas_rec2rec.append(beta_rec)
+            sigmas_build2build.append(sigma_build2build)
+            sigmas_ds.append(sigma_ds)
 
         # Generate Probabilities of Exceedance with Rotation Option
         poes = np.zeros((len(intensities), len(damage_thresholds)))
@@ -1020,14 +1076,15 @@ class postprocessor():
             if fragility_rotation:
                 # Combined uncertainty isn't a simple SRSS in rotation,
                 # but we report total for consistency in dict
-                betas_total.append(np.sqrt(beta_rec**2 + sigma_build2build**2))
+                betas_total.append(np.sqrt(beta_rec**2 + sigma_build2build**2 + sigma_ds**2))
                 poes[:, i] = self.calculate_rotated_fragility(theta,
                                                              rotation_percentile,
                                                              beta_rec,
                                                              sigma_build2build,
+                                                             sigma_ds,
                                                              intensities)
             else:
-                beta_total = np.sqrt(beta_rec**2 + sigma_build2build**2)
+                beta_total = np.sqrt(beta_rec**2 + sigma_build2build**2 + sigma_ds**2)
                 betas_total.append(beta_total)
                 poes[:, i] = self.calculate_lognormal_fragility(theta, beta_total)
 
@@ -1048,7 +1105,8 @@ class postprocessor():
                 'poes': poes,
                 'medians': thetas,
                 'sigma_record2record': sigmas_rec2rec,
-                'sigma_build2build': sigma_build2build,
+                'sigma_build2build': sigmas_build2build,
+                'sigma_ds': sigmas_ds,
                 'betas_total': betas_total,
                 'rotation_active': fragility_rotation,
                 'rotation_percentile': rotation_percentile if fragility_rotation else None
@@ -1064,10 +1122,105 @@ class postprocessor():
 
         return ida_dict
 
-    def calculate_sigma_loss(self,
-                             loss):
+    def calculate_vulnerability_function(self,
+                                         poes,
+                                         consequence_model,
+                                         cov_consequence=None,
+                                         uncertainty=True,
+                                         method=None,
+                                         intensities=np.round(np.geomspace(0.05, 10.0, 50), 3)):
         """
-        Calculate the uncertainty in the loss estimates based on the method proposed in Silva (2019),
+        Compute a vulnerability function (mean loss ratio and associated uncertainty)
+        by convolving fragility functions with a consequence (damage-to-loss) model.
+
+        The expected loss ratio is computed as the convolution of mutually exclusive
+        damage-state probabilities with damage-to-loss ratios. Uncertainty in the
+        loss ratio conditional on intensity measure level (Loss | IM) can be computed
+        either explicitly using the law of total variance or via an empirical Silva-type
+        envelope.
+
+        Parameters
+        ----------
+        poes : ndarray, shape (n_IM, n_DS)
+            Probabilities of exceedance of each damage state conditional on the
+            intensity measure level (P[DS ≥ k | IM]). Damage states must be ordered
+            from least to most severe.
+
+        consequence_model : array-like, length n_DS
+            Mean damage-to-loss ratios associated with each damage state. Values
+            must lie in the interval [0, 1].
+
+        cov_consequence : array-like, length n_DS, optional
+            Coefficient of variation of the damage-to-loss ratio for each damage
+            state. Required when ``method="explicit"``. Each entry represents the
+            conditional uncertainty of loss given the damage state.
+
+        uncertainty : bool, optional
+            Flag indicating whether to compute uncertainty (coefficient of variation)
+            of the loss ratio conditional on IM. If False, the COV column is still
+            returned and filled with zeros. Default is True.
+
+        method : {"explicit", "silva"}, optional
+            Method used to compute uncertainty when ``uncertainty=True``.
+
+            - "explicit" (default):
+              Computes uncertainty using the law of total variance, accounting for
+              both damage-state mixing and uncertainty within each damage state.
+              Requires ``cov_consequence`` to be provided.
+
+            - "silva":
+              Computes uncertainty using a Silva-type empirical envelope based only
+              on the mean loss ratio.
+
+            If ``uncertainty=True`` and ``method=None``, the method defaults to
+            "explicit".
+
+        intensities : ndarray, optional
+            Intensity measure levels corresponding to the rows of ``poes``.
+            Default is a geometric sequence between 0.05 and 10.0.
+
+
+        Returns
+        -------
+        df : pandas.DataFrame
+            DataFrame with the following columns:
+
+            - ``IML``  : Intensity measure level
+            - ``Loss`` : Expected loss ratio at the given IML
+            - ``COV``  : Coefficient of variation of the loss ratio at the given IML
+
+            The ``COV`` column is always returned. If ``uncertainty=False``, it
+            contains zeros.
+
+        Raises
+        ------
+        Exception
+            If the dimensions of ``poes``, ``consequence_model``, or
+            ``cov_consequence`` are inconsistent, or if ``method="explicit"`` is
+            selected without providing ``cov_consequence``.
+
+        Notes
+        -----
+        For the explicit uncertainty method, the variance of the loss ratio is
+        computed using the law of total variance:
+
+        Var(LR | IM) = Σ_k p_k [ σ_k² + (μ_k − μ)² ]
+
+        where:
+            - p_k  is the probability of being in damage state k given IM,
+            - μ_k  is the mean loss ratio for damage state k,
+            - σ_k² is the variance of the loss ratio within damage state k,
+            - μ    is the mean loss ratio at the given IM.
+
+        This formulation is consistent with performance-based earthquake
+        engineering (PBEE) frameworks and produces physically meaningful,
+        IM-dependent uncertainty.
+        """
+
+    def calculate_cov_silva(self,
+                            loss):
+        """
+        Helper function to calculate the uncertainty in the loss estimates based on the method proposed in Silva (2019),
         which incorporates the sigma (standard deviation) for loss ratios within seismic vulnerability functions.
 
         This method computes the sigma loss ratio for expected loss ratios and also estimates the parameters
@@ -1102,102 +1255,73 @@ class postprocessor():
         Earthquake Spectra. DOI: 10.1193/013018eqs031m.
 
         """
-        sigma_loss_ratio = np.where(loss == 0, 0,
-                                    np.where(loss == 1, 1,
-                                             np.sqrt(loss * (-0.7 - 2 * loss + np.sqrt(6.8 * loss + 0.5)))))
+        sigma_loss_ratio = np.where(loss == 1e-8, 1e-8,np.where(loss == 1, 1,np.sqrt(loss * (-0.7 - 2 * loss + np.sqrt(6.8 * loss + 0.5)))))
         a_beta_dist = np.zeros(loss.shape)
         b_beta_dist = np.zeros(loss.shape)
 
         return sigma_loss_ratio, a_beta_dist, b_beta_dist
 
-    def get_vulnerability_function(self,
-                                   poes,
-                                   consequence_model,
-                                   intensities=np.round(np.geomspace(0.05, 10.0, 50), 3),
-                                   uncertainty=True):
-        """
-        Calculate the vulnerability function given the probabilities of exceedance and a consequence model,
-        and optionally compute the uncertainty (coefficient of variation) in the expected loss.
-
-        This function computes the expected loss ratios for a range of intensity measure levels (IMLs)
-        based on the probabilities of exceedance and the corresponding consequence model. Additionally,
-        it calculates the coefficient of variation (COV) of the loss ratio if the uncertainty flag is set to True.
-
-        Parameters:
-        -----------
-        poes : array
-            An array of probabilities of exceedance associated with the damage states considered.
-            The shape is (number of intensities, number of damage states).
-
-        consequence_model : list
-            A list of damage-to-loss ratios corresponding to each damage state. It has a length equal
-            to the number of damage states.
-
-        intensities : array, optional
-            An array of intensity measure levels. The default is a geometric sequence ranging from
-            0.05 to 10.0 with 50 points.
-
-        uncertainty : bool, optional
-            A flag to indicate whether to calculate (or not) the coefficient of variation associated
-            with Loss|IM. The default is True.
-
-        Returns:
-        --------
-        df : pandas DataFrame
-            A DataFrame containing the intensity measure levels (IML), expected loss ratios, and
-            optionally, the coefficient of variation (COV) for each IML. The COV is calculated only
-            if the uncertainty flag is True.
-
-        """
+        # Default behavior
+        if uncertainty and method is None:
+            method = "explicit"
 
         # Consistency checks
-        if len(consequence_model) != np.size(poes, 1):
-            raise Exception('Mismatch between the fragility consequence models!')
-        if len(intensities) != np.size(poes, 0):
-            raise Exception('Mismatch between the number of IMLs and fragility models!')
+        n_im, n_ds = poes.shape
+        if len(consequence_model) != n_ds:
+            raise Exception('ERROR! Mismatch between fragility and consequence models!')
 
-        # Initialize loss array
-        loss = np.zeros([len(intensities),])
+        if len(intensities) != n_im:
+            raise Exception('ERROR! Mismatch between number of IMLs and fragility models!')
 
-        # Calculate expected loss ratios
-        for i in range(len(intensities)):
-            for j in range(0, np.size(poes, 1)):
-                if j == (np.size(poes, 1) - 1):
-                    loss[i,] = loss[i,] + poes[i, j] * consequence_model[j]
-                else:
-                    loss[i,] = loss[i,] + (poes[i, j] - poes[i, j + 1]) * consequence_model[j]
+        if uncertainty and method == "explicit":
+            if cov_consequence is None:
+                raise Exception('ERROR! Explicit uncertainty method requires cov_consequence.')
+            if len(cov_consequence) != n_ds:
+                raise Exception('ERROR! Length of cov_consequence must match consequence_model.')
 
-        # If uncertainty is true, calculate the coefficient of variation
-        if uncertainty:
-            cov = np.zeros(loss.shape)
-
-            for m in range(loss.shape[0]):
-                mean_loss_ratio = loss[m]
-
-                if mean_loss_ratio < 1e-4:
-                    loss[m] = 1e-8
-                    cov[m] = 1e-8
-                elif np.abs(1 - mean_loss_ratio) < 1e-4:
-                    loss[m] = 0.99999
-                    cov[m] = 1e-8
-                else:
-                    # Use the calculate_sigma_loss function for loss-related uncertainty
-                    sigma_loss_ratio, a_beta_dist, b_beta_dist = self.calculate_sigma_loss(loss[m])
-
-                    # Coefficient of variation
-                    cov[m] = np.min([sigma_loss_ratio / mean_loss_ratio, 0.90 * np.sqrt(mean_loss_ratio * (1 - mean_loss_ratio)) / mean_loss_ratio])
-
-            # Store to DataFrame with COV
-            df = pd.DataFrame({'IML': intensities,
-                               'Loss': loss,
-                               'COV': cov})
-
+        # Convert to arrays
+        mu_k = np.asarray(consequence_model, dtype=float)
+        if cov_consequence is not None:
+            cov_k = np.asarray(cov_consequence, dtype=float)
+            var_k = (cov_k * mu_k) ** 2
         else:
-            # Store to DataFrame without COV
-            df = pd.DataFrame({'IML': intensities,
-                               'Loss': loss})
+            var_k = np.zeros_like(mu_k)
+
+        # Damage-state probabilities from POEs
+        p_ds = np.zeros_like(poes)
+
+        for j in range(n_ds):
+            if j == n_ds - 1:
+                p_ds[:, j] = poes[:, j]
+            else:
+                p_ds[:, j] = poes[:, j] - poes[:, j + 1]
+
+        # Mean loss ratio (convolution)
+        loss = np.dot(p_ds, mu_k)
+
+        # Initialize COV
+        cov = np.zeros_like(loss)
+        if uncertainty:
+            if method.lower() == "explicit":
+                # Law of total variance
+                diff = mu_k - loss[:, None]
+                var_loss = np.sum(p_ds * (var_k + diff ** 2),axis=1)
+                cov = np.sqrt(var_loss) / (loss + 1e-12)
+            elif method.lower() == "silva":
+                # Semi-empirical derivatoin
+                for i, mu in enumerate(loss):
+                    sigma_loss_ratio, _, _ = self.calculate_sigma_loss(mu)
+                    cov[i] = np.min([sigma_loss_ratio / mu,0.90 * np.sqrt(mu * (1 - mu)) / mu])
+            else:
+                raise Exception(f"ERROR! Unknown uncertainty method: {method}")
+
+        # Output
+        df = pd.DataFrame({'IML': intensities,
+                           'Loss': loss,
+                           'COV': cov})
 
         return df
+
 
     def calculate_average_annual_damage_probability(self,
                                                     fragility_array,
