@@ -1217,49 +1217,48 @@ class postprocessor():
         IM-dependent uncertainty.
         """
 
-    def calculate_cov_silva(self,
-                            loss):
-        """
-        Helper function to calculate the uncertainty in the loss estimates based on the method proposed in Silva (2019),
-        which incorporates the sigma (standard deviation) for loss ratios within seismic vulnerability functions.
+        def calculate_sigma_silva(loss):
+            """
+            Helper function to calculate the uncertainty in the loss estimates based on the method proposed in Silva (2019),
+            which incorporates the sigma (standard deviation) for loss ratios within seismic vulnerability functions.
 
-        This method computes the sigma loss ratio for expected loss ratios and also estimates the parameters
-        of a beta distribution (coefficients a and b), which describe the uncertainty and variability in
-        the loss estimates. The formula used is derived from seismic vulnerability research.
+            This method computes the sigma loss ratio for expected loss ratios and also estimates the parameters
+            of a beta distribution (coefficients a and b), which describe the uncertainty and variability in
+            the loss estimates. The formula used is derived from seismic vulnerability research.
 
-        Parameters:
-        -----------
-        loss : list or array
-            A list or array of expected loss ratios. The expected loss ratio represents the proportion of
-            the building's value that is expected to be lost due to an earthquake event, ranging from 0 to 1.
+            Parameters:
+            -----------
+            loss : list or array
+                A list or array of expected loss ratios. The expected loss ratio represents the proportion of
+                the building's value that is expected to be lost due to an earthquake event, ranging from 0 to 1.
 
-        Returns:
-        --------
-        sigma_loss_ratio : list or array
-            The calculated uncertainty (sigma) associated with the mean loss ratio for each input loss value.
-            The sigma loss ratio represents the variability of the loss estimates and is computed based on the
-            loss ratios provided.
+            Returns:
+            --------
+            sigma_loss_ratio : list or array
+                The calculated uncertainty (sigma) associated with the mean loss ratio for each input loss value.
+                The sigma loss ratio represents the variability of the loss estimates and is computed based on the
+                loss ratios provided.
 
-        a_beta_dist : list or array
-            The coefficient 'a' of the beta distribution for each loss ratio. This parameter represents the shape
-            of the beta distribution and is used to model the uncertainty in the loss estimates.
+            a_beta_dist : list or array
+                The coefficient 'a' of the beta distribution for each loss ratio. This parameter represents the shape
+                of the beta distribution and is used to model the uncertainty in the loss estimates.
 
-        b_beta_dist : list or array
-            The coefficient 'b' of the beta distribution for each loss ratio. This parameter also represents the
-            shape of the beta distribution, complementing the coefficient 'a' to fully describe the distribution's
-            behavior.
+            b_beta_dist : list or array
+                The coefficient 'b' of the beta distribution for each loss ratio. This parameter also represents the
+                shape of the beta distribution, complementing the coefficient 'a' to fully describe the distribution's
+                behavior.
 
-        References:
-        ----------
-        1) Silva, V. (2019) "Uncertainty and correlation in seismic vulnerability functions of building classes."
-        Earthquake Spectra. DOI: 10.1193/013018eqs031m.
+            References:
+            ----------
+            1) Silva, V. (2019) "Uncertainty and correlation in seismic vulnerability functions of building classes."
+            Earthquake Spectra. DOI: 10.1193/013018eqs031m.
 
-        """
-        sigma_loss_ratio = np.where(loss == 1e-8, 1e-8,np.where(loss == 1, 1,np.sqrt(loss * (-0.7 - 2 * loss + np.sqrt(6.8 * loss + 0.5)))))
-        a_beta_dist = np.zeros(loss.shape)
-        b_beta_dist = np.zeros(loss.shape)
+            """
+            sigma_loss_ratio = np.where(loss == 1e-8, 1e-8,np.where(loss == 1, 1,0.5*np.sqrt(loss * (-0.7 - 2 * loss + np.sqrt(6.8 * loss + 0.5)))))
+            a_beta_dist = np.zeros(loss.shape)
+            b_beta_dist = np.zeros(loss.shape)
 
-        return sigma_loss_ratio, a_beta_dist, b_beta_dist
+            return sigma_loss_ratio, a_beta_dist, b_beta_dist
 
         # Default behavior
         if uncertainty and method is None:
@@ -1310,7 +1309,7 @@ class postprocessor():
             elif method.lower() == "silva":
                 # Semi-empirical derivatoin
                 for i, mu in enumerate(loss):
-                    sigma_loss_ratio, _, _ = self.calculate_sigma_loss(mu)
+                    sigma_loss_ratio, _, _ = calculate_sigma_silva(mu)
                     cov[i] = np.min([sigma_loss_ratio / mu,0.90 * np.sqrt(mu * (1 - mu)) / mu])
             else:
                 raise Exception(f"ERROR! Unknown uncertainty method: {method}")
@@ -1365,22 +1364,33 @@ class postprocessor():
 
         """
 
-        # Filter hazard array based on the maximum return period
+        # Ensure arrays are sorted by Intensity (Column 0)
+        hazard_array = hazard_array[hazard_array[:, 0].argsort()]
+        fragility_array = fragility_array[fragility_array[:, 0].argsort()]
+
+        # Filter hazard based on return period threshold
         max_integration = return_period / max_return_period
         hazard_array = hazard_array[hazard_array[:, 1] >= max_integration]
 
-        # Compute mean intensity levels and rate of occurrences
+        # Safety check: Need at least 2 points to calculate a difference (interval)
+        if len(hazard_array) < 2:
+            return 0.0
+
+        # Compute midpoints and rate of occurrences (|d_lambda|)
         mean_imls = (hazard_array[:-1, 0] + hazard_array[1:, 0]) / 2
-        rate_occ = np.diff(hazard_array[:, 1]) / -return_period
+        # Use abs to ensure a positive probability mass regardless of sort order
+        rate_occ = np.abs(np.diff(hazard_array[:, 1])) / return_period
 
-        # Define fragility curve for interpolation
-        curve_imls = np.hstack(([0], fragility_array[:, 0], [20]))
-        curve_ordinates = np.hstack(([0], fragility_array[:, 1], [1]))
+        # Define fragility curve with dynamic upper boundary
+        # We assume Probability=0 at IM=0 and Probability=1 at high IM
+        upper_im_bound = max(20.0, fragility_array[:, 0].max() * 1.5)
+        curve_imls = np.hstack(([0.0], fragility_array[:, 0], [upper_im_bound]))
+        curve_ordinates = np.hstack(([0.0], fragility_array[:, 1], [1.0]))
 
-        # Interpolate fragility curve values at the mean intensity levels
+        # Interpolate and Integrate
         interpolated_values = np.interp(mean_imls, curve_imls, curve_ordinates)
 
-        # Compute the average annual damage probability
+        # Result: Sum of (Probability of Damage * Frequency of Occurrence)
         return np.dot(interpolated_values, rate_occ)
 
     def calculate_average_annual_loss(self,
@@ -1389,17 +1399,20 @@ class postprocessor():
                                       return_period=1,
                                       max_return_period=5000):
         """
-        Calculate the Average Annual Loss (AAL) based on vulnerability and hazard curves.
+        Calculate the Average Annual Loss Ratio (AALR) based on vulnerability and hazard curves.
 
-        This function computes the average annual loss by integrating the product of the vulnerability function
-        (which relates intensity measure levels to loss ratios) and the hazard curve (which relates intensity measure
-        levels to annual rates of exceedance). The result represents the expected average loss over a given return period.
+        This function estimates the average loss ratio occurring over a given return period (typically annual where return_period = 1),
+        using the vulnerability curve (which relates intensity measure levels to an expected loss ratio) and the hazard
+        curve (which relates intensity measure levels to annual rates of exceedance).
+
+        The calculation integrates the product of the vulnerability function and the hazard curve over the specified range
+        of intensity measure levels, accounting for the return period and a maximum return period threshold.
 
         Parameters:
         -----------
         vulnerability_array : 2D array
             A 2D array where the first column contains intensity measure levels, and the second column contains the
-            corresponding loss ratios (representing expected loss relative to the building value or some other metric).
+            corresponding expected loss ratios for each intensity level.
 
         hazard_array : 2D array
             A 2D array where the first column contains intensity measure levels, and the second column contains the
@@ -1407,7 +1420,7 @@ class postprocessor():
 
         return_period : float, optional, default=1
             The return period used to scale the hazard rate. This is the time span (in years) over which the
-            average annual loss is calculated. Typically, this value is 1 year, but longer periods can be used
+            average annual damage probability is calculated. A typical value is 1 year, but longer periods can be used
             for multi-year assessments.
 
         max_return_period : float, optional, default=5000
@@ -1416,26 +1429,39 @@ class postprocessor():
 
         Returns:
         --------
-        average_annual_loss : float
-            The average annual loss, calculated by integrating the product of the vulnerability function and the
-            hazard curve over the given intensity measure levels. This value represents the expected loss per year.
+        average_annual_loss_ratio : float
+            The average annual loss ratio, calculated by integrating the product of the vulnerability
+            function and the hazard curve over the given intensity measure levels.
 
         """
+        # Ensure hazard data is sorted by Intensity Measure (IM)
+        hazard_array = hazard_array[hazard_array[:, 0].argsort()]
+        vulnerability_array = vulnerability_array[vulnerability_array[:, 0].argsort()]
 
-        # Filter hazard array based on the maximum return period
-        max_integration = return_period / max_return_period
-        hazard_array = hazard_array[hazard_array[:, 1] >= max_integration]
+        # Filter hazard based on max return period (min frequency threshold)
+        min_rate_threshold = return_period / max_return_period
+        hazard_filtered = hazard_array[hazard_array[:, 1] >= min_rate_threshold]
 
-        # Compute mean intensity levels and rate of occurrences
-        mean_imls = (hazard_array[:-1, 0] + hazard_array[1:, 0]) / 2
-        rate_occ = np.diff(hazard_array[:, 1]) / -return_period
+        if len(hazard_filtered) < 2:
+            return 0.0
 
-        # Define vulnerability curve for interpolation
-        curve_imls = np.hstack(([0], vulnerability_array[:, 0], [20]))
-        curve_ordinates = np.hstack(([0], vulnerability_array[:, 1], [1]))
+        # Calculate midpoints (mean IMs) and the change in rates (d_lambda)
+        # Using the absolute difference as the rate of occurrence for each interval
+        mean_imls = (hazard_filtered[:-1, 0] + hazard_filtered[1:, 0]) / 2
+        rate_occ = np.abs(np.diff(hazard_filtered[:, 1])) / return_period
 
-        # Interpolate vulnerability curve values at the mean intensity levels
-        interpolated_values = np.interp(mean_imls, curve_imls, curve_ordinates)
+        # Prepare vulnerability curve for interpolation
+        # Anchoring the curve at IM=0 (Loss=0) and a high IM cap (Loss=1.0)
+        v_im = vulnerability_array[:, 0]
+        v_loss = vulnerability_array[:, 1]
 
-        # Compute the average annual loss
-        return np.dot(interpolated_values, rate_occ)
+        curve_imls = np.concatenate(([0.0], v_im, [max(20.0, v_im.max() * 1.5)]))
+        curve_ordinates = np.concatenate(([0.0], v_loss, [1.0]))
+
+        # Interpolate vulnerability at the hazard midpoints
+        interpolated_losses = np.interp(mean_imls, curve_imls, curve_ordinates)
+
+        # Final Integration (Dot product of Losses and Probabilities)
+        average_annual_loss = np.dot(interpolated_losses, rate_occ)
+
+        return average_annual_loss
