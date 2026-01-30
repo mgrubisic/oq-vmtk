@@ -484,14 +484,18 @@ class postprocessor():
                 sample_im  = imls.copy()
                 sample_edp = edps.copy()
 
-            # Standardization: stability check
+            # Standardization
             npts_sample_coll = np.sum(sample_edp > collapse_limit)
             target_min       = math.ceil(0.5*npt_ori)
-            if npts_sample_coll < target_min:
-                add_count = target_min - npts_sample_coll
-                # Append original collapse points to stabilize
-                sample_im  = np.concatenate([sample_im, im_coll_ori[:, add_count]])
-                sample_edp = np.concatenate([sample_edp, edp_coll_ori[:, add_count]])
+            # To stabilize Logistic Regression if bootstrap has too few collapses
+            if npts_sample_coll < target_min and npt_ori > 0:
+                add_count = int(target_min - npts_sample_coll)
+                # Resample from original collapse points (1D)
+                extra_indices = np.random.choice(len(im_coll_ori), size=add_count, replace=True)
+
+                # Use 1D indexing: im_coll_ori[extra_indices]
+                sample_im = np.concatenate([sample_im, im_coll_ori[extra_indices]])
+                sample_edp = np.concatenate([sample_edp, edp_coll_ori[extra_indices]])
 
             # Final split
             is_coll = sample_edp > collapse_limit # Indices of collapse instances
