@@ -1497,6 +1497,11 @@ class modeller():
         ordered_sfs : list
             A list of all scale factors tested, in the order they were executed.
 
+        Note
+        ----
+        The current method assumes the acceleration time-history is in m/s2. Therefore, the acceleration
+        values are multiple by a factor of g.
+        
         References
         ----------
         [1] Vamvatsikos, D. and Cornell, C.A. (2002), Incremental dynamic analysis. Earthquake Engng. Struct. Dyn.,

@@ -752,6 +752,11 @@ class postprocessor():
 
             return cloud_dict
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                              POSTPROCESS MULTIPLE STRIPE ANALYSIS RESULTS                                   #
+    #                                                                                                             #
+    ###############################################################################################################
     def do_multiple_stripe_analysis(self,
                                     imls,
                                     edps,
@@ -822,104 +827,123 @@ class postprocessor():
         of the structure.
         """
 
-        # Convert to numpy arrays to ensure indexing works
+        # Convert to numpy arrays
         imls = np.array(imls)
         edps = np.array(edps)
 
-        # Extract unique IM levels for each stripe (one value per column)
-        # Assuming each column in imls has the same IM value
-        stripe_imls = np.mean(imls, axis=0)
+        if intensities is None:
+            intensities = np.round(np.geomspace(0.05, 10.0, 50), 3)
+
+        # Handle IM levels: Extract stripe values (one per column)
+        stripe_imls = np.mean(imls, axis=0) if imls.ndim > 1 else imls
         num_stripes = len(stripe_imls)
         num_gmrs_per_stripe = np.array([len(edps[:, i]) for i in range(num_stripes)])
 
-        def likelihood(params, x, n, z, sigma_b2b, sigma_ds):
+        def negative_log_likelihood(params, x, n, z):
             """
             Negative Log-Likelihood for Binomial Distribution.
-            x: stripe IMs, n: total GMs per stripe, z: exceedances per stripe
+            Fits the aleatory (record-to-record) parameters to the data.
             """
-            theta = params[0]
-            beta_r2r = params[1]
-
-            beta_tot = np.sqrt(beta_r2r**2 + sigma_b2b**2 + sigma_ds**2)
+            theta, beta_r2r = params
 
             # Probability of exceedance based on lognormal CDF
-            p = stats.norm.cdf(np.log(x / theta) / beta_tot)
-            p = np.clip(p, 1e-10, 1 - 1e-10) # Numerical stability
+            # We use the standard normal CDF on the log-transformed data
+            p = stats.norm.cdf(np.log(x / theta) / beta_r2r)
 
-            # log-likelihood of binomial pmf: log(nCz * p^z * (1-p)^(n-z))
+            # Numerical stability: clip p to avoid log(0) in binomial logpmf
+            p = np.clip(p, 1e-15, 1 - 1e-15)
+
+            # log-likelihood of observing z exceedances in n trials
             log_f = stats.binom.logpmf(z, n, p)
             return -np.sum(log_f)
 
-        # Create storage lists
+        # Storage lists
         thetas = []
         sigmas_record2record = []
-        sigmas_build2build = []
-        sigmas_ds = []
         betas_total = []
 
         # Iterate through each Damage State threshold
         for threshold in damage_thresholds:
-            # Count exceedances per stripe (column-wise)
+            # Count exceedances per stripe (z values)
             num_exc = np.array([np.sum(edps[:, i] >= threshold) for i in range(num_stripes)])
 
             # Initial guess: theta = median of stripes, beta = 0.4
             initial_guess = [np.median(stripe_imls), 0.4]
+
+            # Bounds: Prevent median from hitting zero and keep beta in physical range
             bounds = optimize.Bounds([0.001 * np.min(stripe_imls), 0.05],
                                      [10.0 * np.max(stripe_imls), 1.5])
 
-            sol = optimize.minimize(likelihood, initial_guess,
-                                    args=(stripe_imls, num_gmrs_per_stripe, num_exc, sigma_build2build, sigma_ds),
-                                    bounds=bounds, method='L-BFGS-B')
+            # Optimize the aleatory fit
+            sol = optimize.minimize(
+                negative_log_likelihood,
+                initial_guess,
+                args=(stripe_imls, num_gmrs_per_stripe, num_exc),
+                bounds=bounds,
+                method='L-BFGS-B'
+            )
 
-            t_val = sol.x[0]
-            s_val = sol.x[1]
-            b_val = np.sqrt(s_val**2 + sigma_build2build**2 + sigma_ds**2)
+            t_val = sol.x[0] # Fitted Median
+            s_val = sol.x[1] # Fitted Beta (Record-to-Record)
+
+            # Combine uncertainties AFTER fitting using SRSS
+            b_tot = np.sqrt(s_val**2 + sigma_build2build**2 + sigma_ds**2)
 
             thetas.append(t_val)
             sigmas_record2record.append(s_val)
-            sigmas_build2build.append(sigma_build2build)
-            sigmas_ds.append(sigma_ds)
-            betas_total.append(b_val)
+            betas_total.append(b_tot)
 
-        # Calculate Fragility Curves (POEs)
+        # Calculate Fragility Curves (POEs) over the full intensity range
         poes = np.zeros((len(intensities), len(damage_thresholds)))
         for i in range(len(damage_thresholds)):
             if fragility_rotation:
-                poes[:, i] = self.calculate_rotated_fragility(thetas[i],
-                                                             rotation_percentile,
-                                                             sigmas_record2record[i],
-                                                             sigma_build2build=sigma_build2build,
-                                                             sigma_ds = sigma_ds)
+                # Assuming this helper exists in your class
+                poes[:, i] = self.calculate_rotated_fragility(
+                    thetas[i],
+                    rotation_percentile,
+                    sigmas_record2record[i],
+                    sigma_build2build=sigma_build2build,
+                    sigma_ds=sigma_ds
+                )
             else:
-                poes[:, i] = self.calculate_lognormal_fragility(thetas[i],
-                                                               sigmas_record2record[i],
-                                                               sigma_build2build=sigma_build2build,
-                                                               sigma_ds = sigma_ds)
+                # Standard lognormal PoE
+                poes[:, i] = stats.norm.cdf(np.log(intensities / thetas[i]) / betas_total[i])
 
-        # Output dictionary following requested nested structure
+        # Formatting Output
+        # metadata observed_fractions is now a list of arrays (one array per DS)
         msa_dict = {
-            'msa inputs': {
+            'msa_inputs': {
                 'imls': imls,
                 'edps': edps,
                 'damage_thresholds': damage_thresholds,
                 'sigma_build2build': sigma_build2build,
-                'sigma_ds'         : sigma_ds,
+                'sigma_ds': sigma_ds,
                 'is_rotated': fragility_rotation
             },
             'fragility': {
                 'fragility_method': 'mle',
-                'intensities'        : intensities,
-                'poes'               : poes,
-                'medians'            : thetas,
+                'intensities': intensities,
+                'poes': poes,
+                'medians': thetas,
                 'sigma_record2record': sigmas_record2record,
-                'sigma_build2build'  : sigmas_build2build,
-                'sigma_ds'           : sigmas_ds,
-                'betas_total'        : betas_total
+                'betas_total': betas_total
+            },
+            'metadata': {
+                'stripe_levels': stripe_imls,
+                'observed_fractions': [
+                    [np.sum(edps[:, j] >= thresh) / num_gmrs_per_stripe[j] for j in range(num_stripes)]
+                    for thresh in damage_thresholds
+                ]
             }
         }
 
         return msa_dict
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                            POSTPROCESS INCREMENTAL DYNAMIC ANALYSIS RESULTS                                 #
+    #                                                                                                             #
+    ###############################################################################################################
     def do_incremental_dynamic_analysis(self,
                                         ansys_dict,
                                         im_matrix,
@@ -1016,25 +1040,79 @@ class postprocessor():
                     rec_edps.append(drifts_data[i][sf])
 
             if len(rec_ims) > 1:
-                idx = np.argsort(rec_edps)
-                sorted_edps = np.array(rec_edps)[idx]
+                # 1. Sort by Intensity Measure (not EDP) to preserve analysis sequence
+                idx = np.argsort(rec_ims)
                 sorted_ims = np.array(rec_ims)[idx]
+                sorted_edps = np.array(rec_edps)[idx]
 
-                raw_curves.append({'im': sorted_ims, 'edp': sorted_edps})
+                # 2. ENFORCE MONOTONICITY (Handles Structural Resurrection)
+                # This ensures that if a limit state is reached, it stays reached.
+                monotonic_edps = np.maximum.accumulate(sorted_edps)
 
-                # Interpolate IM = f(EDP) to ensure horizontal flatlining
-                f_im_cap = interp1d(sorted_edps, sorted_ims,
-                                    bounds_error=False, fill_value="extrapolate")
+                raw_curves.append({'im': sorted_ims, 'edp': monotonic_edps})
+
+                # 3. INTERPOLATE IM = f(EDP)
+                # We interpolate against the monotonic EDPs to find the FIRST
+                # occurrence of each threshold.
+                # Use fill_value=np.nan for points beyond the analyzed range
+                # to allow the MLE to handle censoring correctly.
+                f_im_cap = interp1d(monotonic_edps, sorted_ims,
+                                    bounds_error=False, fill_value=np.nan)
+
                 im_at_edp_matrix.append(f_im_cap(edp_range))
             else:
                 im_at_edp_matrix.append(np.full_like(edp_range, np.nan))
 
         im_at_edp_matrix = np.array(im_at_edp_matrix)
 
-        # Calculate Statistical IDA Percentiles (16/50/84)
+        # 1. HANDLE COLLAPSE FOR STATISTICS
+        # Replace NaNs that occur AFTER a record has flatlined with the max IM
+        # achieved for that record to represent the capacity 'ceiling'.
+        for i in range(n_records):
+            # Find where the record stops having data
+            mask = ~np.isnan(im_at_edp_matrix[i, :])
+            if np.any(mask):
+                last_valid_idx = np.where(mask)[0][-1]
+                last_valid_im = im_at_edp_matrix[i, last_valid_idx]
+
+                # Fill the remaining EDP range with the collapse IM
+                im_at_edp_matrix[i, last_valid_idx+1:] = last_valid_im
+
+        # 2. CALCULATE PERCENTILES
+        # Now that we've filled the 'collapse' region, we won't get All-NaN slices
+        # unless a record never started at all.
         median_ida_im = np.nanmedian(im_at_edp_matrix, axis=0)
         p16_ida_im = np.nanpercentile(im_at_edp_matrix, 16, axis=0)
         p84_ida_im = np.nanpercentile(im_at_edp_matrix, 84, axis=0)
+
+        
+        # for i in range(n_records):
+        #     rec_ims, rec_edps = [], []
+        #     for j, sf in enumerate(sf_matrix[i, :]):
+        #         if not np.isnan(sf) and sf in drifts_data[i]:
+        #             rec_ims.append(im_matrix[i, j])
+        #             rec_edps.append(drifts_data[i][sf])
+        #
+        #     if len(rec_ims) > 1:
+        #         idx = np.argsort(rec_edps)
+        #         sorted_edps = np.array(rec_edps)[idx]
+        #         sorted_ims = np.array(rec_ims)[idx]
+        #
+        #         raw_curves.append({'im': sorted_ims, 'edp': sorted_edps})
+        #
+        #         # Interpolate IM = f(EDP) to ensure horizontal flatlining
+        #         f_im_cap = interp1d(sorted_edps, sorted_ims,
+        #                             bounds_error=False, fill_value="extrapolate")
+        #         im_at_edp_matrix.append(f_im_cap(edp_range))
+        #     else:
+        #         im_at_edp_matrix.append(np.full_like(edp_range, np.nan))
+
+        # im_at_edp_matrix = np.array(im_at_edp_matrix)
+        #
+        # # Calculate Statistical IDA Percentiles (16/50/84)
+        # median_ida_im = np.nanmedian(im_at_edp_matrix, axis=0)
+        # p16_ida_im = np.nanpercentile(im_at_edp_matrix, 16, axis=0)
+        # p84_ida_im = np.nanpercentile(im_at_edp_matrix, 84, axis=0)
 
         # Fragility Fitting (MLE for Censored Data)
         im_max = np.nanmax(im_matrix)

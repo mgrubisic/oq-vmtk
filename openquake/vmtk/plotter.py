@@ -13,6 +13,7 @@ from scipy.interpolate import interp1d
 import matplotlib.animation as animation
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.animation import FuncAnimation
+from scipy.interpolate import CubicSpline
 
 class plotter:
     """
@@ -128,7 +129,6 @@ class plotter:
     #                                         PLOT DEMAND PROFILES                                                #
     #                                                                                                             #
     ###############################################################################################################
-
     def plot_demand_profiles(self,
                              peak_drift_list,
                              peak_accel_list,
@@ -1273,6 +1273,8 @@ class plotter:
                           ida_dict,
                           imt_label,
                           edp_label,
+                          xlims,
+                          ylims,
                           title=None,
                           pFlag = True,
                           export_path = None):
@@ -1326,78 +1328,77 @@ class plotter:
           the summary percentiles and vertical thresholds to remain the focal point.
         """
 
-        # Initialise the figure
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(8, 6))
 
         inputs = ida_dict['ida_inputs']
         stats  = ida_dict['stats']
 
-        # Plot Individual Raw IDA Curves (Background Cloud)
+        # 1. Plot Individual Cubic Spline IDA Curves
         for i, curve in enumerate(inputs['raw_curves']):
-            ax.plot(curve['edp'], curve['im'], '-o', color='gray', alpha=0.15,
-                    lw=self.line_widths['thin'],
-                    markersize=3,
-                    label='Individual Record' if i == 0 else "")
+            ims = curve['im']
+            edps = curve['edp']
 
-        # Plot Statistical Percentile Lines with requested colors
-        # 16th Percentile - Green (using class colors if applicable or specific request)
-        ax.plot(stats['fitted_edps'], stats['p16_im'],
-                color='green', ls='--', lw=self.line_widths['medium'],
-                label='$16^{th}$ Percentile')
+            if len(ims) > 3:
+                # Traditional Vamvatsikos approach:
+                # Interpolate a dense IM range to get smooth EDP response
+                im_smooth = np.linspace(np.min(ims), np.max(ims), 300)
 
-        # Median (50th) - Blue Solid (using GEM color or standard blue)
-        ax.plot(stats['fitted_edps'], stats['median_im'],
-                color='blue', lw=self.line_widths['thick'],
-                label='$50^{th}$ Percentile (Median)')
+                # CubicSpline handles the non-monotonic EDP values
+                # (the curve can "bend" back and forth on the X-axis)
+                cs = CubicSpline(ims, edps)
+                edp_smooth = cs(im_smooth)
 
-        # 84th Percentile - Blue Dashed
-        ax.plot(stats['fitted_edps'], stats['p84_im'],
-                color='red', ls='--', lw=self.line_widths['medium'],
-                label='$84^{th}$ Percentile')
+                ax.plot(edp_smooth, im_smooth, color='gray', alpha=0.15,
+                        lw=self.line_widths['thin'], zorder=1,
+                        label='Individual Record' if i == 0 else "")
+            else:
+                ax.plot(edps, ims, '-o', color='gray', alpha=0.15,
+                        lw=self.line_widths['thin'], markersize=3, zorder=1)
 
-        # Add Vertical Lines for Damage Thresholds
-        # Uses the 'fragility' color palette from the class
+        # 2. Plot Statistical Percentile Lines
+        # Note: Percentiles are usually calculated on the monotonic version
+        # to represent "First Collapse" for safety engineering.
+        fitted_edps = stats['fitted_edps']
+
+        def plot_stat_line(x, y, color, ls, lw, label):
+            mask = ~np.isnan(y)
+            if np.sum(mask) > 3:
+                # For summary stats, IM is usually the dependent variable
+                cs_stat = CubicSpline(x[mask], y[mask])
+                x_fine = np.linspace(np.min(x[mask]), np.max(x[mask]), 300)
+                ax.plot(x_fine, cs_stat(x_fine), color=color, ls=ls, lw=lw, label=label, zorder=3)
+
+        plot_stat_line(fitted_edps, stats['p16_im'], 'green', '--', self.line_widths['medium'], '$16^{th}$ Percentile')
+        plot_stat_line(fitted_edps, stats['median_im'], 'blue', '-', self.line_widths['thick'], '$50^{th}$ Percentile (Median)')
+        plot_stat_line(fitted_edps, stats['p84_im'], 'red', '--', self.line_widths['medium'], '$84^{th}$ Percentile')
+
+        # 3. Damage Thresholds and Styling
         ds_colors = self.colors['fragility']
-
         for i, thresh in enumerate(inputs['damage_thresholds']):
-            color = ds_colors[i % len(ds_colors)]
-            ax.axvline(thresh,
-                       color=color,
-                       ls=':',
-                       alpha=0.8,
-                       lw=self.line_widths['medium'],
-                       label=f'$DS_{{{i+1}}}$ Threshold: {thresh:.3f}')
+            ax.axvline(thresh, color=ds_colors[i % len(ds_colors)], ls=':', alpha=0.8,
+                       lw=self.line_widths['medium'], label=f'$DS_{{{i+1}}}$ Threshold', zorder=2)
 
+        self._set_plot_style(ax, title=title or f"IDA: {imt_label} vs {edp_label}",
+                             xlabel=edp_label, ylabel=imt_label)
 
-        # Apply consistent Class Styling
-        default_title = f"IDA: {imt_label} vs {edp_label}"
-        self._set_plot_style(ax,
-                             title=title if title else default_title,
-                             xlabel= edp_label,
-                             ylabel= imt_label)
-
-        # Final layout adjustments
-        ax.set_xlim([0, np.max(stats['fitted_edps'])])
-        ax.set_ylim(bottom=0)
+        ax.set_xlim(xlims)
+        ax.set_ylim(ylims)
         ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
         plt.tight_layout()
 
         # Save or Show
         if pFlag:
             if export_path:
-                # Save to disk
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
                 plt.show()
-            # Show if no path OR if you want to see it after saving
-            if not export_path:
-                # Display but do not save to disk
-                plt.show()
+                plt.close(fig)
             else:
-                # Close the plot to free memory after saving if not showing
-                plt.close()
+                plt.show()
+        else:
+            plt.close(fig)
 
     ###############################################################################################################
     #                                                                                                             #
@@ -1407,66 +1408,104 @@ class plotter:
     def plot_msa_analysis(self,
                           stripe_imls,
                           stripe_edps,
-                          damage_thresholds,
                           imt_label,
                           edp_label,
+                          xlims,
+                          ylims,
                           title=None,
-                          pFlag =True,
-                          export_path = None):
+                          pFlag=True,
+                          export_path=None):
         """
-        Plots MSA stripes and overlays the lognormal PDF for each stripe
-        to show the distribution of response.
+        Visualizes Multiple Stripe Analysis (MSA) results by plotting individual
+        response points and lognormal distribution fits at each intensity level.
+
+        This method generates a 'stripe' plot where the vertical axis represents
+        the Intensity Measure (IM) and the horizontal axis represents the
+        Engineering Demand Parameter (EDP). For each stripe, it calculates and
+        overlays a lognormal Probability Density Function (PDF) to illustrate
+        the statistical distribution of structural response at that hazard level.
+
+        Parameters
+        ----------
+        stripe_imls : 2D array
+            Matrix of intensity measure levels corresponding to each ground
+            motion and stripe.
+        stripe_edps : 2D array
+            Matrix of structural responses (ratios). The method automatically
+            converts these to percentages (%) for plotting.
+        imt_label : str
+            Label for the Y-axis (e.g., 'Sa(T1) [g]').
+        edp_label : str
+            Label for the X-axis base (e.g., 'Maximum Inter-storey Drift').
+            The unit '[%]' is appended automatically.
+        title : str, optional
+            Custom plot title. If None, a default MSA title is used.
+        pFlag : bool, default True
+            If True, displays the plot. If False, closes the figure to save memory.
+        export_path : str, optional
+            File path to save the generated image.
+
+        Returns
+        -------
+        None
         """
+        # --- Conversion from Ratio to Percent ---
+        stripe_edps = stripe_edps * 100
+
         num_gmrs, num_stripes = stripe_edps.shape
         unique_imls = stripe_imls[0, :] # Discrete IM levels (y-axis values)
 
-        fig, ax = plt.subplots(figsize=(12, 7))
+        fig, ax = plt.subplots(figsize=(8, 6))
 
         # Plot the raw data points (The Stripes)
         for j in range(num_stripes):
             im_level = unique_imls[j]
             edp_values = stripe_edps[:, j]
 
-            # Scatter individual GM results: x=EDP, y=IML
-            ax.scatter(edp_values, [im_level] * num_gmrs, color='gray', alpha=0.3, s=15, zorder=2)
+            # Scatter individual GM results: x=EDP (%), y=IML
+            ax.scatter(edp_values, [im_level] * num_gmrs,
+                       color='gray', alpha=0.3, s=15, zorder=2, label='GM Stripes' if j==0 else "")
 
             # 2. Calculate Log-Normal PDF for this stripe
-            log_edp = np.log(edp_values[edp_values > 0]) # Ensure no log(0)
-            mu_ln = np.mean(log_edp)
-            sigma_ln = np.std(log_edp)
+            valid_edps = edp_values[edp_values > 0]
+            if len(valid_edps) > 1:
+                log_edp = np.log(valid_edps)
+                mu_ln = np.mean(log_edp)
+                sigma_ln = np.std(log_edp)
 
-            # Create x-range for the PDF (along the EDP axis)
-            x_range = np.linspace(min(edp_values)*0.5, max(edp_values)*1.5, 300)
-            pdf_values = stats.lognorm.pdf(x_range, s=sigma_ln, scale=np.exp(mu_ln))
+                # Create x-range for the PDF
+                x_range = np.linspace(max(0.001, min(edp_values)*0.5), max(edp_values)*1.5, 300)
+                pdf_values = stats.lognorm.pdf(x_range, s=sigma_ln, scale=np.exp(mu_ln))
 
-            # Scale and Shift the PDF vertically (along the IML axis)
-            # Scale factor determines how "tall" the PDF looks relative to the Y-axis
-            if len(unique_imls) > 1:
-                scale_factor = np.diff(unique_imls).min() * 0.6
-            else:
-                scale_factor = im_level * 0.2
+                # Scale and Shift the PDF vertically
+                if len(unique_imls) > 1:
+                    scale_factor = np.diff(unique_imls).min() * 0.7
+                else:
+                    scale_factor = im_level * 0.2
 
-            pdf_scaled = (pdf_values / max(pdf_values)) * scale_factor
+                pdf_scaled = (pdf_values / max(pdf_values)) * scale_factor
 
-            # Plot the PDF curve: x=EDP range, y=IM Level + PDF height
-            ax.plot(x_range, im_level + pdf_scaled, color='royalblue', lw=1.5, zorder=4)
-            # Fill the PDF vertically
-            ax.fill_between(x_range, im_level, im_level + pdf_scaled, color='royalblue', alpha=0.2, zorder=3)
-
-        # Plot Damage Thresholds as Vertical lines (since EDP is on X)
-        colors = plt.cm.Reds(np.linspace(0.4, 1, len(damage_thresholds)))
-        for i, thresh in enumerate(damage_thresholds):
-            ax.axvline(thresh, color=colors[i], linestyle='--', lw=2, label=f'Threshold {i+1}: {thresh}')
+                # Plot the PDF curve and fill
+                ax.plot(x_range, im_level + pdf_scaled, color='royalblue', lw=1.5, zorder=4)
+                ax.fill_between(x_range, im_level, im_level + pdf_scaled,
+                                color='royalblue', alpha=0.2, zorder=3, label='Lognormal Fit' if j==0 else "")
 
         # Styling
         default_title = f"MSA: {imt_label} vs {edp_label}"
         self._set_plot_style(ax,
                              title=title if title else default_title,
-                             xlabel= edp_label,
-                             ylabel= imt_label)
+                             xlabel=f"{edp_label}",
+                             ylabel=imt_label)
 
         ax.grid(True, which="both", ls="-", alpha=0.15)
-        ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
+
+        # Only show legend if we have labels
+        handles, labels = ax.get_legend_handles_labels()
+        if labels:
+            ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
+
+        ax.set_xlim([xlims[0], xlims[1]])
+        ax.set_ylim([ylims[0], ylims[1]])
         plt.tight_layout()
 
         # Save or Show
@@ -1494,6 +1533,8 @@ class plotter:
     def plot_fragility_from_ca(self,
                                cloud_dict,
                                imt_label,
+                               xlims,
+                               ylims,
                                title=None,
                                plot_bootstrap=False,
                                pFlag=True,
@@ -1567,7 +1608,7 @@ class plotter:
         alpha1_mean = boot['alpha1'].mean()
 
         # 2. Initialise Plot
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(8, 6))
         self._set_plot_style(ax,
                              xlabel=imt_label,
                              ylabel=r'Probability of Exceedance $P(DS \geq ds | IM)$')
@@ -1598,7 +1639,7 @@ class plotter:
                 beta_val = betas[ds]
 
                 # Label using Theta and Beta symbols
-                label = rf"DS{ds+1}: $\theta$={theta_val:.2f}, $\beta$={beta_val:.2f}"
+                label = rf"DS{ds+1}: $\theta$={theta_val:.2f}g, $\beta$={beta_val:.2f}"
 
             ax.plot(intensities, poes_mean[:, ds],
                     color=c,
@@ -1606,8 +1647,8 @@ class plotter:
                     label=label,
                     zorder=3)
         # Final Formatting
-        ax.set_ylim(0, 1.00)
-        ax.set_xlim(0, 5.00)
+        ax.set_xlim([xlims[0], xlims[1]])
+        ax.set_ylim([ylims[0], ylims[1]])
         ax.xaxis.set_minor_locator(AutoMinorLocator())
         ax.yaxis.set_minor_locator(AutoMinorLocator())
 
@@ -1639,6 +1680,8 @@ class plotter:
     def plot_fragility_from_ida(self,
                                 ida_dict,
                                 imt_label,
+                                xlims,
+                                ylims,
                                 title = None,
                                 pFlag = True,
                                 export_path = None):
@@ -1689,9 +1732,10 @@ class plotter:
         intensities = frag_data['intensities']
         poes        = frag_data['poes']        # 2D array [n_intensities x n_thresholds]
         medians     = frag_data['medians']
+        betas       = frag_data['betas_total']
 
         # Initialize Plot
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(8, 6))
 
         default_title = f"Fragility Functions for {imt_label}"
         self._set_plot_style(ax,
@@ -1699,14 +1743,23 @@ class plotter:
                              xlabel=imt_label,
                              ylabel=r'Probability of Exceedance $P(DS \geq ds | IM)$')
 
-        # Plot Each Damage State Curve
-        # We cycle through colors defined in self.colors['fragility']
-        for i in range(poes.shape[1]):
-            color = self.colors['fragility'][i % len(self.colors['fragility'])]
-            # Plot the fragility curve
-            ax.plot(intensities, poes[:, i], linestyle='solid', color=color, lw=self.line_widths['thick'], label=f'$DS_{{{i+1}}}$ ($\mu_{{{i+1}}}={medians[i]:.2f}$g)')
-        ax.set_xlim([0, 5.0])
-        ax.set_ylim([0, 1.0]) # Small buffer above 1.0
+        n_ds = poes.shape[1]
+
+        # 3. Plot Fragility Curves and Empirical Points
+        for ds in range(n_ds):
+            # Assign color
+            color = self.colors['fragility'][ds % len(self.colors['fragility'])]
+            label_prefix = f"DS{ds+1}"
+
+            # Plot Continuous Lognormal Curve
+            ax.plot(intensities, poes[:, ds],
+                    color=color,
+                    linewidth=self.line_widths['thick'],
+                    label=rf"{label_prefix}: $\theta$={medians[ds]:.2f}g, $\beta$={betas[ds]:.2f}",
+                    zorder=3)
+
+        ax.set_xlim([xlims[0], xlims[1]])
+        ax.set_ylim([ylims[0], ylims[1]])
         ax.legend(fontsize=self.font_sizes['legend'], loc='lower right', frameon=True)
         plt.tight_layout()
 
@@ -1727,6 +1780,110 @@ class plotter:
                 # Close the plot to free memory after saving if not showing
                 plt.close()
 
+
+    ###############################################################################################################
+    #                                                                                                             #
+    #                              PLOT MULTIPLE STRIPE ANALYSES FRAGILITY OUTPUTS                                #
+    #                                                                                                             #
+    ###############################################################################################################
+    def plot_fragility_from_msa(self,
+                                msa_dict,
+                                imt_label,
+                                xlims,
+                                ylims,
+                                title=None,
+                                pFlag=True,
+                                export_path=None):
+        """
+        Generates a fragility analysis plot from Multiple Stripe Analysis (MSA)
+        results, showing continuous lognormal curves and discrete empirical points.
+
+        Parameters
+        ----------
+        msa_dict : dict
+            Dictionary containing:
+            - 'fragility': {'intensities': [], 'poes': [], 'medians': [], 'betas': []}
+            - 'metadata': {'stripe_levels': [], 'observed_fractions': []}
+        imt_label : str
+            Label for the X-axis (Intensity Measure).
+        title : str, optional
+            Custom title for the plot.
+        pFlag : bool, default True
+            Render and show/save the plot.
+        export_path : str, optional
+            Path to export the plot.
+        """
+        # 1. Setup Data
+        frag = msa_dict['fragility']
+        meta = msa_dict.get('metadata', {})
+
+        intensities = frag['intensities']
+        poes_mean = frag['poes']  # 2D array [IM x DamageState]
+        medians = frag['medians']
+        betas = frag['betas_total']
+
+        # Empirical data (The actual fractions from the stripes)
+        stripe_levels = meta.get('stripe_levels', [])
+        observed_fractions = meta.get('observed_fractions', []) # List of arrays per DS
+
+        # 2. Initialise Plot
+        fig, ax = plt.subplots(figsize=(8, 6))
+        self._set_plot_style(ax,
+                             xlabel=imt_label,
+                             ylabel=r'Probability of Exceedance $P(DS \geq ds | IM)$')
+
+        n_ds = poes_mean.shape[1]
+
+        # 3. Plot Fragility Curves and Empirical Points
+        for ds in range(n_ds):
+            # Assign color
+            color = self.colors['fragility'][ds % len(self.colors['fragility'])]
+            label_prefix = f"DS{ds+1}"
+
+            # Plot Continuous Lognormal Curve (MLE Fit)
+            ax.plot(intensities, poes_mean[:, ds],
+                    color=color,
+                    linewidth=self.line_widths['thick'],
+                    label=rf"{label_prefix}: $\theta$={medians[ds]:.2f}g, $\beta$={betas[ds]:.2f}",
+                    zorder=3)
+
+            # Plot Discrete Empirical Points (Observed at each stripe)
+            if len(observed_fractions) > 0:
+                ax.scatter(stripe_levels, observed_fractions[ds],
+                           color=color, marker='o', s=60, edgecolors='white',
+                           linewidth=1, zorder=4, alpha=0.8)
+
+        # 4. Final Formatting
+        ax.set_xlim([xlims[0], xlims[1]])
+        ax.set_ylim([ylims[0], ylims[1]])
+        ax.xaxis.set_minor_locator(AutoMinorLocator())
+        ax.yaxis.set_minor_locator(AutoMinorLocator())
+
+        default_title = "Fragility Functions from Multiple Stripe Analysis (MLE)"
+        ax.set_title(title if title else default_title, fontsize=self.font_sizes['title'])
+        ax.legend(loc='lower right', fontsize=self.font_sizes['legend'],
+                  frameon=True, framealpha=0.9, edgecolor='black')
+
+        plt.tight_layout()
+
+        # Save or Show
+        if pFlag:
+            if export_path:
+                # Save to disk
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
+            # Show if no path OR if you want to see it after saving
+            if not export_path:
+                # Display but do not save to disk
+                plt.show()
+            else:
+                # Close the plot to free memory after saving if not showing
+                plt.close()
+
+
     ###############################################################################################################
     #                                                                                                             #
     #                                           PLOT VULNERABILITY OUTPUT                                         #
@@ -1737,7 +1894,7 @@ class plotter:
                                     loss,
                                     cov,
                                     imt_label,
-                                    ylabel,
+                                    loss_label,
                                     title=None,
                                     pFlag=True,
                                     export_path=None):
@@ -1763,7 +1920,7 @@ class plotter:
             imt_label : str
                 Label for the X-axis (e.g., 'PGA [g]').
 
-            ylabel : str
+            loss_label : str
                 Label for the primary Y-axis loss curve (e.g., 'Mean Damage Ratio').
 
             title : str, optional
@@ -1806,14 +1963,14 @@ class plotter:
                                    'Loss_Val': np.concatenate(simulated_data)})
 
             # Initialise Plot
-            fig, ax1 = plt.subplots(figsize=(12, 6))
+            fig, ax1 = plt.subplots(figsize=(9, 6))
 
             # Set plot style
             default_title = f"Vulnerability Function: {imt_label}"
             self._set_plot_style(ax1,
                                  title=title if title else default_title,
                                  xlabel=imt_label,
-                                 ylabel="Loss Distribution")
+                                 ylabel=loss_label)
 
             # Violin plot for Beta distributions
             # We use 'Loss_Val' to match the DataFrame column
@@ -1843,7 +2000,7 @@ class plotter:
                      lw=self.line_widths['medium'], label="Mean Loss Ratio", zorder=5)
 
             # Style the secondary axis (Loss Curve)
-            ax2.set_ylabel(ylabel, color='red', rotation=270, labelpad=20,
+            ax2.set_ylabel(loss_label, color='red', rotation=270, labelpad=20,
                            fontsize=self.font_sizes['labels'], fontname=self.font_name)
             ax2.tick_params(axis='y', labelcolor='red', labelsize=self.font_sizes['ticks'])
             ax2.set_ylim(0, 1.0)
