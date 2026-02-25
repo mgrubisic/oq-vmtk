@@ -1176,8 +1176,8 @@ class plotter:
             default_title = f"MCA: {imt_label} vs {edp_label}"
             self._set_plot_style(ax,
                                 title=title if title else default_title,
-                                xlabel= edp_label,
-                                ylabel= imt_label)
+                                xlabel= imt_label,
+                                ylabel= edp_label)
 
             # Plot Bootstrap Samples (Background Cloud)
             n_boot = len(boot['a'])
