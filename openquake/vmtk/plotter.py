@@ -236,7 +236,11 @@ class plotter:
     #                                      PLOT MODAL ANALYSIS OUTPUT                                             #
     #                                                                                                             #
     ###############################################################################################################
-    def plot_modes(self, node_list, mode_shape_vectors, T, export_path=None):
+    def plot_modes(self,
+                   node_list,
+                   mode_shape_vectors,
+                   T,
+                   export_path=None):
         """
         Plots the undeformed structure (3D, left) and 2D mode shape profiles (right)
 
@@ -673,8 +677,60 @@ class plotter:
     #                                   ANIMATE STATIC PUSHOVER ANALYSES                                          #
     #                                                                                                             #
     ###############################################################################################################
-    def animate_spo(self, spo_top_disp, spo_rxn, spo_disps, spo_midr, nodeList, elementList, push_dir, save_path):
-        """Generates and saves the SPO animation using FuncAnimation."""
+    def animate_spo(self,
+                    spo_top_disp,
+                    spo_rxn,
+                    spo_disps,
+                    spo_midr,
+                    nodeList,
+                    elementList,
+                    push_dir,
+                    export_path):
+        """
+        Generate and save an animation of a static (monotonic) pushover analysis (SPO).
+
+        Creates a three-panel animated figure showing, frame by frame:
+
+        - **Left panel** – 2D deformed model shape overlaid on the gray undeformed geometry.
+        - **Top-right panel** – Pushover curve (base shear vs. top displacement) with the
+          currently active portion highlighted in blue.
+        - **Bottom-right panel** – Base shear vs. maximum inter-storey drift ratio.
+
+        The animation is saved to disk as a GIF or MP4 file.
+
+        Parameters
+        ----------
+        spo_top_disp : array-like of float
+            Top-node displacement recorded at each analysis step [m].
+            Its length determines the total number of animation frames.
+        spo_rxn : array-like of float
+            Base shear reaction recorded at each analysis step [kN].
+            Must be the same length as ``spo_top_disp``.
+        spo_disps : array-like, shape (n_steps, n_floors)
+            Floor displacement matrix. Row ``i`` contains the lateral displacements
+            of every floor node at analysis step ``i`` [m].
+        spo_midr : array-like of float
+            Maximum inter-storey drift ratio at each analysis step.
+            Must be the same length as ``spo_top_disp``.
+        nodeList : list of int
+            Ordered list of OpenSees node tags (must be present in the active model).
+        elementList : list of int
+            List of OpenSees element tags used to draw the structural skeleton.
+        push_dir : int
+            Direction of the pushover load:
+            ``1`` = X-direction (X–Z view), ``2`` = Y-direction (Y–Z view),
+            ``3`` = Z-direction (Z–X view).
+        export_path : str
+            Full file path for the exported animation, including extension.
+            Supported formats: ``.gif`` (Pillow writer) and ``.mp4`` (FFmpeg writer).
+            Other extensions fall back to GIF.
+
+        Returns
+        -------
+        None
+            The animation is written to ``export_path``; the figure is closed afterwards
+            to free memory.
+        """
         deform_factor = 1 # Scaling factor for visualization
         # spo_midr is now passed in as an argument, so its length determines the number of frames.
         num_frames = len(spo_top_disp)
@@ -829,23 +885,23 @@ class plotter:
         ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=50, blit=False)
 
         # Directory check
-        if save_path:
-            directory = os.path.dirname(save_path)
+        if export_path:
+            directory = os.path.dirname(export_path)
             if directory and not os.path.exists(directory):
                 print(f"Creating directory: {directory}")
                 os.makedirs(directory, exist_ok=True)
 
         # Save the animation
-        print(f"\nSaving animation to: {save_path}")
+        print(f"\nSaving animation to: {export_path}")
 
         try:
-            if save_path.lower().endswith('.gif'):
-                ani.save(save_path, writer='pillow', dpi=150)
-            elif save_path.lower().endswith('.mp4'):
-                ani.save(save_path, writer='ffmpeg', dpi=200)
+            if export_path.lower().endswith('.gif'):
+                ani.save(export_path, writer='pillow', dpi=150)
+            elif export_path.lower().endswith('.mp4'):
+                ani.save(export_path, writer='ffmpeg', dpi=200)
             else:
                 print("WARNING: Animation path extension not recognized. Saving as GIF.")
-                ani.save(save_path + ".gif", writer='pillow', dpi=150)
+                ani.save(export_path + ".gif", writer='pillow', dpi=150)
         except Exception as e:
             print(f"⚠️ Failed to save animation: {e}")
 
@@ -856,7 +912,12 @@ class plotter:
     #                                   ANIMATE CYCLIC PUSHOVER ANALYSES                                          #
     #                                                                                                             #
     ###############################################################################################################
-    def animate_cpo(self, cpo_dict, nodeList, elementList, push_dir, save_path):
+    def animate_cpo(self,
+                    cpo_dict,
+                    nodeList,
+                    elementList,
+                    push_dir,
+                    export_path):
         """
         Generates and saves the CPO animation using FuncAnimation, showing:
         1. Deformed model shape.
@@ -873,10 +934,15 @@ class plotter:
             List of element tags in the model.
         push_dir: int
             Direction of the pushover analysis (1=X, 2=Y, 3=Z).
-        save_path: str
+        export_path: str
             File path to save the animation (e.g., 'cpo_animation.gif' or 'cpo_animation.mp4').
-        """
 
+        Returns
+        -------
+        None
+            The animation is written to ``export_path``; the figure is closed afterwards
+            to free memory.
+        """
         # Data Extraction and Processing
         cpo_top_disp = cpo_dict['cpo_top_disp']
         cpo_rxn = cpo_dict['cpo_rxn']
@@ -1052,23 +1118,23 @@ class plotter:
         ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=50, blit=False)
 
         # Directory check
-        if save_path:
-            directory = os.path.dirname(save_path)
+        if export_path:
+            directory = os.path.dirname(export_path)
             if directory and not os.path.exists(directory):
                 print(f"Creating directory: {directory}")
                 os.makedirs(directory, exist_ok=True)
 
         # Save the animation
-        print(f"\nSaving animation to: {save_path}")
+        print(f"\nSaving animation to: {export_path}")
 
         try:
-            if save_path.lower().endswith('.gif'):
-                ani.save(save_path, writer='pillow', dpi=150)
-            elif save_path.lower().endswith('.mp4'):
-                ani.save(save_path, writer='ffmpeg', dpi=200)
+            if export_path.lower().endswith('.gif'):
+                ani.save(export_path, writer='pillow', dpi=150)
+            elif export_path.lower().endswith('.mp4'):
+                ani.save(export_path, writer='ffmpeg', dpi=200)
             else:
                 print("WARNING: Animation path extension not recognized. Saving as GIF.")
-                ani.save(save_path + ".gif", writer='pillow', dpi=150)
+                ani.save(export_path + ".gif", writer='pillow', dpi=150)
         except Exception as e:
             print(f"⚠️ Failed to save animation: {e}")
 
