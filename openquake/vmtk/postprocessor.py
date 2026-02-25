@@ -546,6 +546,7 @@ class postprocessor():
                                'fitted_y': None}   # Store the fitted y-values
                 }
 
+            return cloud_dict
 
         elif fragility_method.lower() == 'ordinal':
 
@@ -585,6 +586,8 @@ class postprocessor():
                                'fitted_x': None,   # Store the fitted x-values
                                'fitted_y': None}   # Store the fitted y-values
                 }
+
+            return cloud_dict
 
         elif fragility_method.lower() == 'lognormal':
 
@@ -1085,7 +1088,7 @@ class postprocessor():
         p16_ida_im = np.nanpercentile(im_at_edp_matrix, 16, axis=0)
         p84_ida_im = np.nanpercentile(im_at_edp_matrix, 84, axis=0)
 
-        
+
         # for i in range(n_records):
         #     rec_ims, rec_edps = [], []
         #     for j, sf in enumerate(sf_matrix[i, :]):
