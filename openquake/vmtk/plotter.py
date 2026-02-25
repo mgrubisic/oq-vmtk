@@ -49,6 +49,11 @@ class plotter:
     duplicate_for_drift()
         Helper function to create data for box plots of peak storey drifts.
 
+    plot_modes()
+        Plots mode shapes
+
+
+
     plot_demand_profiles()
         Plots demand profiles for peak drifts and accelerations from NLTHA output.
 
@@ -224,181 +229,6 @@ class plotter:
         x.append(0.0)
 
         return x, y
-
-
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                         PLOT DEMAND PROFILES                                                #
-    #                                                                                                             #
-    ###############################################################################################################
-    def plot_demand_profiles(self,
-                             peak_drift_list,
-                             peak_accel_list,
-                             control_nodes,
-                             title = None,
-                             pFlag = True,
-                             export_path = None):
-
-        """
-        Generate demand profile plots for peak storey drifts and peak floor accelerations.
-
-        This method creates two side-by-side plots:
-        - A plot of peak storey drift (%), displaying how the drift ratio varies with floor number.
-        - A plot of peak floor acceleration (g), displaying how the acceleration varies with floor number.
-
-        The data is presented as lines representing each control node's response at different floors.
-
-        Parameters:
-        ----------
-        peak_drift_list : list of np.ndarray
-            A list of arrays where each array contains peak drift values for each floor, with the first column being the drift values and the second column being the floor numbers.
-
-        peak_accel_list : list of np.ndarray
-            A list of arrays where each array contains peak acceleration values for each floor, with the first column being the acceleration values and the second column being the floor numbers.
-
-        control_nodes : list
-            A list of floor numbers or nodes that represent the control points in the structure.
-
-        title : str, optional
-            Custom plot title.
-
-        pFlag : bool, optional, default=True
-            If True, the plot is processed (saved/shown).
-
-        export_path : str, optional
-            Full path including filename to save the plot. Creates directories if missing.
-
-        Returns:
-        --------
-        None
-            This function saves the plot to a file in the specified output directory.
-
-        """
-
-        # Initialise Plot with two subplots
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
-
-        # Apply standard styles to subplots
-        self._set_plot_style(ax1, xlabel=r'Peak Storey Drift, $\theta_{max}$ [%]', ylabel='Floor No.')
-        self._set_plot_style(ax2, xlabel=r'Peak Floor Acceleration, $a_{max}$ [g]', ylabel='Floor No.')
-
-        nst = len(control_nodes) - 1
-        for i in range(len(peak_drift_list)):
-            # Process and plot Drifts
-            x_drift, y_drift = self.duplicate_for_drift(peak_drift_list[i][:, 0], control_nodes)
-            ax1.plot([float(val) * 100 for val in x_drift], y_drift,
-                     linewidth=self.line_widths['medium'],
-                     linestyle='solid', color=self.colors['gem'][1], alpha=0.7)
-
-            # Process and plot Accelerations (converted to g)
-            ax2.plot([float(val) / 9.81 for val in peak_accel_list[i][:, 0]], control_nodes,
-                     linewidth=self.line_widths['medium'],
-                     linestyle='solid', color=self.colors['gem'][0], alpha=0.7)
-
-        # Axis Customization
-        for ax in [ax1, ax2]:
-            ax.set_yticks(np.linspace(0, nst, nst + 1))
-            ax.set_yticklabels([int(i) for i in np.linspace(0, nst, nst + 1)],
-                               fontsize=self.font_sizes['ticks'], fontname=self.font_name)
-
-            # Use smaller font for X-ticks as profiles can be dense
-            ax.tick_params(axis='x', labelsize=self.font_sizes['ticks'] - 2)
-            ax.set_xlim([0, 5.0])
-
-        # Add title
-        default_title = "Seismic Demand Profiles"
-        fig.suptitle(title if title else default_title,
-                     fontsize=self.font_sizes['title'],
-                     fontname=self.font_name)
-
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to make room for suptitle
-
-        # Save or Show
-        if pFlag:
-            if export_path:
-                directory = os.path.dirname(export_path)
-                if directory and not os.path.exists(directory):
-                    os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
-                plt.show()
-            else:
-                plt.show()
-        else:
-            plt.close()
-
-    ###############################################################################################################
-    #                                                                                                             #
-    #                              PLOT STOREY LOSS FUNCTION GENERATOR OUTPUT                                     #
-    #                                                                                                             #
-    ###############################################################################################################
-
-    def plot_slf_model(self,
-                       out,
-                       cache,
-                       xlabel,
-                       output_directory=None,
-                       plot_label='slf'):
-
-        """
-        Generate a plot to visualize the Storey Loss Function (SLF) model output.
-
-        This function visualizes the storey loss for different realizations of a model
-        by plotting the following:
-        1. Scatter plot of total storey loss for each realization.
-        2. Shaded region representing the 16th to 84th percentiles of the empirical data.
-        3. Plot of the median of the empirical data for simulations.
-        4. Fitted Storey Loss Function (SLF) curve.
-
-        The plot includes:
-        - A scatter plot of the total loss per storey for each realization.
-        - A shaded area representing the empirical 16th to 84th percentiles.
-        - The median storey loss curve based on simulations.
-        - The fitted SLF curve.
-
-        Parameters:
-        ----------
-        out : dict
-            A dictionary containing the results of the model. It should include keys for:
-                - 'edp_range': A range of Engineering Demand Parameters (EDP) used in the analysis.
-                - 'slf': The fitted Storey Loss Function curve.
-
-        cache : dict
-            A dictionary containing cached data, including:
-                - 'total_loss_storey': A list of total storey losses for each realization.
-                - 'empirical_16th', 'empirical_84th': Empirical data representing the 16th and 84th percentiles.
-                - 'empirical_median': Empirical median values of the storey loss for the simulations.
-
-        xlabel : str
-            The label for the x-axis, typically representing the Engineering Demand Parameter (EDP) range.
-
-        output_directory : str, optional
-            Directory where the plot will be saved. If None, the plot is saved in the current working directory.
-
-        plot_label : str, optional
-            The label for the saved plot file (without file extension). Default is 'slf'.
-
-        Returns:
-        --------
-        None
-            This function saves the generated plot for each key in the `cache` dictionary to the specified directory.
-        """
-        keys_list = list(cache.keys())
-        for i, current_key in enumerate(keys_list):
-            rlz = len(cache[current_key]['total_loss_storey'])
-            total_loss_storey_array = np.array([cache[current_key]['total_loss_storey'][i] for i in range(rlz)])
-
-            fig, ax = plt.subplots(figsize=(8, 6))
-            self._set_plot_style(ax, xlabel=xlabel, ylabel='Storey Loss')
-
-            for i in range(rlz):
-                ax.scatter(out[current_key]['edp_range'], total_loss_storey_array[i, :], color=self.colors['gem'][3], s=self.marker_sizes['small'], alpha=0.5)
-
-            ax.fill_between(out[current_key]['edp_range'], cache[current_key]['empirical_16th'], cache[current_key]['empirical_84th'], color='gray', alpha=0.3, label=r'16$^{\text{th}}$-84$^{\text{th}}$ Percentile')
-            ax.plot(out[current_key]['edp_range'], cache[current_key]['empirical_median'], lw=self.line_widths['medium'], color='blue', label='Simulations - Median')
-            ax.plot(out[current_key]['edp_range'], out[current_key]['slf'], color='black', lw=self.line_widths['medium'], label='SLF - Fitted')
-
-            ax.legend(fontsize=self.font_sizes['legend'])
-            self._save_plot(output_directory, f"{plot_label}_{current_key}")
 
 
     ###############################################################################################################
@@ -627,6 +457,216 @@ class plotter:
         else:
             plt.show()
 
+    ###############################################################################################################
+    #                                                                                                             #
+    #                                         PLOT DEMAND PROFILES                                                #
+    #                                                                                                             #
+    ###############################################################################################################
+    def plot_demand_profiles(self,
+                             peak_drift_list,
+                             peak_accel_list,
+                             control_nodes,
+                             title = None,
+                             pFlag = True,
+                             export_path = None):
+
+        """
+        Generate demand profile plots for peak storey drifts and peak floor accelerations.
+
+        This method creates two side-by-side plots:
+        - A plot of peak storey drift (%), displaying how the drift ratio varies with floor number.
+        - A plot of peak floor acceleration (g), displaying how the acceleration varies with floor number.
+
+        The data is presented as lines representing each control node's response at different floors.
+
+        Parameters:
+        ----------
+        peak_drift_list : list of np.ndarray
+            A list of arrays where each array contains peak drift values for each floor, with the first column being the drift values and the second column being the floor numbers.
+
+        peak_accel_list : list of np.ndarray
+            A list of arrays where each array contains peak acceleration values for each floor, with the first column being the acceleration values and the second column being the floor numbers.
+
+        control_nodes : list
+            A list of floor numbers or nodes that represent the control points in the structure.
+
+        title : str, optional
+            Custom plot title.
+
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
+
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
+
+        Returns:
+        --------
+        None
+            This function saves the plot to a file in the specified output directory.
+
+        """
+
+        # Initialise Plot with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+        # Apply standard styles to subplots
+        self._set_plot_style(ax1, xlabel=r'Peak Storey Drift, $\theta_{max}$ [%]', ylabel='Floor No.')
+        self._set_plot_style(ax2, xlabel=r'Peak Floor Acceleration, $a_{max}$ [g]', ylabel='Floor No.')
+
+        nst = len(control_nodes) - 1
+        for i in range(len(peak_drift_list)):
+            # Process and plot Drifts
+            x_drift, y_drift = self.duplicate_for_drift(peak_drift_list[i][:, 0], control_nodes)
+            ax1.plot([float(val) * 100 for val in x_drift], y_drift,
+                     linewidth=self.line_widths['medium'],
+                     linestyle='solid', color=self.colors['gem'][1], alpha=0.7)
+
+            # Process and plot Accelerations (converted to g)
+            ax2.plot([float(val) / 9.81 for val in peak_accel_list[i][:, 0]], control_nodes,
+                     linewidth=self.line_widths['medium'],
+                     linestyle='solid', color=self.colors['gem'][0], alpha=0.7)
+
+        # Axis Customization
+        for ax in [ax1, ax2]:
+            ax.set_yticks(np.linspace(0, nst, nst + 1))
+            ax.set_yticklabels([int(i) for i in np.linspace(0, nst, nst + 1)],
+                               fontsize=self.font_sizes['ticks'], fontname=self.font_name)
+
+            # Use smaller font for X-ticks as profiles can be dense
+            ax.tick_params(axis='x', labelsize=self.font_sizes['ticks'] - 2)
+            ax.set_xlim([0, 5.0])
+
+        # Add title
+        default_title = "Seismic Demand Profiles"
+        fig.suptitle(title if title else default_title,
+                     fontsize=self.font_sizes['title'],
+                     fontname=self.font_name)
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to make room for suptitle
+
+        # Save or Show
+        if pFlag:
+            if export_path:
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
+            else:
+                plt.show()
+        else:
+            plt.close()
+
+    ###############################################################################################################
+    #                                                                                                             #
+    #                              PLOT STOREY LOSS FUNCTION GENERATOR OUTPUT                                     #
+    #                                                                                                             #
+    ###############################################################################################################
+    def plot_slf_model(self,
+                       out,
+                       cache,
+                       edp_label,
+                       loss_label,
+                       xlims,
+                       ylims,
+                       title = None,
+                       pFlag = True,
+                       export_path=None):
+
+        """
+        Generate a plot to visualize the Storey Loss Function (SLF) model output.
+
+        This function visualizes the storey loss for different realizations of a model
+        by plotting the following:
+        1. Scatter plot of total storey loss for each realization.
+        2. Shaded region representing the 16th to 84th percentiles of the empirical data.
+        3. Plot of the median of the empirical data for simulations.
+        4. Fitted Storey Loss Function (SLF) curve.
+
+        The plot includes:
+        - A scatter plot of the total loss per storey for each realization.
+        - A shaded area representing the empirical 16th to 84th percentiles.
+        - The median storey loss curve based on simulations.
+        - The fitted SLF curve.
+
+        Parameters:
+        ----------
+        out : dict
+            A dictionary containing the results of the model. It should include keys for:
+                - 'edp_range': A range of Engineering Demand Parameters (EDP) used in the analysis.
+                - 'slf': The fitted Storey Loss Function curve.
+
+        cache : dict
+            A dictionary containing cached data, including:
+                - 'total_loss_storey': A list of total storey losses for each realization.
+                - 'empirical_16th', 'empirical_84th': Empirical data representing the 16th and 84th percentiles.
+                - 'empirical_median': Empirical median values of the storey loss for the simulations.
+
+        edp_label : str
+            The label for the x-axis, typically representing the Engineering Demand Parameter (EDP) range.
+
+        loss_label : str
+            The label for the y-axis, typically representing the Storey Loss Ratio range.
+
+        xlims : tuple of float
+            (min, max) limits for the X-axis (EDP axis).
+
+        ylims : tuple of float
+            (min, max) limits for the Y-axis (Loss axis).
+
+        title : str, optional
+            Custom plot title.
+
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
+
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
+
+        Returns:
+        --------
+        None
+            This function saves the generated plot for each key in the `cache` dictionary to the specified directory.
+        """
+        keys_list = list(cache.keys())
+        for i, current_key in enumerate(keys_list):
+            rlz = len(cache[current_key]['total_loss_storey'])
+            total_loss_storey_array = np.array([cache[current_key]['total_loss_storey'][i] for i in range(rlz)])
+
+            fig, ax = plt.subplots(figsize=(8, 6))
+            self._set_plot_style(ax, xlabel=edp_label, ylabel='Storey Loss')
+
+            for i in range(rlz):
+                ax.scatter(out[current_key]['edp_range'], total_loss_storey_array[i, :], color=self.colors['gem'][3], s=self.marker_sizes['small'], alpha=0.5)
+
+            ax.fill_between(out[current_key]['edp_range'], cache[current_key]['empirical_16th'], cache[current_key]['empirical_84th'], color='gray', alpha=0.3, label=r'16$^{\text{th}}$-84$^{\text{th}}$ Percentile')
+            ax.plot(out[current_key]['edp_range'], cache[current_key]['empirical_median'], lw=self.line_widths['medium'], color='blue', label='Simulations - Median')
+            ax.plot(out[current_key]['edp_range'], out[current_key]['slf'], color='black', lw=self.line_widths['medium'], label='SLF - Fitted')
+
+            ax.legend(fontsize=self.font_sizes['legend'])
+
+        self._set_plot_style(ax,
+                             title=title or "Storey Loss Function",
+                             xlabel=edp_label,
+                             ylabel=loss_label)
+
+        ax.set_xlim(xlims)
+        ax.set_ylim(ylims)
+        ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
+        plt.tight_layout()
+
+        # Save or Show
+        if pFlag:
+            if export_path:
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.show()
+            else:
+                plt.show()
+        else:
+            plt.close()
 
     ###############################################################################################################
     #                                                                                                             #
