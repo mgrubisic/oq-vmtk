@@ -40,32 +40,66 @@ class plotter:
 
     Methods
     -------
-    _set_plot_style(ax, title=None, xlabel=None, ylabel=None, grid=True)
-        Sets consistent plot style for all plots.
-    _save_plot(output_directory, plot_label)
-        Saves the plot to the specified directory.
-    duplicate_for_drift(peak_drift_list, control_nodes)
-        Creates data for box plots of peak storey drifts.
-    plot_mca_analysis(cloud_dict, output_directory=None, plot_label='mca_plot', xlabel='Peak Ground Acceleration, PGA [g]', ylabel=r'Maximum Peak Storey Drift, $\theta_{max}$ [%]')
-        Plots cloud analysis results.
-    plot_ida_analysis(ida_dict, output_directory=None, plot_label='ida_plot', xlabel='Peak Ground Acceleration, PGA [g]', ylabel=r'Maximum Peak Storey Drift, $\theta_{max}$ [%]')
+    _set_plot_style()
+        Helper function to set consistent plot style for all plots.
+
+    _save_plot()
+        Helper function to save the plot to the specified directory.
+
+    duplicate_for_drift()
+        Helper function to create data for box plots of peak storey drifts.
+
+    plot_demand_profiles()
+        Plots demand profiles for peak drifts and accelerations from NLTHA output.
+
+    plot_slf_model()
+        Plots Storey Loss Function model results.
+
+    plot_mca_analysis()
+        Plots modified cloud analysis results.
+
+    plot_ida_analysis()
         Plots incremental dynamic analysis results.
-    plot_msa_analysis(imls, edps, output_directory=None, plot_label='cloud_analysis_plot', xlabel='Peak Ground Acceleration, PGA [g]', ylabel=r'Maximum Peak Storey Drift, $\theta_{max}$ [%]')
-        Plots incremental dynamic analysis results.
-    plot_fragility_analysis(cloud_dict, output_directory=None, plot_label='fragility_plot', xlabel='Peak Ground Acceleration, PGA [g]')
-        Plots fragility analysis results.
-    plot_demand_profiles(peak_drift_list, peak_accel_list, control_nodes, output_directory=None, plot_label='demand_profiles')
-        Plots demand profiles for peak drifts and accelerations.
-    plot_vulnerability_analysis(intensities, loss, cov, xlabel, ylabel, output_directory=None, plot_label='vulnerability_plot')
+
+    plot_msa_analysis()
+        Plots multiple stripe analysis results.
+
+    plot_fragility_from_mca()
+        Plots fragility analysis results from modified cloud analysis output.
+
+    plot_fragility_from_ida()
+        Plots fragility analysis results from incremental dynamic analysis output.
+
+    plot_fragility_from_msa()
+        Plots fragility analysis results from multiple stripe analysis output.
+
+
+    plot_vulnerability_function()
         Plots vulnerability analysis results, including Beta distributions and loss curves.
-    plot_slf_model(out, cache, xlabel, output_directory=None, plot_label='slf')
-        Plots Storey Loss Function (SLF) model results.
+
     animate_model_run(control_nodes, acc, dts, nrha_disps, nrha_accels, drift_thresholds, output_directory=None, plot_label='animation')
         Animates the seismic demands for a single nonlinear time-history analysis (NRHA) run.
 
     """
 
     def __init__(self):
+        """
+        Initialize the plotter with default style settings.
+
+        Sets up dictionaries for font sizes, line widths, marker sizes, and color
+        schemes used consistently across all plot methods. Also configures the
+        default output resolution (DPI) and font family.
+
+        No parameters are required. All defaults can be overridden by directly
+        modifying the instance attributes after construction.
+
+        Example
+        -------
+        >>> pl = plotter()
+        >>> pl.resolution = 300          # lower DPI for faster saves
+        >>> pl.font_sizes['title'] = 18  # increase title font size
+        """
+
         # Define default styles
         self.font_sizes = {
             'title': 16,
@@ -92,7 +126,30 @@ class plotter:
         self.font_name = 'Arial'
 
     def _set_plot_style(self, ax, title=None, xlabel=None, ylabel=None, grid=True):
-        """Set consistent plot style for all plots."""
+        """
+        Apply a consistent visual style to a Matplotlib axes object.
+
+        Sets the title, axis labels, tick font sizes, and grid visibility using
+        the instance-level font and style settings. This is an internal helper
+        called by all public plot methods to ensure a uniform appearance.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            The axes object to style.
+        title : str, optional
+            Title text to display above the plot. If None, no title is set.
+        xlabel : str, optional
+            Label for the X-axis. If None, no label is applied.
+        ylabel : str, optional
+            Label for the Y-axis. If None, no label is applied.
+        grid : bool, default True
+            If True, enables both major and minor grid lines.
+
+        Returns
+        -------
+        None
+        """
         if title:
             ax.set_title(title, fontsize=self.font_sizes['title'], fontname=self.font_name)
         if xlabel:
@@ -105,7 +162,26 @@ class plotter:
             ax.grid(visible=True, which='minor')
 
     def _save_plot(self, output_directory, plot_label):
-        """Save the plot if output_directory is provided."""
+        """
+        Save the current Matplotlib figure to disk and display it.
+
+        If an output directory is provided, saves the figure as a PNG file at
+        the specified resolution. The plot is always shown via ``plt.show()``
+        after saving (or instead of saving if no directory is given).
+
+        Parameters
+        ----------
+        output_directory : str or None
+            Directory where the PNG file will be written. If None, the plot is
+            only displayed and not saved.
+        plot_label : str
+            Filename stem (without extension) for the saved file. The output
+            file will be ``<output_directory>/<plot_label>.png``.
+
+        Returns
+        -------
+        None
+        """
         if output_directory:
             plt.savefig(f'{output_directory}/{plot_label}.png', dpi=self.resolution, format='png')
         plt.show()
@@ -113,7 +189,33 @@ class plotter:
     def duplicate_for_drift(self,
                             peak_drift_list,
                             control_nodes):
-        """Creates data to process box plots for peak storey drifts."""
+        """
+        Reshape peak storey drift data into a step-function format for profile plotting.
+
+        For each storey, the drift value is duplicated so that it spans the full height
+        of that storey when plotted against elevation. A zero value is appended at the
+        roof level to close the profile. This produces the characteristic staircase shape
+        used in demand profile visualizations.
+
+        Parameters
+        ----------
+        peak_drift_list : list or array-like of float
+            Peak drift values for each storey (length = number of storeys).
+            Index ``i`` corresponds to the drift between ``control_nodes[i]`` and
+            ``control_nodes[i+1]``.
+        control_nodes : list or array-like
+            Elevation (or node tag) values for each floor level, including the ground
+            floor. Length must be ``len(peak_drift_list) + 1``.
+
+        Returns
+        -------
+        x : list of float
+            Drift values expanded into step-function format. Each storey drift is
+            repeated twice, and a trailing ``0.0`` is appended at the top.
+        y : list of float
+            Corresponding floor elevation values, also expanded to match ``x``.
+            Each storey boundary elevation is repeated twice.
+        """
         x = []; y = []
         for i in range(len(control_nodes)-1):
             y.extend((float(control_nodes[i]),float(control_nodes[i+1])))
@@ -141,7 +243,7 @@ class plotter:
         Generate demand profile plots for peak storey drifts and peak floor accelerations.
 
         This method creates two side-by-side plots:
-        - A plot of peak storey drift (%), displaying how the drift varies with floor number.
+        - A plot of peak storey drift (%), displaying how the drift ratio varies with floor number.
         - A plot of peak floor acceleration (g), displaying how the acceleration varies with floor number.
 
         The data is presented as lines representing each control node's response at different floors.
