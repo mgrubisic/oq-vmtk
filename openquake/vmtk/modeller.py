@@ -17,8 +17,8 @@ class modeller():
     ----------
     number_storeys : int
         The number of storeys in the building model.
-    floor_heights : list
-        List of floor heights in meters.
+    storey_heights : list
+        List of storey heights in meters.
     floor_masses : list
         List of floor masses in tonnes.
     storey_disps : np.array
@@ -30,7 +30,7 @@ class modeller():
 
     Methods
     -------
-    __init__(number_storeys, floor_heights, floor_masses, storey_disps, storey_forces, degradation)
+    __init__(number_storeys, storey_heights, floor_masses, storey_disps, storey_forces, degradation)
         Initializes the modeller object and validates input parameters.
     create_Pinching4_material(mat1Tag, mat2Tag, storey_forces, storey_disps, degradation)
         Creates a Pinching4 material model for the MDOF oscillator.
@@ -40,19 +40,19 @@ class modeller():
         Plots the 3D visualization of the OpenSees model.
     do_gravity_analysis(nG=100, ansys_soe='UmfPack', constraints_handler='Transformation', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-6, init_iter=500, algorithm_type='Newton', integrator='LoadControl', analysis='Static')
         Performs gravity analysis on the MDOF system.
-    do_modal_analysis(num_modes=3, solver='-genBandArpack', doRayleigh=False, pflag=False)
+    do_modal_analysis(num_modes=3, solver='-genBandArpack', doRayleigh=False, pFlag=False)
         Performs modal analysis to determine natural frequencies and mode shapes.
-    do_spo_analysis(ref_disp, disp_scale_factor, push_dir, phi, pflag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='EnergyIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton', save_animation_path)
+    do_spo_analysis(ref_disp, disp_scale_factor, push_dir, phi, pFlag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='EnergyIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton', save_animation_path)
         Performs static pushover analysis (SPO) on the MDOF system.
-    do_cpo_analysis(ref_disp, mu_levels, push_dir, dispIncr, pflag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton', safe_animation_path)
+    do_cpo_analysis(ref_disp, mu_levels, push_dir, dispIncr, pFlag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton', safe_animation_path)
         Performs cyclic pushover analysis (CPO) on the MDOF system.
-    do_nrha_analysis(fnames, dt_gm, sf, t_max, dt_ansys, pflag=True, xi=0.05, ansys_soe='BandGeneral', constraints_handler='Plain', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50, algorithm_type='Newton', save_animation_path, drift_thresholds)
+    do_nrha_analysis(fnames, dt_gm, sf, t_max, dt_ansys, pFlag=True, xi=0.05, ansys_soe='BandGeneral', constraints_handler='Plain', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50, algorithm_type='Newton', save_animation_path, drift_thresholds)
         Performs nonlinear time-history analysis (NRHA) on the MDOF system.
     do_incremental_dynamic_analysis(fnames, dt_gm, t_max, dt_ansys,target_drift=0.05, initial_sf = 0.1, hunt_step =2.0,max_fill_gap=0.2, max_runs =15, capping_drift = 0.10, xi=0.05, pFlag=False))
         Performs nonlinear time-history analysis (NRHA) on the MDOF system.
 
     """
-    def __init__(self, number_storeys, floor_heights, floor_masses, storey_disps, storey_forces, degradation):
+    def __init__(self, number_storeys, storey_heights, floor_masses, storey_disps, storey_forces, degradation):
         """
         Initializes the modeller object and validates the input parameters.
 
@@ -60,8 +60,8 @@ class modeller():
         ----------
         number_storeys : int
             The number of storeys in the building model.
-        floor_heights : list
-            List of floor heights in meters (e.g., [2.5, 3.0]).
+        storey_heights : list
+            List of storey heights in meters (e.g., [2.5, 3.0]).
         floor_masses : list
             List of floor masses in tonnes (e.g., [1000, 1200]).
         storey_disps : np.array
@@ -74,15 +74,15 @@ class modeller():
         Raises
         ------
         ValueError
-            If the number of entries in `floor_heights` or `floor_masses` does not match `number_storeys`.
+            If the number of entries in `storey_heights` or `floor_masses` does not match `number_storeys`.
         """
 
         ### Run tests on input parameters
-        if len(floor_heights)!=number_storeys or len(floor_masses)!=number_storeys:
+        if len(storey_heights)!=number_storeys or len(floor_masses)!=number_storeys:
             raise ValueError('Number of entries exceed the number of storeys!')
 
         self.number_storeys = number_storeys
-        self.floor_heights  = floor_heights
+        self.storey_heights  = storey_heights
         self.floor_masses   = floor_masses
         self.storey_disps   = storey_disps
         self.storey_forces  = storey_forces
@@ -248,10 +248,10 @@ class modeller():
         current_height = 0.0
 
         # Use range based on the length of heights to ensure we never go out of bounds
-        for i in range(len(self.floor_heights)):
+        for i in range(len(self.storey_heights)):
             nodeTag = i + 1 # Nodes will be 1, 2, 3...
 
-            current_height += self.floor_heights[i]
+            current_height += self.storey_heights[i]
             current_mass = self.floor_masses[i]
 
             coords = [0.0, 0.0, current_height]
@@ -262,7 +262,7 @@ class modeller():
             ops.mass(nodeTag, *masses)
 
         # Update number_storeys to match the actual number of nodes created
-        self.number_storeys = len(self.floor_heights)
+        self.number_storeys = len(self.storey_heights)
 
         ### Get list of model nodes
         nodeList = ops.getNodeTags()
@@ -476,7 +476,7 @@ class modeller():
                           num_modes=3,
                           solver = '-genBandArpack',
                           doRayleigh=False,
-                          pflag=False,
+                          pFlag=False,
                           plot_modes=True,
                           export_path = None):
         """
@@ -502,7 +502,7 @@ class modeller():
             Flag to enable or disable Rayleigh damping in the modal analysis. This parameter is not used directly
             in this method but can be set in the OpenSees model. Default is False.
 
-        pflag: bool, optional
+        pFlag: bool, optional
             Flag to control whether to print the modal analysis report. If True, the fundamental period and
             mode shape will be printed to the console. Default is False.
 
@@ -553,7 +553,7 @@ class modeller():
             mode_shape_vectors.append(mode_vector)
 
         # Optional printing
-        if pflag:
+        if pFlag:
             ops.modalProperties('-print')
             print(r'Fundamental Period: T = {.3f} s'.format(T[0]))
 
@@ -573,7 +573,7 @@ class modeller():
                         disp_scale_factor,
                         push_dir,
                         phi,
-                        pflag=True,
+                        pFlag=True,
                         num_steps=200,
                         ansys_soe='BandGeneral',
                         constraints_handler='Transformation',
@@ -611,7 +611,7 @@ class modeller():
             The lateral load pattern shape. This is typically a mode shape or a predefined load distribution.
             For example, it can be the first-mode shape from the calibrateModel function.
 
-        pflag: bool, optional
+        pFlag: bool, optional
             Flag to print (or not) the pushover analysis steps. If True, detailed feedback on each step will be printed. Default is True.
 
         num_steps: int, optional
@@ -687,7 +687,7 @@ class modeller():
 
         elementList = ops.getEleTags()
 
-        if pflag is True:
+        if pFlag is True:
             print(f"\n------ Static Pushover Analysis of Node # {control_node} to {target_disp} ---------")
 
         ok = 0
@@ -708,31 +708,31 @@ class modeller():
 
             # Adaptive Convergence Scheme
             if ok != 0:
-                if pflag: print('FAILED: Trying relaxing convergence...')
+                if pFlag: print('FAILED: Trying relaxing convergence...')
                 ops.test(test_type, init_tol*0.01, init_iter)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
-                if pflag: print('FAILED: Trying relaxing convergence with more iterations...')
+                if pFlag: print('FAILED: Trying relaxing convergence with more iterations...')
                 ops.test(test_type, init_tol*0.01, init_iter*10)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
-                if pflag: print('FAILED: Trying relaxing convergence with more iteration and Newton with initial then current...')
+                if pFlag: print('FAILED: Trying relaxing convergence with more iteration and Newton with initial then current...')
                 ops.test(test_type, init_tol*0.01, init_iter*10)
                 ops.algorithm('Newton', 'initialThenCurrent')
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
-                if pflag: print('FAILED: Trying relaxing convergence with more iteration and Newton with initial...')
+                if pFlag: print('FAILED: Trying relaxing convergence with more iteration and Newton with initial...')
                 ops.test(test_type, init_tol*0.01, init_iter*10)
                 ops.algorithm('Newton', 'initial')
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
-                if pflag: print('FAILED: Attempting a Hail Mary...')
+                if pFlag: print('FAILED: Attempting a Hail Mary...')
                 ops.test('FixedNumIter', init_iter*10)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
@@ -741,7 +741,7 @@ class modeller():
 
             loadf = ops.getTime()
 
-            if pflag is True:
+            if pFlag is True:
                 curr_disp = ops.nodeDisp(control_node, push_dir)
                 print(f'Currently pushed node {control_node} to {curr_disp:.4f} with load factor {loadf:.4f}')
 
@@ -782,8 +782,8 @@ class modeller():
         # Use a COPY of the original displacement history for IDR calculation
         idr_disps = spo_disps.copy()
 
-        if not hasattr(self, 'floor_heights'):
-            raise AttributeError("Cannot calculate IDR: 'floor_heights' property is required but not defined in the class.")
+        if not hasattr(self, 'storey_heights'):
+            raise AttributeError("Cannot calculate IDR: 'storey_heights' property is required but not defined in the class.")
 
         # Prepend ground floor (zero displacement)
         ground_disps = np.zeros((idr_disps.shape[0], 1))
@@ -792,11 +792,11 @@ class modeller():
         # Compute interstorey displacements (ISD)
         spo_isd = np.diff(full_idr_disps, axis=1)
 
-        # Convert floor_heights to a numpy array for division
-        floor_heights = np.array(self.floor_heights)
+        # Convert storey_heights to a numpy array for division
+        storey_heights = np.array(self.storey_heights)
 
-        # Normalize by corresponding floor heights to get IDR (x100 requested)
-        spo_idr = (spo_isd / floor_heights) * 100
+        # Normalize by corresponding storey heights to get IDR (x100 requested)
+        spo_idr = (spo_isd / storey_heights) * 100
 
         # Take the maximum interstorey drift ratio per step
         spo_midr = np.max(np.abs(spo_idr), axis=1)
@@ -822,7 +822,7 @@ class modeller():
                         push_dir,
                         dispIncr,
                         phi,
-                        pflag=True,
+                        pFlag=True,
                         ansys_soe='BandGeneral',
                         constraints_handler='Transformation',
                         numberer='RCM',
@@ -846,7 +846,7 @@ class modeller():
             The number of displacement increments for each loading cycle target.
         phi: list of floats
             The lateral load pattern shape vector (scaled by mass).
-        pflag: bool, optional, default=True
+        pFlag: bool, optional, default=True
             If True, prints feedback during the analysis steps.
         save_animation_path: str, optional, default=None
             If provided, the path to save the animation (e.g., 'cpo.gif' or 'cpo.mp4').
@@ -920,7 +920,7 @@ class modeller():
             cycleDispList.append(-ref_disp * mu)  # pull negative
         dispNoMax = len(cycleDispList)
 
-        if pflag:
+        if pFlag:
             print(f"\n------ Cyclic Pushover with ductility levels: {mu_levels} ------")
 
         # Recording data arrays
@@ -1012,7 +1012,7 @@ class modeller():
                     else:
                         energy_steps.append(energy_steps[-1])
 
-            if pflag is True:
+            if pFlag is True:
                 curr_disp = ops.nodeDisp(control_node, push_dir)
                 print(f"Cycle target {d+1}/{dispNoMax}: Pushed node {control_node} to {curr_disp:.4f}")
 
@@ -1501,7 +1501,7 @@ class modeller():
         ----
         The current method assumes the acceleration time-history is in m/s2. Therefore, the acceleration
         values are multiple by a factor of g.
-        
+
         References
         ----------
         [1] Vamvatsikos, D. and Cornell, C.A. (2002), Incremental dynamic analysis. Earthquake Engng. Struct. Dyn.,
