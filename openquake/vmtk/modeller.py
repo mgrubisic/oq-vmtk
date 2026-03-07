@@ -303,84 +303,232 @@ class modeller():
             ops.element('zeroLength', eleTag, eleNodes[0], eleNodes[1], '-mat', mat2Tag, mat2Tag, rigM, rigM, rigM, rigM, '-dir', 1, 2, 3, 4, 5, 6, '-doRayleigh', 1)
 
 
-    def plot_model(self, display_info=True):
+    def plot_model(self, display_info=True, export_path=None):
         """
-        Plots the 3D visualization of the OpenSees model, including nodes and elements.
+        Plots a 2-D visualisation of the stick-and-mass model as two subplots.
 
-        This method generates a 3D plot of the multi-degree-of-freedom oscillator model defined in OpenSees.
-        It visualizes the nodes and the connections between them (representing structural elements). Nodes
-        are plotted as either square (base) or circular markers, while the elements are visualized as lines
-        connecting the nodes. If `display_info` is set to True, the node coordinates and IDs will be displayed
-        on the plot.
+        Left panel  — node elevation diagram with zigzag spring symbols
+        (zero-length Pinching4 elements), individual storey height brackets,
+        and a separate double-headed total-height dimension line.
+        Right panel — force-deformation backbone curves for every storey,
+        both axes starting from zero.
+        Legend boxes are placed at the same vertical level below each panel.
 
         Parameters
         ----------
         display_info : bool, optional
-            If True, displays additional information (coordinates and node ID) next to each node in the plot.
-            The default is True.
+            Annotate each node with its tag, elevation and mass.  Default True.
+        export_path : str, optional
+            If provided the figure is saved here instead of displayed.
 
         Returns
         -------
         None
-
-        Notes
-        -----
-        - Nodes are represented as either squares (base node) or circles (upper storey nodes).
-        - Elements (connections between nodes) are represented by blue lines connecting the corresponding nodes.
-        - Node coordinates are retrieved from OpenSees using `ops.nodeCoord` and node masses are retrieved with
-          `ops.nodeMass`.
-        - Element connectivity (pairs of nodes connected by an element) is retrieved using `ops.eleNodes`.
-        - The plot is created using Matplotlib's 3D plotting functionality.
         """
+        import matplotlib.lines as mlines
+        from matplotlib.lines import Line2D
 
-        # get list of model nodes
-        NodeCoordListX = []; NodeCoordListY = []; NodeCoordListZ = [];
-        NodeMassList = []
+        # ── Collect data from OpenSees domain ────────────────────────────────
+        nodeList    = ops.getNodeTags()
+        NodeCoordListZ, NodeMassList = [], []
+        for tag in nodeList:
+            NodeCoordListZ.append(ops.nodeCoord(tag, 3))
+            NodeMassList.append(ops.nodeMass(tag, 1))
 
-        nodeList = ops.getNodeTags()
-        for thisNodeTag in nodeList:
-            NodeCoordListX.append(ops.nodeCoord(thisNodeTag,1))
-            NodeCoordListY.append(ops.nodeCoord(thisNodeTag,2))
-            NodeCoordListZ.append(ops.nodeCoord(thisNodeTag,3))
-            NodeMassList.append(ops.nodeMass(thisNodeTag,1))
+        n_st    = self.number_storeys
+        total_h = max(NodeCoordListZ)
 
-        # get list of model elements
-        elementList = ops.getEleTags()
-        for thisEleTag in elementList:
-            eleNodesList = ops.eleNodes(thisEleTag)
-            if len(eleNodesList)==2:
-                [NodeItag,NodeJtag] = eleNodesList
-                NodeCoordListI=ops.nodeCoord(NodeItag)
-                NodeCoordListJ=ops.nodeCoord(NodeJtag)
-                [NodeIxcoord,NodeIycoord,NodeIzcoord]=NodeCoordListI
-                [NodeJxcoord,NodeJycoord,NodeJzcoord]=NodeCoordListJ
+        # ── Colours ───────────────────────────────────────────────────────────
+        COL_BASE   = '#B71C1C'
+        COL_NODE   = '#1565C0'
+        COL_ANN    = '#37474F'
+        COL_GRID   = '#EBEBEB'
+        COL_SPRING = '#546E7A'
+        BG         = 'white'
+        s_colors   = [plt.cm.tab10(i % 10) for i in range(n_st)]
 
-        fig = plt.figure(figsize=(12,12))
-        ax = fig.add_subplot(projection='3d')
+        # ── Spring drawing helper ─────────────────────────────────────────────
+        def _draw_spring(ax, x, z_bot, z_top, color, n_teeth=6, width=0.06):
+            pad   = (z_top - z_bot) * 0.15
+            n_pts = n_teeth * 2 + 1
+            zs    = np.linspace(z_bot + pad, z_top - pad, n_pts)
+            xs    = np.empty(n_pts)
+            xs[0] = x; xs[-1] = x
+            for k in range(1, n_pts - 1):
+                xs[k] = x + width if k % 2 == 1 else x - width
+            ax.plot([x, x], [z_bot, z_bot + pad], color=color, lw=1.5, zorder=3)
+            ax.plot([x, x], [z_top - pad, z_top], color=color, lw=1.5, zorder=3)
+            ax.plot(xs, zs, color=color, lw=1.5, zorder=3,
+                    solid_capstyle='round', solid_joinstyle='round')
 
-        for i in range(len(nodeList)):
-            if i==0:
-                ax.scatter(NodeCoordListX[i],NodeCoordListY[i],NodeCoordListZ[i], marker='s', s=200,color='black')
-            else:
-                ax.scatter(NodeCoordListX[i],NodeCoordListY[i],NodeCoordListZ[i], marker='o', s=150,color='black')
-            if display_info == True:
-                ax.text(NodeCoordListX[i]+0.01,NodeCoordListY[i],NodeCoordListZ[i],  'Node %s (%s,%s,%s)' % (str(i),str(NodeCoordListX[i]),str(NodeCoordListY[i]),str(NodeCoordListZ[i])), size=20, zorder=1, color="#0A4F5E")
+        # ── Custom legend handler that draws a zigzag spring icon ─────────────
+        class _SpringHandler:
+            def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+                x0, y0 = handlebox.xdescent, handlebox.ydescent
+                w, h   = handlebox.width, handlebox.height
+                n      = 4; n_pts = n * 2 + 1
+                xs_l   = np.linspace(x0 + 2, x0 + w - 2, n_pts)
+                ys_l   = np.empty(n_pts)
+                cy     = y0 + h / 2; amp = h * 0.38
+                ys_l[0] = cy; ys_l[-1] = cy
+                for k in range(1, n_pts - 1):
+                    ys_l[k] = cy + amp if k % 2 == 1 else cy - amp
+                line = mlines.Line2D(xs_l, ys_l, color=COL_SPRING, lw=1.5,
+                                     solid_capstyle='round',
+                                     solid_joinstyle='round')
+                handlebox.add_artist(line)
+                return line
 
-        i = 0
-        while i < len(elementList):
+        # ── Figure ────────────────────────────────────────────────────────────
+        fig, (ax1, ax2) = plt.subplots(
+            1, 2, figsize=(13, 9),
+            gridspec_kw={'width_ratios': [1, 2.2]})
+        fig.patch.set_facecolor(BG)
+        ax1.set_facecolor(BG)
+        ax2.set_facecolor(BG)
 
-            x = [NodeCoordListX[i], NodeCoordListX[i+1]]
-            y = [NodeCoordListY[i], NodeCoordListY[i+1]]
-            z = [NodeCoordListZ[i], NodeCoordListZ[i+1]]
+        # ═════════════════════════════════════════════════════════════════════
+        # LEFT — node elevation diagram
+        # ═════════════════════════════════════════════════════════════════════
+        col_x = 0.0
 
-            plt.plot(x,y,z,color='blue')
-            i = i+1
+        for i in range(n_st):
+            _draw_spring(ax1, col_x,
+                         NodeCoordListZ[i], NodeCoordListZ[i + 1],
+                         COL_SPRING)
 
-        ax.set_xlabel('X-Direction [m]', fontsize=14)
-        ax.set_ylabel('Y-Direction [m]', fontsize=14)
-        ax.set_zlabel('Z-Direction [m]', fontsize=14)
+        for i, (z, m) in enumerate(zip(NodeCoordListZ, NodeMassList)):
+            mk = 's' if i == 0 else 'o'
+            co = COL_BASE if i == 0 else COL_NODE
+            sz = 260 if i == 0 else 200
+            ax1.scatter(col_x, z, s=sz, marker=mk, color=co,
+                        edgecolors='white', linewidths=1.5, zorder=5)
+            if display_info:
+                ax1.plot([col_x + 0.02, col_x + 0.09], [z, z],
+                         lw=0.8, color='#B0BEC5', zorder=1)
+                ax1.text(col_x + 0.11, z,
+                         f'Node {i}   z = {z:.2f} m   m = {m:.3f} t',
+                         fontsize=9, color=COL_ANN,
+                         va='center', ha='left', fontfamily='monospace')
 
-        plt.show()
+        # ── Storey brackets (left of spring) ─────────────────────────────────
+        bx_st = -0.12   # vertical bar of individual storey brackets
+        for i in range(n_st):
+            z_bot = NodeCoordListZ[i]; z_top = NodeCoordListZ[i + 1]
+            z_mid = (z_bot + z_top) / 2.0; sh = z_top - z_bot
+            ax1.plot([bx_st - 0.03, bx_st], [z_bot, z_bot], lw=0.7, color='#90A4AE')
+            ax1.plot([bx_st - 0.03, bx_st], [z_top, z_top], lw=0.7, color='#90A4AE')
+            ax1.plot([bx_st - 0.03, bx_st - 0.03], [z_bot, z_top],
+                     lw=0.7, color='#90A4AE')
+            ax1.text(bx_st - 0.05, z_mid, f'{sh:.2f} m',
+                     fontsize=7.5, color='#90A4AE', ha='right', va='center')
+
+        # ── Element ID labels (right of spring) ───────────────────────────────
+        ele_list = ops.getEleTags()
+        for i in range(n_st):
+            z_mid = (NodeCoordListZ[i] + NodeCoordListZ[i + 1]) / 2.0
+            ele_id = ele_list[i] if i < len(ele_list) else i
+            ax1.text(col_x + 0.09, z_mid,
+                     f'Ele. {ele_id}',
+                     fontsize=8, color=COL_SPRING,
+                     ha='left', va='center', style='italic')
+
+        # axis styling
+        for sp in ['top', 'right', 'bottom']:
+            ax1.spines[sp].set_visible(False)
+        ax1.spines['left'].set_color('#90A4AE')
+        ax1.spines['left'].set_linewidth(0.8)
+        ax1.set_xticks([])
+        ax1.set_xlim(-0.40, 1.45)
+        ax1.set_ylim(0, total_h + 0.5)
+        ax1.set_ylabel('Height,  z  [m]', fontsize=12, fontweight='bold',
+                       color=COL_ANN, labelpad=8)
+        ax1.tick_params(axis='y', labelsize=10, colors=COL_ANN)
+        ax1.set_title('Node Positions', fontsize=13, fontweight='bold',
+                      color='#1A237E', pad=12)
+
+        # ═════════════════════════════════════════════════════════════════════
+        # RIGHT — storey force-deformation backbones
+        # ═════════════════════════════════════════════════════════════════════
+        ax2.grid(True, color=COL_GRID, linewidth=0.7, zorder=0)
+        ax2.set_axisbelow(True)
+
+        for i in range(n_st):
+            d  = np.concatenate(([0.0], self.storey_disps[i, :]))
+            f  = np.concatenate(([0.0], self.storey_forces[i, :]))
+            sc = s_colors[i]
+            ax2.plot(d, f, color=sc, lw=2.2, zorder=3,
+                     label=f'Storey {i + 1}', solid_capstyle='round')
+            ax2.scatter(d[1:], f[1:], color=sc, s=40, zorder=4,
+                        edgecolors='white', linewidths=0.8)
+
+        for sp in ['top', 'right']:
+            ax2.spines[sp].set_visible(False)
+        ax2.spines['left'].set_color(COL_ANN)
+        ax2.spines['left'].set_linewidth(1.0)
+        ax2.spines['bottom'].set_color(COL_ANN)
+        ax2.spines['bottom'].set_linewidth(1.0)
+
+        ax2.set_xlim(left=0)
+        ax2.set_ylim(bottom=0)
+        ax2.set_xlabel('Storey Drift Capacity,  \u03b4\u1d62  [m]',
+                       fontsize=12, fontweight='bold', color=COL_ANN, labelpad=10)
+        ax2.set_ylabel('Storey Shear Force,  V\u1d62  [kN]',
+                       fontsize=12, fontweight='bold', color=COL_ANN, labelpad=10)
+        ax2.tick_params(labelsize=10, colors=COL_ANN)
+        ax2.set_title('Storey Force\u2013Deformation Relationships',
+                      fontsize=13, fontweight='bold', color='#1A237E', pad=12)
+
+        # ── Legends — same vertical level below each panel ────────────────────
+        spring_handle = Line2D([], [], color=COL_SPRING, lw=1.5,
+                               label='Zero-length spring')
+        handles1 = [
+            Line2D([0], [0], marker='s', color='w',
+                   markerfacecolor=COL_BASE, markersize=9,
+                   label='Fixed base node'),
+            Line2D([0], [0], marker='o', color='w',
+                   markerfacecolor=COL_NODE, markersize=9,
+                   label='Floor node'),
+            spring_handle,
+        ]
+        handles2 = [
+            Line2D([0], [0], color=s_colors[i], lw=2.2, label=f'Storey {i + 1}')
+            for i in range(n_st)
+        ]
+
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.14)
+        fig.canvas.draw()
+
+        p1    = ax1.get_position()
+        p2    = ax2.get_position()
+        leg_y = 0.01
+
+        fig.legend(handles=handles1,
+                   handler_map={spring_handle: _SpringHandler()},
+                   fontsize=8.5, ncol=3, loc='lower center',
+                   bbox_to_anchor=(p1.x0 + p1.width / 2, leg_y),
+                   bbox_transform=fig.transFigure,
+                   framealpha=0.95, edgecolor='#CFD8DC',
+                   borderpad=0.7, handletextpad=0.4)
+        fig.legend(handles=handles2,
+                   fontsize=9, ncol=min(n_st, 5), loc='lower center',
+                   bbox_to_anchor=(p2.x0 + p2.width / 2, leg_y),
+                   bbox_transform=fig.transFigure,
+                   framealpha=0.95, edgecolor='#CFD8DC',
+                   borderpad=0.7, handletextpad=0.5)
+
+        # ── Super-title ───────────────────────────────────────────────────────
+        label = 'SDOF Oscillator' if n_st == 1 else f'{n_st}-Storey MDOF'
+        fig.suptitle(f'OpenSees {label}  \u2014  Stick-and-Mass Model',
+                     fontsize=14, fontweight='bold', color='#1A237E', y=1.01)
+
+        if export_path:
+            plt.savefig(export_path, dpi=150,
+                        bbox_inches='tight', facecolor=BG)
+        else:
+            plt.show()
+        plt.close()
 
 ##########################################################################
 #                             ANALYSIS MODULES                           #
