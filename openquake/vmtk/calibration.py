@@ -481,7 +481,7 @@ def calibrate_model(
         nst: int,
         sdof_capacity: np.ndarray,
         isSOS: bool = False,
-        floor_heights: Optional[List[float]] = None,
+        storey_heights: Optional[List[float]] = None,
         stiffness_profile: Optional[np.ndarray] = None,
         mass_profile: Optional[np.ndarray] = None,
         phi_target: Optional[np.ndarray] = None,
@@ -494,10 +494,10 @@ def calibrate_model(
     The target period is derived from the first capacity point:
         T_target = 2pi * sqrt(Sd[0] / (Sa[0] * g))
 
-    Without floor_heights — analytical only, returns 5-tuple:
+    Without storey_heights — analytical only, returns 5-tuple:
         floor_masses, storey_drifts (m), storey_forces (g x mass), phi, metadata
 
-    With floor_heights — builds OpenSees model, iterates period to T_target,
+    With storey_heights — builds OpenSees model, iterates period to T_target,
     runs SPO for verification, returns same 5-tuple (no model returned; caller
     should reconstruct a clean model from storey_drifts and storey_forces).
 
@@ -510,7 +510,7 @@ def calibrate_model(
     isSOS : bool
         True if a soft storey is present. Reduces ground-floor stiffness by
         soft_storey_factor (0.35). Default False.
-    floor_heights : list of float, optional
+    storey_heights : list of float, optional
         Storey heights (m), length nst. Triggers OpenSees period iteration.
     stiffness_profile : np.ndarray, optional
         Custom relative storey stiffnesses (length nst). Overrides default.
@@ -602,7 +602,7 @@ def calibrate_model(
         'cumulative_mass_participation': modal_props['cumulative_mass_participation'],
     }
 
-    if floor_heights is None:
+    if storey_heights is None:
         return floor_masses, storey_drifts, storey_forces, phi, metadata
 
     # =========================================================================
@@ -626,7 +626,7 @@ def calibrate_model(
         if verbose:
             print("-" * 50 + f"  iter {iteration + 1}/{max_iterations}")
         try:
-            model = _modeller(nst, floor_heights, floor_masses,
+            model = _modeller(nst, storey_heights, floor_masses,
                               storey_drifts, storey_forces * G, False)
             model.compile_model()
             model.do_gravity_analysis()
@@ -656,7 +656,7 @@ def calibrate_model(
 
     # ── SPO for verification ──────────────────────────────────────────────────
     try:
-        model = _modeller(nst, floor_heights, floor_masses,
+        model = _modeller(nst, storey_heights, floor_masses,
                           storey_drifts, storey_forces * G, False)
         model.compile_model()
         model.do_gravity_analysis()
