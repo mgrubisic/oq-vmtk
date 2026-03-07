@@ -23,8 +23,19 @@ class plotter:
     fragility analysis, demand profiles, vulnerability analysis, and animations of seismic responses.
     It also includes utility methods for setting consistent plot styles and saving plots.
 
+    All static plots are created at a uniform ``figsize`` (default ``(10, 7)``)
+    with ``constrained_layout=True`` and are saved **without**
+    ``bbox_inches='tight'``.  This guarantees that every exported image has
+    exactly the same pixel dimensions (``figsize × resolution``), regardless
+    of its content.  Animation panels use ``figsize_anim`` (default
+    ``(16, 8)``).  Both attributes can be changed after construction.
+
     Attributes
     ----------
+    figsize : tuple of float
+        Width and height in inches for all static (non-animation) plots.
+    figsize_anim : tuple of float
+        Width and height in inches for animation panels.
     font_sizes : dict
         Dictionary containing font sizes for titles, labels, ticks, and legends.
     line_widths : dict
@@ -34,7 +45,7 @@ class plotter:
     colors : dict
         Dictionary containing color schemes for fragility, damage states, and GEM colors.
     resolution : int
-        Resolution for saving plots (default: 500 DPI).
+        Resolution for saving plots (default: 400 DPI).
     font_name : str
         Font name for plot text (default: 'Arial').
 
@@ -99,7 +110,13 @@ class plotter:
 
         Sets up dictionaries for font sizes, line widths, marker sizes, and color
         schemes used consistently across all plot methods. Also configures the
-        default output resolution (DPI) and font family.
+        default output resolution (DPI), font family, and figure size.
+
+        All figures are created with ``constrained_layout=True`` and saved
+        without ``bbox_inches='tight'`` so that every output image has exactly
+        the same pixel dimensions (``figsize × resolution``).  Modify
+        ``self.figsize`` to change the uniform size of all static plots, or
+        ``self.figsize_anim`` for animation panels.
 
         No parameters are required. All defaults can be overridden by directly
         modifying the instance attributes after construction.
@@ -109,6 +126,7 @@ class plotter:
         >>> pl = plotter()
         >>> pl.resolution = 300          # lower DPI for faster saves
         >>> pl.font_sizes['title'] = 18  # increase title font size
+        >>> pl.figsize = (10, 8)         # change default figure size
         """
 
         # Define default styles
@@ -135,6 +153,8 @@ class plotter:
         }
         self.resolution = 400
         self.font_name = 'Arial'
+        self.figsize = (10, 7)
+        self.figsize_anim = (16, 8)
 
     def _set_plot_style(self, ax, title=None, xlabel=None, ylabel=None, grid=True):
         """
@@ -177,8 +197,11 @@ class plotter:
         Save the current Matplotlib figure to disk and display it.
 
         If an output directory is provided, saves the figure as a PNG file at
-        the specified resolution. The plot is always shown via ``plt.show()``
-        after saving (or instead of saving if no directory is given).
+        the specified resolution.  The figure is saved **without**
+        ``bbox_inches='tight'`` so that the on-disk image dimensions match
+        ``self.figsize × self.resolution`` exactly.  The plot is always shown
+        via ``plt.show()`` after saving (or instead of saving if no directory
+        is given).
 
         Parameters
         ----------
@@ -248,224 +271,277 @@ class plotter:
                    T,
                    export_path=None):
         """
-        Plots the undeformed structure (3D, left) and 2D mode shape profiles (right)
+        Plots 2-D mode shape profiles in a square grid layout (2x2, 3x3 etc).
 
-        - 3D plot X and Y limits are set to encompass the structure coordinates and a minimum range of [-2,2]
-        - 3D plot Z-limit is fixed to start at 0.0
-        - Mode shape vectors are normalized by the X-displacement of the top node (max(Z))
+        Each mode occupies one cell with two side-by-side profile plots:
+        left = X-displacement vs Z (blue), right = Y-displacement vs Z (green).
+        Normalised displacement values are printed next to every node dot.
+        A grey undeformed reference line (x=0) is drawn in every panel.
+
+        Sign convention
+        ---------------
+        Eigenvectors have arbitrary sign.  The method flips each mode so that
+        the top-node displacement in the dominant horizontal direction (X or Y)
+        is always positive.
+
+        Grid
+        ----
+        ncols = ceil(sqrt(N)),  nrows = ceil(N / ncols).
+        Unused cells in the last row are hidden.
 
         Parameters
         ----------
-        node_list : list
-            List of node tags
-        mode_shape_vectors : list of numpy.ndarray
-            Mode shape vectors (one per mode)
-        T : list
-            List of natural periods corresponding to the modes
+        node_list : list of int
+            Ordered OpenSees node tags (base node first).
+        mode_shape_vectors : list of numpy.ndarray, shape (n_nodes, 3)
+            One array per mode; columns are [ux, uy, uz], pre-normalised by
+            max abs value as returned by do_modal_analysis.
+        T : list of float
+            Natural periods [s] for each mode.
         export_path : str, optional
-            If provided, saves the figure to this path (e.g., 'modes.png') instead of displaying it
+            File path to save the figure.  If None the figure is displayed.
+
+        Returns
+        -------
+        None
         """
+        import math
+        from scipy.interpolate import interp1d
 
-        # Extract number of modes from length of periods list
+        COL_BASE  = '#B71C1C'
+        COL_NODE  = '#1565C0'
+        COL_UNDEF = '#90A4AE'
+        COL_ANN   = '#37474F'
+        COL_GRID  = '#EBEBEB'
+        COL_X     = '#1565C0'
+        COL_Y     = '#2E7D32'
+        BG        = 'white'
+
+        node_z    = np.array([ops.nodeCoord(tag, 3) for tag in node_list])
+        n_nodes   = len(node_list)
         num_modes = len(T)
+        unique_z  = np.unique(node_z)
+        z_min, z_max = unique_z[0], unique_z[-1]
 
-        # Data retrieval and structuring
-        node_coords_list = [ops.nodeCoord(tag) for tag in node_list]
-        node_coords_undeformed = np.array(node_coords_list)
-        element_list = ops.getEleTags()
+        def _fix_sign(phi):
+            top = phi[-1, :]
+            dom = int(np.argmax(np.abs(top[:2])))
+            return -phi if top[dom] < 0 else phi.copy()
 
-        # Identify Base Nodes (first node) and Top Nodes (max Z coordinate)
-        base_node_tag = node_list[0] if node_list else -1
+        norms = [_fix_sign(np.asarray(mv)) for mv in mode_shape_vectors]
 
-        X, Y, Z = node_coords_undeformed.T
-        z_max = np.max(Z)
-        top_node_indices = np.where(Z == z_max)[0]
+        ncols = math.ceil(math.sqrt(num_modes))
+        nrows = math.ceil(num_modes / ncols)
 
-        # Z-levels for 2D plots (must be unique and ordered for interpolation)
-        unique_z_levels = np.unique(Z)
-        z_min = np.min(unique_z_levels)
-        z_max = np.max(unique_z_levels)
+        fig = plt.figure(figsize=(ncols * 5.0, nrows * 4.5), facecolor=BG)
+        fig.patch.set_facecolor(BG)
+        gs = gridspec.GridSpec(nrows, ncols * 2, figure=fig,
+                               hspace=0.50, wspace=0.35,
+                               left=0.07, right=0.97,
+                               top=0.88,  bottom=0.08)
 
-        # --- CALCULATE 3D AXES LIMITS (Enforcing X/Y range [-2, 2] and Z min 0.0) ---
-        x_min_data, x_max_data = np.min(X), np.max(X)
-        y_min_data, y_max_data = np.min(Y), np.max(Y)
-        z_min_data = np.min(Z)
+        interp_kind = ('cubic'     if len(unique_z) >= 4 else
+                       'quadratic' if len(unique_z) == 3 else 'linear')
+        z_sm = np.linspace(z_min, z_max, 300)
 
-        epsilon = 1e-6 # Small buffer for axes with zero extent
+        for idx in range(ncols * nrows):
+            row  = idx // ncols
+            col  = idx  % ncols
+            gc_x = col * 2
+            gc_y = col * 2 + 1
 
-        # X Limits: Must span at least [-2, 2] and cover the data range plus a buffer
-        x_min_3d = min(x_min_data, -2.0)
-        x_max_3d = max(x_max_data, 2.0)
-        x_range = x_max_3d - x_min_3d
-        x_lim_3d = (x_min_3d - 0.05 * x_range, x_max_3d + 0.05 * x_range)
-        if np.isclose(x_range, 0.0): # Handle case where all X coords are the same
-            x_lim_3d = (x_min_3d - epsilon, x_max_3d + epsilon)
+            if idx >= num_modes:
+                for gc in (gc_x, gc_y):
+                    ax = fig.add_subplot(gs[row, gc])
+                    ax.set_visible(False)
+                continue
 
-        # Y Limits: Must span at least [-2, 2] and cover the data range plus a buffer
-        y_min_3d = min(y_min_data, -2.0)
-        y_max_3d = max(y_max_data, 2.0)
-        y_range = y_max_3d - y_min_3d
-        y_lim_3d = (y_min_3d - 0.05 * y_range, y_max_3d + 0.05 * y_range)
-        if np.isclose(y_range, 0.0): # Handle case where all Y coords are the same
-            y_lim_3d = (y_min_3d - epsilon, y_max_3d + epsilon)
+            phi = norms[idx]
+            ux  = phi[:, 0]
+            uy  = phi[:, 1]
 
-        # Z Limits: Force minimum to 0.0
-        z_lim_3d = (max(0.0, z_min_data), z_max * 1.1)
+            ux_sm  = interp1d(unique_z, ux, kind=interp_kind)(z_sm)
+            uy_sm  = interp1d(unique_z, uy, kind=interp_kind)(z_sm)
+            xlim_x = max(np.max(np.abs(ux)) * 1.55, 0.12)
+            xlim_y = max(np.max(np.abs(uy)) * 1.55, 0.12)
+            dom    = 'X' if np.max(np.abs(ux)) >= np.max(np.abs(uy)) else 'Y'
+            t_base = (f'Mode {idx+1}  [{dom}-dir]  '
+                      f'$T_{{{idx+1}}}={T[idx]:.3f}$ s')
 
-        # Create Figure and GridSpec Layout
-        fig = plt.figure(figsize=(18, 10), facecolor='white')
-        gs = gridspec.GridSpec(num_modes, 3, figure=fig, width_ratios=[2, 0.1, 1], wspace=0.1)
+            def _draw(ax, disps, disps_sm, col_line, col_node,
+                      xlabel, xlim, suffix):
+                ax.set_facecolor(BG)
+                ax.grid(True, color=COL_GRID, lw=0.6, zorder=0)
+                ax.set_axisbelow(True)
+                ax.axvline(0, color=COL_UNDEF, lw=1.2, ls='-', zorder=1)
+                ax.plot(disps_sm, z_sm, color=col_line, lw=2.0,
+                        zorder=3, solid_capstyle='round')
+                ann_off = xlim * 0.05
+                for i in range(n_nodes):
+                    z_i = node_z[i]; d_i = disps[i]
+                    nc  = COL_BASE if i == 0 else col_node
+                    ax.scatter(d_i, z_i,
+                               marker='s' if i == 0 else 'o',
+                               s=55 if i == 0 else 40,
+                               color=nc, edgecolors='white',
+                               linewidths=0.8, zorder=5)
+                    ax.text(d_i + ann_off, z_i, f'{d_i:+.3f}',
+                            fontsize=6.5, color=COL_ANN,
+                            va='center', ha='left', zorder=6)
+                ax.set_xlim(-xlim, xlim)
+                ax.set_ylim(z_min - 0.4, z_max + 0.4)
+                ax.set_xlabel(xlabel, fontsize=8, color=COL_ANN, labelpad=3)
+                ax.tick_params(labelsize=7, colors=COL_ANN)
+                for sp in ('top', 'right'):
+                    ax.spines[sp].set_visible(False)
+                ax.spines['left'].set_color(COL_ANN)
+                ax.spines['bottom'].set_color(COL_ANN)
+                ax.set_title(f'{t_base}  —  {suffix}',
+                             fontsize=8, fontweight='bold',
+                             color='#1A237E', pad=7)
 
-        # Set figure-wide title for 2D plots
-        title_x_pos = 0.835 # Position centered over the right column
-        fig.suptitle('2D Mode Shapes: Deformed Profile (X-Z View)',
-                     fontsize=16,
-                     weight='bold',
-                     color='black',
-                     y=0.95,
-                     x=title_x_pos)
+            ax_x = fig.add_subplot(gs[row, gc_x])
+            ax_x.set_ylabel('Z [m]', fontsize=8, color=COL_ANN, labelpad=3)
+            _draw(ax_x, ux, ux_sm, COL_X, COL_NODE,
+                  r'$u_x$ (norm.)', xlim_x, 'X')
 
-        # Plot the 3D Axes
-        ax3d = fig.add_subplot(gs[:, 0], projection='3d')
-        ax3d.set_facecolor('white')
-        fig.patch.set_facecolor('white')
+            ax_y = fig.add_subplot(gs[row, gc_y], sharey=ax_x)
+            ax_y.tick_params(labelleft=False)
+            _draw(ax_y, uy, uy_sm, COL_Y, '#2E7D32',
+                  r'$u_y$ (norm.)', xlim_y, 'Y')
 
-        # 3D Aesthetics
-        ax3d.set_xlabel('X-Direction [m]', fontsize=14, color='black', labelpad=10)
-        ax3d.set_ylabel('Y-Direction [m]', fontsize=14, color='black', labelpad=10)
-        ax3d.set_zlabel('Z-Direction [m]', fontsize=14, color='black', labelpad=10)
-        ax3d.grid(True, linestyle=':', alpha=0.6, color='gray')
-        ax3d.view_init(elev=20, azim=-60)
+        fig.suptitle('OpenSees  —  Modal Analysis  |  Mode Shapes',
+                     fontsize=13, fontweight='bold', color='#1A237E')
 
-        # Set the corrected limits
-        ax3d.set_xlim(x_lim_3d); ax3d.set_ylim(y_lim_3d); ax3d.set_zlim(z_lim_3d)
-        ax3d.set_title('3D Undeformed Structure', fontsize=16, weight='bold', color='black', pad=15)
-
-        # Plot Undeformed Nodes (Black markers)
-        for i, node_tag in enumerate(node_list):
-            x, y, z = node_coords_undeformed[i]
-            marker_style = 's' if node_tag == base_node_tag else 'o'
-            marker_size = 200 if node_tag == base_node_tag else 150
-            ax3d.scatter(x, y, z, marker=marker_style, s=marker_size, color='black', zorder=2)
-
-        # Plot Undeformed Elements (Solid Blue Line)
-        for ele_tag in element_list:
-            ele_nodes_tags = ops.eleNodes(ele_tag)
-            if len(ele_nodes_tags) == 2:
-                idx_i = node_list.index(ele_nodes_tags[0])
-                idx_j = node_list.index(ele_nodes_tags[1])
-
-                x_u = [node_coords_undeformed[idx_i, 0], node_coords_undeformed[idx_j, 0]]
-                y_u = [node_coords_undeformed[idx_i, 1], node_coords_undeformed[idx_j, 1]]
-                z_u = [node_coords_undeformed[idx_i, 2], node_coords_undeformed[idx_j, 2]]
-
-                ax3d.plot(x_u, y_u, z_u, color='blue', linewidth=1.5, linestyle='-', alpha=0.7, zorder=1)
-
-        # Normalization and 2D plot setup
-        normalized_mode_vectors = []
-        for mode_vec in mode_shape_vectors:
-            top_node_disp_x = mode_vec[top_node_indices, 0]
-            max_top_disp = np.max(np.abs(top_node_disp_x))
-
-            if max_top_disp != 0:
-                normalized_vec = mode_vec / max_top_disp
-            else:
-                normalized_vec = mode_vec
-            normalized_mode_vectors.append(normalized_vec)
-
-        deformed_color = 'blue'
-        max_disp_for_plotting = 1.0
-        x_lim_2d = (-max_disp_for_plotting * 1.5, max_disp_for_plotting * 1.5)
-        z_lim_2d = (z_min - 0.5, z_max + 0.5)
-
-        # Iterate through modes for 2D profile plot
-        for mode_idx, mode_vector in enumerate(normalized_mode_vectors):
-            mode_num = mode_idx + 1
-            period = T[mode_idx]
-
-            ax2d = fig.add_subplot(gs[mode_idx, 2])
-
-            # Extract 2D Plot Data (X-displacement vs Z-height)
-            node_displacements_x = []
-            for z_level in unique_z_levels:
-                z_indices = np.where(Z == z_level)[0]
-                node_displacements_x.append(np.mean(mode_vector[z_indices, 0]))
-
-            # Interpolation for deformed mode shape function
-            N_z = len(unique_z_levels)
-            if N_z < 3:
-                interpolation_kind = 'linear'
-            elif N_z == 3:
-                interpolation_kind = 'quadratic'
-            else:
-                interpolation_kind = 'cubic'
-
-            # Undeformed Reference Line (Solid Gray Line)
-            ax2d.plot([0] * N_z, unique_z_levels, color='gray', linewidth=3.0, linestyle='-', alpha=0.7, zorder=1)
-
-            # Plot Undeformed Nodes (Black Square/Circle at X=0)
-            for i, node_tag in enumerate(node_list):
-                z_u = node_coords_undeformed[i, 2]
-                if z_u not in unique_z_levels: continue
-
-                marker_style = 's' if node_tag == base_node_tag else 'o'
-                marker_size = 80 if node_tag == base_node_tag else 50
-
-                ax2d.scatter(0, z_u, marker=marker_style, s=marker_size, color='black', edgecolor='black', linewidth=0.5, zorder=2)
-
-            # Smooth Deformed Profile (Fixed Blue Line)
-            f_interp = interp1d(unique_z_levels, node_displacements_x, kind=interpolation_kind)
-            Z_smooth = np.linspace(z_min, z_max, 100)
-            X_smooth = f_interp(Z_smooth)
-
-            ax2d.plot(X_smooth, Z_smooth, color=deformed_color, linewidth=3.0, linestyle='-', zorder=4)
-
-            # Plot Deformed Nodes (Black square/circle at displaced position)
-            for i, node_tag in enumerate(node_list):
-                z_u = node_coords_undeformed[i, 2]
-                if z_u not in unique_z_levels: continue
-
-                z_idx = np.where(unique_z_levels == z_u)[0][0]
-                x_disp_at_z = node_displacements_x[z_idx]
-
-                marker_style = 's' if node_tag == base_node_tag else 'o'
-                marker_size = 80 if node_tag == base_node_tag else 50
-
-                ax2d.scatter(x_disp_at_z, z_u, marker=marker_style, s=marker_size, color='black', edgecolor='black', linewidth=0.5, zorder=5)
-
-
-            # 2D Plot Aesthetics and Labels
-            title_text = f'Mode {mode_num}, $T_{{{mode_num}}} = {period:.3f}$ s'
-            ax2d.set_title(title_text, fontsize=12, color='black', pad=5)
-
-            ax2d.set_ylim(z_lim_2d)
-            ax2d.grid(True, linestyle=':', alpha=0.5)
-            ax2d.set_xlim(x_lim_2d)
-            ax2d.set_ylabel('Z-Height [m]', fontsize=10)
-
-            # X-Label placement
-            if mode_idx < num_modes - 1:
-                ax2d.tick_params(labelbottom=False)
-                ax2d.set_xlabel(' ', fontsize=10)
-            else:
-                ax2d.set_xlabel('X-Displacement (Normalized)', fontsize=10)
-
-            # Consistent Y-axis tick and label placement
-            if mode_idx > 0:
-                 ax2d.sharey(fig.axes[2])
-                 ax2d.tick_params(labelleft=False)
-
-        # Align labels again after tight_layout to finalize position
-        fig.align_labels()
-        plt.subplots_adjust(top=0.9)
-
-        # Export figure
         if export_path:
-            print(f"Saving figure to {export_path}")
-            plt.savefig(export_path, bbox_inches='tight')
+            plt.savefig(export_path, dpi=self.resolution,
+                        bbox_inches='tight', facecolor=BG)
             plt.show()
         else:
             plt.show()
+        plt.close(fig)
+
+        def _spring3d(ax, xi, yi, z_bot, z_top, color, w, n_teeth=5, lw=1.3):
+            pad   = (z_top - z_bot) * 0.15
+            n_pts = n_teeth * 2 + 1
+            zs    = np.linspace(z_bot + pad, z_top - pad, n_pts)
+            xs    = np.full(n_pts, xi, dtype=float)
+            ys    = np.full(n_pts, yi, dtype=float)
+            for k in range(1, n_pts - 1):
+                xs[k] = xi + (w if k % 2 == 1 else -w)
+            ax.plot([xi, xi], [yi, yi], [z_bot, z_bot + pad],
+                    color=color, lw=lw, zorder=3)
+            ax.plot([xi, xi], [yi, yi], [z_top - pad, z_top],
+                    color=color, lw=lw, zorder=3)
+            ax.plot(xs, ys, zs, color=color, lw=lw, zorder=3,
+                    solid_capstyle='round', solid_joinstyle='round')
+
+        def _style3d(ax):
+            ax.set_facecolor(BG)
+            for pane in (ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane):
+                pane.fill = False
+                pane.set_edgecolor('#DEDEDE')
+            ax.grid(True, linestyle=':', alpha=0.35, color='#CCCCCC')
+            ax.view_init(elev=28, azim=-50)
+            ax.tick_params(axis='both', which='major',
+                           labelsize=6, pad=1, colors=COL_ANN)
+
+        def _normalize(phi):
+            peak = np.max(np.sqrt(phi[:, 0] ** 2 + phi[:, 1] ** 2))
+            return phi / peak if peak > 1e-12 else phi.copy()
+
+        norms      = [_normalize(np.asarray(mv)) for mv in mode_shape_vectors]
+        disp_scale = total_h * 0.28
+        lim        = max(total_h * 0.26, 0.5)
+        w_spring   = lim * 0.05
+
+        # Grid dimensions
+        ncols = math.ceil(math.sqrt(num_modes))
+        nrows = math.ceil(num_modes / ncols)
+
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=(ncols * 4.2, nrows * 4.8),
+            subplot_kw={'projection': '3d'},
+            facecolor=BG)
+        fig.patch.set_facecolor(BG)
+
+        axes_flat = np.array(axes).flatten() if num_modes > 1 else [axes]
+
+        for idx, ax in enumerate(axes_flat):
+            if idx >= num_modes:
+                ax.set_visible(False)
+                continue
+
+            # Ghost undeformed (springs + nodes)
+            for i in range(n_ele):
+                e_nodes = ops.eleNodes(ele_list[i])
+                if len(e_nodes) == 2:
+                    i0 = node_list.index(e_nodes[0])
+                    i1 = node_list.index(e_nodes[1])
+                    _spring3d(ax,
+                              node_x[i0], node_y[i0],
+                              node_z[i0], node_z[i1],
+                              COL_UNDEF, w_spring, n_teeth=4, lw=0.9)
+
+            for i in range(n_nodes):
+                ax.scatter(node_x[i], node_y[i], node_z[i],
+                           marker='s' if i == 0 else 'o',
+                           s=28 if i == 0 else 18,
+                           color=COL_UNDEF, edgecolors='white',
+                           linewidths=0.7, zorder=3,
+                           depthshade=False, alpha=0.55)
+
+            # Deformed mode shape (all blue; base node red)
+            phi = norms[idx]
+            xd  = node_x + phi[:, 0] * disp_scale
+            yd  = node_y + phi[:, 1] * disp_scale
+
+            ax.plot(xd, yd, node_z, color=COL_MODE, lw=2.2, zorder=5,
+                    solid_capstyle='round', solid_joinstyle='round')
+
+            for i in range(n_nodes):
+                node_col = COL_BASE if i == 0 else COL_NODE
+                ax.scatter(xd[i], yd[i], node_z[i],
+                           marker='s' if i == 0 else 'o',
+                           s=65 if i == 0 else 45,
+                           color=node_col, edgecolors='white',
+                           linewidths=1.1, zorder=6, depthshade=False)
+
+            # Dashed wall-projection ghosts on the back planes
+            wall = lim * 0.99
+            ax.plot(xd, np.full(n_nodes,  wall), node_z,
+                    color=COL_MODE, lw=0.9, ls='--', alpha=0.28, zorder=2)
+            ax.plot(np.full(n_nodes, -wall), yd, node_z,
+                    color=COL_MODE, lw=0.9, ls='--', alpha=0.28, zorder=2)
+
+            # Axis styling
+            _style3d(ax)
+            ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
+            ax.set_zlim(0, total_h * 1.1)
+            ax.set_xlabel('X [m]', fontsize=7, color=COL_ANN, labelpad=4)
+            ax.set_ylabel('Y [m]', fontsize=7, color=COL_ANN, labelpad=4)
+            ax.set_zlabel('Z [m]', fontsize=7, color=COL_ANN, labelpad=4)
+
+            # Title with generous pad (18 pt) so it clears the top pane edge
+            dom = 'X' if np.max(np.abs(phi[:, 0])) >= np.max(np.abs(phi[:, 1])) else 'Y'
+            ax.set_title(
+                f'Mode {idx + 1}  [{dom}-dir]  '
+                f'$T_{{{idx + 1}}} = {T[idx]:.3f}$ s',
+                fontsize=9, fontweight='bold', color='#1A237E', pad=18)
+
+        fig.suptitle('OpenSees  \u2014  3D Modal Analysis',
+                     fontsize=13, fontweight='bold', color='#1A237E', y=1.01)
+        plt.tight_layout(pad=2.5)
+
+        if export_path:
+            plt.savefig(export_path, dpi=self.resolution,
+                        bbox_inches='tight', facecolor=BG)
+            plt.show()
+        else:
+            plt.show()
+        plt.close(fig)
+
 
 
     ###############################################################################################################
@@ -492,7 +568,9 @@ class plotter:
           currently active portion highlighted in blue.
         - **Bottom-right panel** – Base shear vs. maximum inter-storey drift ratio.
 
-        The animation is saved to disk as a GIF or MP4 file.
+        The animation figure uses ``self.figsize_anim`` with
+        ``constrained_layout`` so that every exported frame has identical,
+        deterministic pixel dimensions.
 
         Parameters
         ----------
@@ -565,14 +643,12 @@ class plotter:
         max_drift_history = np.maximum.accumulate(spo_midr)
 
         # Initialize the Figure and Subplots
-        fig = plt.figure(figsize=(16, 8))
+        fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
 
         # Layout: (1, 2, 1) is big left plot; (2, 2, 2) is top right; (2, 2, 4) is bottom right
         ax_model = fig.add_subplot(1, 2, 1)
         ax_curve = fig.add_subplot(2, 2, 2)
         ax_drift = fig.add_subplot(2, 2, 4)
-
-        plt.subplots_adjust(wspace=0.4, hspace=0.4)
 
         # Store the number of static (undeformed) artists for easy cleanup in update()
         num_static_lines = len(elementList)
@@ -720,6 +796,10 @@ class plotter:
         2. Base shear vs. top displacement (hysteretic curve, spanning negative/positive).
         3. Base shear vs. maximum interstorey drift (newly updated to show hysteresis).
 
+        The animation figure uses ``self.figsize_anim`` with
+        ``constrained_layout`` so that every exported frame has identical,
+        deterministic pixel dimensions.
+
         Parameters
         ----------
         cpo_dict: dict
@@ -786,14 +866,12 @@ class plotter:
         model_y_lim = (0, max_abs_coord_y * 1.5)
 
         # Initialize the Figure and Subplots
-        fig = plt.figure(figsize=(16, 8))
+        fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
 
         # Layout: (1, 2, 1) is big left plot; (2, 2, 2) is top right; (2, 2, 4) is bottom right
         ax_model = fig.add_subplot(1, 2, 1)
         ax_curve = fig.add_subplot(2, 2, 2)
         ax_drift = fig.add_subplot(2, 2, 4)
-
-        plt.subplots_adjust(wspace=0.4, hspace=0.4)
 
         # Store the number of static (undeformed) artists for easy cleanup in update()
         num_static_lines = len(elementList)
@@ -964,6 +1042,10 @@ class plotter:
         so far (blue → green → yellow → orange → red), if ``drift_thresholds``
         are provided.
 
+        The animation figure uses ``self.figsize_anim`` with
+        ``constrained_layout`` so that every exported frame has identical,
+        deterministic pixel dimensions.
+
         Parameters
         ----------
         control_nodes : array-like of int
@@ -1004,8 +1086,8 @@ class plotter:
             print("⚠️ Warning: Zero or near-zero storey height detected")
 
         # Initialize Figure and Axes ---
-        fig = plt.figure(figsize=(10, 8))
-        gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 0.6])
+        fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
+        gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 0.6], figure=fig)
 
         ax1 = fig.add_subplot(gs[0])  # Displacement
         ax2 = fig.add_subplot(gs[1])  # Acceleration
@@ -1110,7 +1192,6 @@ class plotter:
 
         # Create animation
         ani = FuncAnimation(fig, update, frames=len(dts), interval=10, blit=False, repeat=False)
-        plt.tight_layout()
 
         # Save or show
         if export_path:
@@ -1158,6 +1239,10 @@ class plotter:
 
         The data is presented as lines representing each control node's response at different floors.
 
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
+
         Parameters:
         ----------
         peak_drift_list : list of np.ndarray
@@ -1186,7 +1271,7 @@ class plotter:
         """
 
         # Initialise Plot with two subplots
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=self.figsize, constrained_layout=True)
 
         # Apply standard styles to subplots
         self._set_plot_style(ax1, xlabel=r'Peak Storey Drift, $\theta_{max}$ [%]', ylabel='Floor No.')
@@ -1221,15 +1306,13 @@ class plotter:
                      fontsize=self.font_sizes['title'],
                      fontname=self.font_name)
 
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to make room for suptitle
-
         # Save or Show
         if pFlag:
             if export_path:
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.savefig(export_path, dpi=self.resolution)
                 plt.show()
             else:
                 plt.show()
@@ -1252,6 +1335,10 @@ class plotter:
             Visualizes the Modified Cloud Analysis (MCA) regression including bootstrapping.
             This plot accounts for collapse cases using logistic regression, showing the
             'softening' effect on the median and percentile structural response.
+
+            The figure uses ``self.figsize`` with ``constrained_layout`` and is
+            saved without ``bbox_inches='tight'`` so that every output image has
+            identical, deterministic pixel dimensions.
 
             Parameters
             ----------
@@ -1313,7 +1400,7 @@ class plotter:
             f_mca    = lambda edp, sig, p_c, percentile: edp * np.exp(sig * norm.ppf(percentile / (1 - p_c)))
 
             # Initialise Plot
-            fig, ax = plt.subplots(figsize=(12, 6))
+            fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
             # Apply consistent Class Styling
             default_title = f"MCA: {imt_label} vs {edp_label}"
@@ -1399,7 +1486,7 @@ class plotter:
                     directory = os.path.dirname(export_path)
                     if directory and not os.path.exists(directory):
                         os.makedirs(directory, exist_ok=True)
-                    plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                    plt.savefig(export_path, dpi=self.resolution)
                     plt.show()
                     plt.close(fig)
                 else:
@@ -1429,6 +1516,10 @@ class plotter:
         record curves as a background "cloud" and overlays the statistical response
         percentiles. It is designed to provide an immediate visual assessment of
         structural performance across a range of intensities.
+
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
 
         Parameters
         ----------
@@ -1469,7 +1560,7 @@ class plotter:
             Displays the matplotlib figure.
         """
 
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
         inputs = ida_dict['ida_inputs']
         stats  = ida_dict['stats']
@@ -1525,7 +1616,6 @@ class plotter:
         ax.set_xlim(xlims)
         ax.set_ylim(ylims)
         ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
-        plt.tight_layout()
 
         # Save or Show
         if pFlag:
@@ -1533,7 +1623,7 @@ class plotter:
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.savefig(export_path, dpi=self.resolution)
                 plt.show()
                 plt.close(fig)
             else:
@@ -1565,6 +1655,10 @@ class plotter:
         Engineering Demand Parameter (EDP). For each stripe, it calculates and
         overlays a lognormal Probability Density Function (PDF) to illustrate
         the statistical distribution of structural response at that hazard level.
+
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
 
         Parameters
         ----------
@@ -1608,7 +1702,7 @@ class plotter:
         num_gmrs, num_stripes = stripe_edps.shape
         unique_imls = stripe_imls[0, :] # Discrete IM levels (y-axis values)
 
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
         # Plot the raw data points (The Stripes)
         for j in range(num_stripes):
@@ -1659,7 +1753,6 @@ class plotter:
 
         ax.set_xlim([xlims[0], xlims[1]])
         ax.set_ylim([ylims[0], ylims[1]])
-        plt.tight_layout()
 
         # Save or Show
         if pFlag:
@@ -1668,7 +1761,7 @@ class plotter:
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.savefig(export_path, dpi=self.resolution)
                 plt.show()
             # Show if no path OR if you want to see it after saving
             if not export_path:
@@ -1700,6 +1793,10 @@ class plotter:
         combined linear (for standard damage states) and logistic (for collapse)
         regression models. It optionally displays the underlying bootstrap
         realizations as a background 'cloud' to visualize statistical uncertainty.
+
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
 
         Parameters
         ----------
@@ -1763,7 +1860,7 @@ class plotter:
         alpha1_mean = boot['alpha1'].mean()
 
         # 2. Initialise Plot
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
         self._set_plot_style(ax,
                              xlabel=imt_label,
                              ylabel=r'Probability of Exceedance $P(DS \geq ds | IM)$')
@@ -1811,15 +1908,13 @@ class plotter:
         ax.set_title(title if title else default_title, fontsize=self.font_sizes['title'])
         ax.legend(loc='lower right', fontsize=self.font_sizes['legend'], frameon=True, framealpha=0.9, edgecolor='black')
 
-        plt.tight_layout()
-
         # 6. Save or Show
         if pFlag:
             if export_path:
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.savefig(export_path, dpi=self.resolution)
                 plt.show()
                 plt.close(fig)
             else:
@@ -1848,6 +1943,10 @@ class plotter:
         Incremental Dynamic Analysis. Each curve represents the probability that a
         specific engineering demand parameter (EDP) threshold (e.g., drift limit)
         is exceeded given a specific intensity measure (IM) level.
+
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
 
         Parameters
         ----------
@@ -1896,7 +1995,7 @@ class plotter:
         betas       = frag_data['betas_total']
 
         # Initialize Plot
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
         default_title = f"Fragility Functions for {imt_label}"
         self._set_plot_style(ax,
@@ -1922,7 +2021,6 @@ class plotter:
         ax.set_xlim([xlims[0], xlims[1]])
         ax.set_ylim([ylims[0], ylims[1]])
         ax.legend(fontsize=self.font_sizes['legend'], loc='lower right', frameon=True)
-        plt.tight_layout()
 
         # Save or Show
         if pFlag:
@@ -1931,7 +2029,7 @@ class plotter:
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.savefig(export_path, dpi=self.resolution)
                 plt.show()
             # Show if no path OR if you want to see it after saving
             if not export_path:
@@ -1962,6 +2060,10 @@ class plotter:
         Multiple Stripe Analysis. Each curve represents the probability that a
         specific engineering demand parameter (EDP) threshold (e.g., drift limit)
         is exceeded given a specific intensity measure (IM) level.
+
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
 
         Parameters
         ----------
@@ -2002,7 +2104,7 @@ class plotter:
         observed_fractions = meta.get('observed_fractions', []) # List of arrays per DS
 
         # 2. Initialise Plot
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
         self._set_plot_style(ax,
                              xlabel=imt_label,
                              ylabel=r'Probability of Exceedance $P(DS \geq ds | IM)$')
@@ -2039,8 +2141,6 @@ class plotter:
         ax.legend(loc='lower right', fontsize=self.font_sizes['legend'],
                   frameon=True, framealpha=0.9, edgecolor='black')
 
-        plt.tight_layout()
-
         # Save or Show
         if pFlag:
             if export_path:
@@ -2048,7 +2148,7 @@ class plotter:
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.savefig(export_path, dpi=self.resolution)
                 plt.show()
             # Show if no path OR if you want to see it after saving
             if not export_path:
@@ -2090,6 +2190,10 @@ class plotter:
         - A shaded area representing the empirical 16th to 84th percentiles.
         - The median storey loss curve based on simulations.
         - The fitted SLF curve.
+
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
 
         Parameters:
         ----------
@@ -2135,7 +2239,7 @@ class plotter:
             rlz = len(cache[current_key]['total_loss_storey'])
             total_loss_storey_array = np.array([cache[current_key]['total_loss_storey'][i] for i in range(rlz)])
 
-            fig, ax = plt.subplots(figsize=(8, 6))
+            fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
             self._set_plot_style(ax, xlabel=edp_label, ylabel='Storey Loss')
 
             for i in range(rlz):
@@ -2155,7 +2259,6 @@ class plotter:
         ax.set_xlim(xlims)
         ax.set_ylim(ylims)
         ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
-        plt.tight_layout()
 
         # Save or Show
         if pFlag:
@@ -2163,7 +2266,7 @@ class plotter:
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
-                plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                plt.savefig(export_path, dpi=self.resolution)
                 plt.show()
             else:
                 plt.show()
@@ -2191,6 +2294,10 @@ class plotter:
             It simulates Beta distributions based on mean loss and CoV, rendering them as
             truncated violin plots (strictly bounded 0-1) to represent the physical limits
             of structural damage.
+
+            The figure uses ``self.figsize`` with ``constrained_layout`` and is
+            saved without ``bbox_inches='tight'`` so that every output image has
+            identical, deterministic pixel dimensions.
 
             Parameters
             ----------
@@ -2249,7 +2356,7 @@ class plotter:
                                    'Loss_Val': np.concatenate(simulated_data)})
 
             # Initialise Plot
-            fig, ax1 = plt.subplots(figsize=(9, 6))
+            fig, ax1 = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
             # Set plot style
             default_title = f"Vulnerability Function: {imt_label}"
@@ -2300,15 +2407,13 @@ class plotter:
             ax1.legend(handles=[beta_patch], loc='upper left', fontsize=self.font_sizes['legend'])
             ax2.legend(loc='upper left', bbox_to_anchor=(0, 0.93), fontsize=self.font_sizes['legend'])
 
-            plt.tight_layout()
-
             # Save or show
             if pFlag:
                 if export_path:
                     directory = os.path.dirname(export_path)
                     if directory and not os.path.exists(directory):
                         os.makedirs(directory, exist_ok=True)
-                    plt.savefig(export_path, dpi=self.resolution, bbox_inches='tight')
+                    plt.savefig(export_path, dpi=self.resolution)
                     plt.show()
                 else:
                     plt.show()
