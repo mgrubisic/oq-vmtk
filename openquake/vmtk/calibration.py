@@ -43,7 +43,7 @@ from typing import Tuple, Optional, List, Dict, Any
 from enum import Enum
 from dataclasses import dataclass
 import warnings
-from src.vmtk.modeller_v2 import modeller as _modeller
+from openquake.vmtk.modeller import modeller as _modeller
 
 # Constants
 G = 9.81  # Gravitational acceleration (m/s²)
