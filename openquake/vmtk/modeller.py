@@ -876,6 +876,10 @@ class modeller():
         if mu_levels is None:
             mu_levels = [1, 2, 4, 6, 8, 10]
 
+        # Always start from a clean post-gravity state.
+        self.compile_model()
+        self.do_gravity_analysis()
+
         # Apply the load pattern
         ops.timeSeries("Linear", 1)
         ops.pattern("Plain",1,1)
@@ -1149,6 +1153,12 @@ class modeller():
         peak_disp: numpy.ndarray
             Array of peak displacement values (in meters) for each floor.
         """
+
+        # Always rebuild from a clean state and re-run modal analysis to
+        # populate self.omega, which is required for Rayleigh damping below.
+        self.compile_model()
+        self.do_gravity_analysis()
+        self.do_modal_analysis(num_modes=min(self.number_storeys, 3), plot_modes=False)
 
         # Define control nodes
         control_nodes = ops.getNodeTags()

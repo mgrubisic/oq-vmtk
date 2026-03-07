@@ -80,7 +80,6 @@ class CalibrationConfig:
     roof_mass_factor:     float = 0.75
     soft_storey_factor:   float = 0.50
     stiffness_group_size: int   = 2
-    period_tolerance:     float = 0.02
     validate_results:     bool  = True
     verbose:              bool  = False
 
@@ -416,34 +415,6 @@ def compute_floor_masses(phi: np.ndarray, M: np.ndarray) -> List[float]:
 
 
 # =============================================================================
-# PERIOD MATCHING
-# =============================================================================
-
-def correct_forces_for_period(storey_forces: np.ndarray,
-                               T_actual: float,
-                               T_target: float) -> Tuple[np.ndarray, float]:
-    """
-    Correct storey forces to achieve target period.
-
-    Parameters
-    ----------
-    storey_forces : np.ndarray
-        Current forces.
-    T_actual : float
-        Actual period from OpenSees.
-    T_target : float
-        Target period.
-
-    Returns
-    -------
-    corrected_forces : np.ndarray
-    correction_factor : float
-    """
-    correction = (T_actual / T_target) ** 2
-    return storey_forces * correction, correction
-
-
-# =============================================================================
 # VALIDATION
 # =============================================================================
 
@@ -485,7 +456,6 @@ def calibrate_model(
         stiffness_profile: Optional[np.ndarray] = None,
         mass_profile: Optional[np.ndarray] = None,
         phi_target: Optional[np.ndarray] = None,
-        max_iterations: int = 500,
         config: Optional[CalibrationConfig] = None,
         verbose: bool = False) -> Tuple:
     """
@@ -519,8 +489,6 @@ def calibrate_model(
     phi_target : np.ndarray, optional
         Custom first mode shape (length nst, roof-normalised). Overrides
         eigenvalue-based mode shape.
-    max_iterations : int
-        Maximum period-correction iterations. Default 500.
     config : CalibrationConfig, optional
         Advanced configuration. Auto-generated if omitted.
     verbose : bool
@@ -552,7 +520,45 @@ def calibrate_model(
                                 soft_storey_factor=config.soft_storey_factor,
                                 stiffness_profile=stiffness_profile,
                                 group_size=config.stiffness_group_size)
+
+    # ── Scale K so that T1_analytical = T_target exactly ─────────────────────
+    omega_target = 2 * np.pi / T_target
+    evals_raw    = eigh(K, M, eigvals_only=True)
+    lambda_1     = float(np.sort(evals_raw)[0])
+    alpha        = omega_target ** 2 / lambda_1
+    K            = K * alpha
+
     modal_props = compute_modal_properties(M, K, num_modes=1)
+
+    # ── Mode shape ────────────────────────────────────────────────────────────
+    if phi_target is not None:
+        phi   = np.asarray(phi_target, dtype=float) / phi_target[-1]
+        ones  = np.ones(nst)
+        Gamma = float((phi @ M @ ones) / (phi @ M @ phi))
+        M_eff = float((phi @ M @ ones) ** 2 / (phi @ M @ phi))
+    else:
+        phi   = modal_props['mode_shapes'][:, 0]
+        Gamma = float(modal_props['participation_factors'][0])
+        M_eff = float(modal_props['effective_masses'][0])
+
+    MPR_mode1 = M_eff / np.trace(M)
+    shear_ratios, drift_ratios = compute_storey_distribution_ratios(phi, M)
+
+    # ── Rebuild K from shear_ratios so it is consistent with storey_forces ───
+    # storey_forces[i] = base_shear * SR[i], and the Pinching4 spring at storey i
+    # has stiffness F_spring[i] / drift = storey_forces[i]*G / drift.
+    # For T1 = T_target these spring stiffnesses must equal k[i] = C * SR[i],
+    # where C = omega_target² / lambda_1(K_SR).
+    # Rebuilding K from SR makes K, phi and storey_forces mutually consistent.
+    K_SR = np.zeros((nst, nst))
+    for i in range(nst):
+        K_SR[i, i] = shear_ratios[i] + (shear_ratios[i + 1] if i + 1 < nst else 0.0)
+        if i > 0:
+            K_SR[i, i - 1] = -shear_ratios[i]
+            K_SR[i - 1, i] = -shear_ratios[i]
+    lam_SR  = float(np.sort(eigh(K_SR, M, eigvals_only=True))[0])
+    alpha   = omega_target ** 2 / lam_SR
+    K       = K_SR * alpha
 
     # ── Mode shape ────────────────────────────────────────────────────────────
     if phi_target is not None:
@@ -572,7 +578,17 @@ def calibrate_model(
     storey_forces, storey_drifts = transform_sdof_to_mdof(
         Sd, Sa, phi, M, Gamma, M_eff, shear_ratios)
 
-    pc = 1.0   # no analytical pre-correction: T_target = T_implied by construction
+    # ── Scale forces so spring stiffness F[i,0]/drift[0] = alpha * SR[i] ─────
+    # storey_forces[i] = base_shear * SR[i], giving spring stiffness
+    # k_implied = base_shear * G / drift[0].  We need k = alpha * SR[i],
+    # so multiply every storey force by the ratio alpha / (base_shear*G/drift[0]).
+    # Since SR[i] cancels, this is a single uniform scale applied to all storeys.
+    drift0          = float(Sd[0] * Gamma * phi[0])
+    base_shear_kN   = float(Sa[0] * M_eff * G)
+    k_implied       = base_shear_kN / drift0          # kN/m  (what forces imply)
+    k_needed        = alpha * float(shear_ratios[0])  # kN/m  (what T_target needs)
+    force_scale     = k_needed / k_implied
+    storey_forces   = storey_forces * force_scale
 
     floor_masses = compute_floor_masses(phi, M)
 
@@ -581,13 +597,15 @@ def calibrate_model(
             storey_drifts[i, :], storey_forces[i, :] = validate_capacity_curve(
                 storey_drifts[i, :], storey_forces[i, :])
 
+    # ── u_roof_target: always computed, needed by caller for SPO ─────────────
+    u_roof_target   = Sd * Gamma * phi[-1]
+
     # ── Metadata ──────────────────────────────────────────────────────────────
     metadata = {
         'building_category':             category.value,
         'num_storeys':                   nst,
         'T1':                            modal_props['periods'][0],
         'T_target':                      T_target,
-        'period_correction':             pc,
         'Gamma':                         Gamma,
         'M_eff':                         M_eff,
         'MPR_mode1':                     MPR_mode1,
@@ -600,67 +618,40 @@ def calibrate_model(
         'effective_masses':              modal_props['effective_masses'],
         'mass_participation_ratios':     modal_props['mass_participation_ratios'],
         'cumulative_mass_participation': modal_props['cumulative_mass_participation'],
+        'u_roof_target':                 u_roof_target,
     }
 
     if storey_heights is None:
         return floor_masses, storey_drifts, storey_forces, phi, metadata
 
     # =========================================================================
-    # OpenSees period iteration + SPO
+    # OpenSees SPO verification
+    # Period is already correct by construction (K was scaled to T_target).
+    # Build model once, run SPO, store results in metadata.
     # =========================================================================
-    u_roof_target   = Sd * Gamma * phi[-1]
     u_roof_ultimate = u_roof_target[-1]
 
     if verbose:
         print("=" * 60)
         print(f"calibrate_model  nst={nst}  T_target={T_target:.4f} s")
-        print(f"  Gamma={Gamma:.4f}  M_eff={M_eff:.4f}")
+        print(f"  Gamma={Gamma:.4f}  M_eff={M_eff:.4f}  alpha={alpha:.4f}")
         print("=" * 60)
 
     T_opensees = None
     period_error = np.inf
-    converged = False
     spo_Sd = spo_Sa = spo_roof_disp = spo_base_shear = None
 
-    for iteration in range(max_iterations):
-        if verbose:
-            print("-" * 50 + f"  iter {iteration + 1}/{max_iterations}")
-        try:
-            model = _modeller(nst, storey_heights, floor_masses,
-                              storey_drifts, storey_forces * G, False)
-            model.compile_model()
-            model.do_gravity_analysis()
-            T_arr, _ = model.do_modal_analysis(num_modes=min(nst, 3), plot_modes=False)
-            T_opensees   = T_arr[0]
-            period_error = abs(T_opensees - T_target) / T_target
-            if verbose:
-                print(f"  [T]  T={T_opensees:.4f} s  target={T_target:.4f} s  err={period_error:.2%}")
-        except Exception as e:
-            warnings.warn(f"Model build failed at iteration {iteration + 1}: {e}")
-            break
-
-        if period_error <= config.period_tolerance:
-            converged = True
-            if verbose:
-                print(f"Converged  T={T_opensees:.4f} s  pc={pc:.4f}x")
-            break
-
-        c = float(np.clip(1.0 + 0.8 * ((T_opensees / T_target) ** 2 - 1.0), 0.5, 3.0))
-        storey_forces = storey_forces * c
-        pc *= c
-        if verbose:
-            print(f"  [T]  Correction {c:.4f}x forces  (cumulative pc={pc:.4f})")
-    else:
-        if verbose:
-            print(f"Did not converge  period error={period_error:.2%}")
-
-    # ── SPO for verification ──────────────────────────────────────────────────
     try:
         model = _modeller(nst, storey_heights, floor_masses,
                           storey_drifts, storey_forces * G, False)
         model.compile_model()
         model.do_gravity_analysis()
-        model.do_modal_analysis(num_modes=min(nst, 3), plot_modes=False)
+        T_arr, _ = model.do_modal_analysis(num_modes=min(nst, 3), plot_modes=False)
+        T_opensees   = T_arr[0]
+        period_error = abs(T_opensees - T_target) / T_target
+        if verbose:
+            print(f"  [T]  OpenSees T1={T_opensees:.4f} s  target={T_target:.4f} s  err={period_error:.2%}")
+
         ref_disp   = max(u_roof_target[0], 1e-4)
         disp_scale = max((u_roof_ultimate * 1.5) / ref_disp, 2.0)
         spo_res    = model.do_spo_analysis(
@@ -672,26 +663,22 @@ def calibrate_model(
         spo_Sa         = spo_base_shear / (G * M_eff)
         if verbose:
             for k_pt, sd_t in enumerate(Sd):
-                sa_norm = float(np.interp(sd_t, spo_Sd, spo_Sa)) / pc
-                print(f"  [SPO] Pt{k_pt+1}: Sd={sd_t:.4f}  Sa_spo/pc={sa_norm:.4f}g  Sa_target={Sa[k_pt]:.4f}g")
+                sa_norm = float(np.interp(sd_t, spo_Sd, spo_Sa))
+                print(f"  [SPO] Pt{k_pt+1}: Sd={sd_t:.4f}  Sa_spo={sa_norm:.4f}g  Sa_target={Sa[k_pt]:.4f}g")
     except Exception as e:
-        warnings.warn(f"SPO failed: {e}")
+        warnings.warn(f"OpenSees SPO failed: {e}")
 
     metadata.update({
-        'T_achieved':              T_opensees,
-        'period_error_final':      period_error,
-        'converged':               converged,
-        'spo_iterations':          iteration + 1,
-        'period_correction':       pc,
-        'u_roof_target':           u_roof_target,
+        'alpha':               alpha,
+        'T_achieved':          T_opensees,
+        'period_error_final':  period_error,
     })
     if spo_Sd is not None:
         metadata.update({
-            'spo_sdof_Sd':             spo_Sd,
-            'spo_sdof_Sa':             spo_Sa,
-            'spo_sdof_Sa_normalised':  spo_Sa / pc,
-            'spo_roof_disp':           spo_roof_disp,
-            'spo_base_shear':          spo_base_shear,
+            'spo_sdof_Sd':    spo_Sd,
+            'spo_sdof_Sa':    spo_Sa,
+            'spo_roof_disp':  spo_roof_disp,
+            'spo_base_shear': spo_base_shear,
         })
 
     return floor_masses, storey_drifts, storey_forces, phi, metadata
