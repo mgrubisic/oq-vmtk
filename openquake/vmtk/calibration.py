@@ -665,7 +665,7 @@ def calibrate_model(
         disp_scale = max((u_roof_ultimate * 1.5) / ref_disp, 2.0)
         spo_res    = model.do_spo_analysis(
             ref_disp=ref_disp, disp_scale_factor=disp_scale,
-            push_dir=1, phi=phi.tolist(), pflag=False)
+            push_dir=1, phi=phi.tolist(), pFlag=False)
         spo_roof_disp  = spo_res['spo_disps'][:, -1]
         spo_base_shear = spo_res['spo_rxn']
         spo_Sd         = spo_roof_disp / (Gamma * phi[-1])
