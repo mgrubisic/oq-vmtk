@@ -154,7 +154,7 @@ class plotter:
         self.resolution = 400
         self.font_name = 'Arial'
         self.figsize = (10, 7)
-        self.figsize_anim = (16, 8)
+        self.figsize_anim = (10, 7)
 
     def _set_plot_style(self, ax, title=None, xlabel=None, ylabel=None, grid=True):
         """
@@ -275,14 +275,14 @@ class plotter:
 
         Each mode occupies one cell with two side-by-side profile plots:
         left = X-displacement vs Z (blue), right = Y-displacement vs Z (green).
-        Normalised displacement values are printed next to every node dot.
+        Normalised displacement values are annotated next to every node dot.
         A grey undeformed reference line (x=0) is drawn in every panel.
 
         Sign convention
         ---------------
         Eigenvectors have arbitrary sign.  The method flips each mode so that
-        the top-node displacement in the dominant horizontal direction (X or Y)
-        is always positive.
+        the top-node displacement in the dominant horizontal direction is always
+        positive.
 
         Grid
         ----
@@ -356,20 +356,19 @@ class plotter:
                     ax.set_visible(False)
                 continue
 
-            phi = norms[idx]
-            ux  = phi[:, 0]
-            uy  = phi[:, 1]
-
+            phi    = norms[idx]
+            ux     = phi[:, 0]
+            uy     = phi[:, 1]
             ux_sm  = interp1d(unique_z, ux, kind=interp_kind)(z_sm)
             uy_sm  = interp1d(unique_z, uy, kind=interp_kind)(z_sm)
             xlim_x = max(np.max(np.abs(ux)) * 1.55, 0.12)
             xlim_y = max(np.max(np.abs(uy)) * 1.55, 0.12)
             dom    = 'X' if np.max(np.abs(ux)) >= np.max(np.abs(uy)) else 'Y'
-            t_base = (f'Mode {idx+1}  [{dom}-dir]  '
-                      f'$T_{{{idx+1}}}={T[idx]:.3f}$ s')
+            t_base = (f'Mode {idx+1} [{dom}-dir]  \u2014  '
+                      f'$T_{{{idx+1}}} = {T[idx]:.3f}$ s')
 
             def _draw(ax, disps, disps_sm, col_line, col_node,
-                      xlabel, xlim, suffix):
+                      xlabel, xlim, title):
                 ax.set_facecolor(BG)
                 ax.grid(True, color=COL_GRID, lw=0.6, zorder=0)
                 ax.set_axisbelow(True)
@@ -396,19 +395,18 @@ class plotter:
                     ax.spines[sp].set_visible(False)
                 ax.spines['left'].set_color(COL_ANN)
                 ax.spines['bottom'].set_color(COL_ANN)
-                ax.set_title(f'{t_base}  —  {suffix}',
-                             fontsize=8, fontweight='bold',
+                ax.set_title(title, fontsize=8, fontweight='bold',
                              color='#1A237E', pad=7)
 
             ax_x = fig.add_subplot(gs[row, gc_x])
             ax_x.set_ylabel('Z [m]', fontsize=8, color=COL_ANN, labelpad=3)
             _draw(ax_x, ux, ux_sm, COL_X, COL_NODE,
-                  r'$u_x$ (norm.)', xlim_x, 'X')
+                  r'$u_x$ (norm.)', xlim_x, t_base)
 
             ax_y = fig.add_subplot(gs[row, gc_y], sharey=ax_x)
             ax_y.tick_params(labelleft=False)
             _draw(ax_y, uy, uy_sm, COL_Y, '#2E7D32',
-                  r'$u_y$ (norm.)', xlim_y, 'Y')
+                  r'$u_y$ (norm.)', xlim_y, t_base)
 
         fig.suptitle('OpenSees  —  Modal Analysis  |  Mode Shapes',
                      fontsize=13, fontweight='bold', color='#1A237E')
@@ -420,129 +418,6 @@ class plotter:
         else:
             plt.show()
         plt.close(fig)
-
-        def _spring3d(ax, xi, yi, z_bot, z_top, color, w, n_teeth=5, lw=1.3):
-            pad   = (z_top - z_bot) * 0.15
-            n_pts = n_teeth * 2 + 1
-            zs    = np.linspace(z_bot + pad, z_top - pad, n_pts)
-            xs    = np.full(n_pts, xi, dtype=float)
-            ys    = np.full(n_pts, yi, dtype=float)
-            for k in range(1, n_pts - 1):
-                xs[k] = xi + (w if k % 2 == 1 else -w)
-            ax.plot([xi, xi], [yi, yi], [z_bot, z_bot + pad],
-                    color=color, lw=lw, zorder=3)
-            ax.plot([xi, xi], [yi, yi], [z_top - pad, z_top],
-                    color=color, lw=lw, zorder=3)
-            ax.plot(xs, ys, zs, color=color, lw=lw, zorder=3,
-                    solid_capstyle='round', solid_joinstyle='round')
-
-        def _style3d(ax):
-            ax.set_facecolor(BG)
-            for pane in (ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane):
-                pane.fill = False
-                pane.set_edgecolor('#DEDEDE')
-            ax.grid(True, linestyle=':', alpha=0.35, color='#CCCCCC')
-            ax.view_init(elev=28, azim=-50)
-            ax.tick_params(axis='both', which='major',
-                           labelsize=6, pad=1, colors=COL_ANN)
-
-        def _normalize(phi):
-            peak = np.max(np.sqrt(phi[:, 0] ** 2 + phi[:, 1] ** 2))
-            return phi / peak if peak > 1e-12 else phi.copy()
-
-        norms      = [_normalize(np.asarray(mv)) for mv in mode_shape_vectors]
-        disp_scale = total_h * 0.28
-        lim        = max(total_h * 0.26, 0.5)
-        w_spring   = lim * 0.05
-
-        # Grid dimensions
-        ncols = math.ceil(math.sqrt(num_modes))
-        nrows = math.ceil(num_modes / ncols)
-
-        fig, axes = plt.subplots(
-            nrows, ncols,
-            figsize=(ncols * 4.2, nrows * 4.8),
-            subplot_kw={'projection': '3d'},
-            facecolor=BG)
-        fig.patch.set_facecolor(BG)
-
-        axes_flat = np.array(axes).flatten() if num_modes > 1 else [axes]
-
-        for idx, ax in enumerate(axes_flat):
-            if idx >= num_modes:
-                ax.set_visible(False)
-                continue
-
-            # Ghost undeformed (springs + nodes)
-            for i in range(n_ele):
-                e_nodes = ops.eleNodes(ele_list[i])
-                if len(e_nodes) == 2:
-                    i0 = node_list.index(e_nodes[0])
-                    i1 = node_list.index(e_nodes[1])
-                    _spring3d(ax,
-                              node_x[i0], node_y[i0],
-                              node_z[i0], node_z[i1],
-                              COL_UNDEF, w_spring, n_teeth=4, lw=0.9)
-
-            for i in range(n_nodes):
-                ax.scatter(node_x[i], node_y[i], node_z[i],
-                           marker='s' if i == 0 else 'o',
-                           s=28 if i == 0 else 18,
-                           color=COL_UNDEF, edgecolors='white',
-                           linewidths=0.7, zorder=3,
-                           depthshade=False, alpha=0.55)
-
-            # Deformed mode shape (all blue; base node red)
-            phi = norms[idx]
-            xd  = node_x + phi[:, 0] * disp_scale
-            yd  = node_y + phi[:, 1] * disp_scale
-
-            ax.plot(xd, yd, node_z, color=COL_MODE, lw=2.2, zorder=5,
-                    solid_capstyle='round', solid_joinstyle='round')
-
-            for i in range(n_nodes):
-                node_col = COL_BASE if i == 0 else COL_NODE
-                ax.scatter(xd[i], yd[i], node_z[i],
-                           marker='s' if i == 0 else 'o',
-                           s=65 if i == 0 else 45,
-                           color=node_col, edgecolors='white',
-                           linewidths=1.1, zorder=6, depthshade=False)
-
-            # Dashed wall-projection ghosts on the back planes
-            wall = lim * 0.99
-            ax.plot(xd, np.full(n_nodes,  wall), node_z,
-                    color=COL_MODE, lw=0.9, ls='--', alpha=0.28, zorder=2)
-            ax.plot(np.full(n_nodes, -wall), yd, node_z,
-                    color=COL_MODE, lw=0.9, ls='--', alpha=0.28, zorder=2)
-
-            # Axis styling
-            _style3d(ax)
-            ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
-            ax.set_zlim(0, total_h * 1.1)
-            ax.set_xlabel('X [m]', fontsize=7, color=COL_ANN, labelpad=4)
-            ax.set_ylabel('Y [m]', fontsize=7, color=COL_ANN, labelpad=4)
-            ax.set_zlabel('Z [m]', fontsize=7, color=COL_ANN, labelpad=4)
-
-            # Title with generous pad (18 pt) so it clears the top pane edge
-            dom = 'X' if np.max(np.abs(phi[:, 0])) >= np.max(np.abs(phi[:, 1])) else 'Y'
-            ax.set_title(
-                f'Mode {idx + 1}  [{dom}-dir]  '
-                f'$T_{{{idx + 1}}} = {T[idx]:.3f}$ s',
-                fontsize=9, fontweight='bold', color='#1A237E', pad=18)
-
-        fig.suptitle('OpenSees  \u2014  3D Modal Analysis',
-                     fontsize=13, fontweight='bold', color='#1A237E', y=1.01)
-        plt.tight_layout(pad=2.5)
-
-        if export_path:
-            plt.savefig(export_path, dpi=self.resolution,
-                        bbox_inches='tight', facecolor=BG)
-            plt.show()
-        else:
-            plt.show()
-        plt.close(fig)
-
-
 
     ###############################################################################################################
     #                                                                                                             #
@@ -557,233 +432,172 @@ class plotter:
                     nodeList,
                     elementList,
                     push_dir,
-                    export_path):
+                    phi,
+                    export_path,
+                    frame_step=5,
+                    dpi=100):
         """
-        Generate and save an animation of a static (monotonic) pushover analysis (SPO).
+        Generate and save an animation of a static (monotonic) pushover analysis.
 
-        Creates a three-panel animated figure showing, frame by frame:
-
-        - **Left panel** – 2D deformed model shape overlaid on the gray undeformed geometry.
-        - **Top-right panel** – Pushover curve (base shear vs. top displacement) with the
-          currently active portion highlighted in blue.
-        - **Bottom-right panel** – Base shear vs. maximum inter-storey drift ratio.
-
-        The animation figure uses ``self.figsize_anim`` with
-        ``constrained_layout`` so that every exported frame has identical,
-        deterministic pixel dimensions.
+        Layout — self.figsize_anim
+        ----------------------
+        Left  (wide) - 2-D deformed model shape with orange load arrows.
+        Top-right    - Pushover curve (base shear vs. roof displacement).
+        Bottom-right - Base shear vs. maximum inter-storey drift ratio.
 
         Parameters
         ----------
-        spo_top_disp : array-like of float
-            Top-node displacement recorded at each analysis step [m].
-            Its length determines the total number of animation frames.
-        spo_rxn : array-like of float
-            Base shear reaction recorded at each analysis step [kN].
-            Must be the same length as ``spo_top_disp``.
+        spo_top_disp : array-like
+        spo_rxn : array-like
         spo_disps : array-like, shape (n_steps, n_floors)
-            Floor displacement matrix. Row ``i`` contains the lateral displacements
-            of every floor node at analysis step ``i`` [m].
-        spo_midr : array-like of float
-            Maximum inter-storey drift ratio at each analysis step.
-            Must be the same length as ``spo_top_disp``.
+        spo_midr : array-like
         nodeList : list of int
-            Ordered list of OpenSees node tags (must be present in the active model).
         elementList : list of int
-            List of OpenSees element tags used to draw the structural skeleton.
-        push_dir : int
-            Direction of the pushover load:
-            ``1`` = X-direction (X–Z view), ``2`` = Y-direction (Y–Z view),
-            ``3`` = Z-direction (Z–X view).
+        push_dir : int  (1=X, 2=Y, 3=Z)
+        phi : list of float  (floor load pattern, no base node)
         export_path : str
-            Full file path for the exported animation, including extension.
-            Supported formats: ``.gif`` (Pillow writer) and ``.mp4`` (FFmpeg writer).
-            Other extensions fall back to GIF.
-
-        Returns
-        -------
-        None
-            The animation is written to ``export_path``; the figure is closed afterwards
-            to free memory.
+        frame_step : int, optional
+            Render every N-th step to reduce frame count and speed up export.
+            Default 5.
+        dpi : int, optional
+            Export resolution. Default 100.
         """
-        deform_factor = 1 # Scaling factor for visualization
-        # spo_midr is now passed in as an argument, so its length determines the number of frames.
-        num_frames = len(spo_top_disp)
+        spo_rxn   = np.asarray(spo_rxn)
+        spo_midr  = np.asarray(spo_midr)
+        spo_disps = np.asarray(spo_disps)
+        phi_arr   = np.asarray(phi, dtype=float)
+        phi_norm  = phi_arr / phi_arr.max()
 
-        # ------------------ Data Processing ------------------
-        # Get undeformed coordinates once
+        total_steps   = len(spo_top_disp)
+        frame_indices = np.arange(0, total_steps, frame_step)
+        num_frames    = len(frame_indices)
+        deform_factor = 1
+
         NodeCoordListX_und = [ops.nodeCoord(tag, 1) for tag in nodeList]
         NodeCoordListY_und = [ops.nodeCoord(tag, 2) for tag in nodeList]
         NodeCoordListZ_und = [ops.nodeCoord(tag, 3) for tag in nodeList]
 
-        # Determine the plotting coordinates based on push_dir for the 2D view
-        if push_dir == 1:
-            plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
-            x_label_model = 'X-Direction [m]'
-            y_label_model = 'Z-Direction [m]'
-        elif push_dir == 2:
-            plot_coords_und = (NodeCoordListY_und, NodeCoordListZ_und)
-            x_label_model = 'Y-Direction [m]'
-            y_label_model = 'Z-Direction [m]'
+        if push_dir == 2:
+            horiz_und, x_label_model = NodeCoordListY_und, 'Y-Direction [m]'
         elif push_dir == 3:
-            plot_coords_und = (NodeCoordListZ_und, NodeCoordListX_und)
-            x_label_model = 'Z-Direction [m]'
-            y_label_model = 'X-Direction [m]'
+            horiz_und, x_label_model = NodeCoordListZ_und, 'Z-Direction [m]'
         else:
-            plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
-            x_label_model = 'X-Direction [m]'
-            y_label_model = 'Z-Direction [m]'
+            horiz_und, x_label_model = NodeCoordListX_und, 'X-Direction [m]'
+        vert_und = NodeCoordListZ_und
 
-        # Max coordinate for consistent plot limits
-        max_abs_coord_x = np.max(np.abs(plot_coords_und[0]))
-        max_abs_coord_y = np.max(np.abs(plot_coords_und[1]))
-        model_x_lim = (-max_abs_coord_x * 3.0, max_abs_coord_x * 3.0)
-        model_y_lim = (0, max_abs_coord_y * 1.5)
+        max_disp_ever = np.max(np.abs(spo_disps))
+        half_x        = max(max_disp_ever * 1.5, 0.01)
+        arrow_scale   = (half_x * 0.40) / spo_rxn.max()
+        model_xlim    = (
+            -(half_x * 0.25 + spo_rxn.max() * arrow_scale * 1.1),
+            half_x * 1.25
+        )
+        model_ylim = (0, max(vert_und) * 1.5)
 
-        # Max Interstorey Drift History (passed as spo_midr)
-        max_drift_history = np.maximum.accumulate(spo_midr)
-
-        # Initialize the Figure and Subplots
-        fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
-
-        # Layout: (1, 2, 1) is big left plot; (2, 2, 2) is top right; (2, 2, 4) is bottom right
-        ax_model = fig.add_subplot(1, 2, 1)
-        ax_curve = fig.add_subplot(2, 2, 2)
-        ax_drift = fig.add_subplot(2, 2, 4)
-
-        # Store the number of static (undeformed) artists for easy cleanup in update()
-        num_static_lines = len(elementList)
-        num_static_collections = 1 # For the single undeformed nodes scatter plot
-
-        # Set up static plot elements
-        # 2D Model Plot (Undeformed - static gray background)
-        ax_model.scatter(plot_coords_und[0], plot_coords_und[1],
-                          marker='o', s=50, color='gray', alpha=0.5, label='Undeformed Nodes')
+        # Pre-build element pairs for speed
+        ele_pairs = []
         for eleTag in elementList:
-            [NodeItag, NodeJtag] = ops.eleNodes(eleTag)
-            i = nodeList.index(NodeItag)
-            j = nodeList.index(NodeJtag)
-            x_und = [plot_coords_und[0][i], plot_coords_und[0][j]]
-            y_und = [plot_coords_und[1][i], plot_coords_und[1][j]]
-            ax_model.plot(x_und, y_und, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+            try:
+                ni, nj = ops.eleNodes(eleTag)
+                ele_pairs.append((nodeList.index(ni), nodeList.index(nj)))
+            except Exception:
+                continue
 
-        ax_model.set_xlabel(x_label_model)
-        ax_model.set_ylabel(y_label_model)
-        ax_model.set_title('Deformed Model Shape')
-        ax_model.set_xlim(model_x_lim)
-        ax_model.set_ylim(model_y_lim)
-        ax_model.grid(True)
+        fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
+        gs  = fig.add_gridspec(2, 2, width_ratios=[1.1, 1])
+        ax_model = fig.add_subplot(gs[:, 0])
+        ax_curve = fig.add_subplot(gs[0, 1])
+        ax_drift = fig.add_subplot(gs[1, 1])
 
-        # Pushover Curve (Base Shear vs Top Disp)
-        ax_curve.set_xlabel('Top Displacement [m]')
-        ax_curve.set_ylabel('Base Shear [kN]')
-        ax_curve.set_title('Pushover Curve (Base Shear vs Top Disp)')
-        ax_curve.plot(spo_top_disp, spo_rxn, 'gray', linewidth=2, alpha=0.5, label='Static Curve')
-        curve_anim, = ax_curve.plot([], [], 'blue', linewidth=2, label='Current Step')
-        ax_curve.legend()
-        ax_curve.set_xlim(np.min(spo_top_disp)*1.1 if np.min(spo_top_disp) < 0 else 0, np.max(spo_top_disp)*1.1)
-        ax_curve.set_ylim(np.min(spo_rxn)*1.1, np.max(spo_rxn)*1.1)
-        ax_curve.grid(True)
+        # Static background
+        ax_model.scatter(horiz_und, vert_und,
+                         marker='o', s=40, color='gray', alpha=0.5, zorder=3)
+        for ii, jj in ele_pairs:
+            ax_model.plot([horiz_und[ii], horiz_und[jj]],
+                          [vert_und[ii],  vert_und[jj]],
+                          color='gray', ls='--', lw=1.0, alpha=0.5, zorder=2)
+        ax_model.set_xlabel(x_label_model, fontsize=9)
+        ax_model.set_ylabel('Elevation [m]', fontsize=9)
+        ax_model.set_xlim(model_xlim)
+        ax_model.set_ylim(model_ylim)
+        ax_model.grid(True, ls=':', alpha=0.4)
+        ax_model.tick_params(labelsize=8)
 
-        # Max Drift vs Base Shear
-        ax_drift.set_xlabel('Max Interstorey Drift Ratio [%]')
-        ax_drift.set_ylabel('Base Shear [kN]')
-        ax_drift.set_title('Base Shear vs Max Interstorey Drift Ratio')
-        drift_anim, = ax_drift.plot([], [], 'green', linewidth=2, label='Current Max Drift')
-        ax_drift.legend()
-        # Use spo_midr limits
-        ax_drift.set_xlim(0, np.max(max_drift_history) * 1.2)
-        ax_drift.set_ylim(np.min(spo_rxn)*1.1, np.max(spo_rxn)*1.1)
-        ax_drift.grid(True)
+        n_static_lines = len(ax_model.lines)
+        n_static_colls = len(ax_model.collections)
 
+        ax_curve.plot(spo_top_disp, spo_rxn, color='gray', lw=1.5, alpha=0.5)
+        curve_anim, = ax_curve.plot([], [], '#1565C0', lw=2)
+        ax_curve.set_xlabel('Roof Displacement [m]', fontsize=8)
+        ax_curve.set_ylabel('Base Shear [kN]', fontsize=8)
+        ax_curve.set_title('Base Shear vs Roof Displacement', fontsize=9, fontweight='bold')
+        ax_curve.set_xlim(0, np.max(spo_top_disp) * 1.1)
+        ax_curve.set_ylim(0, np.max(spo_rxn) * 1.15)
+        ax_curve.grid(True, ls=':', alpha=0.4)
+        ax_curve.tick_params(labelsize=8)
 
-        # The update function for FuncAnimation
-        def update(frame):
-            nonlocal num_static_lines, num_static_collections
+        ax_drift.plot(spo_midr, spo_rxn, color='gray', lw=1.5, alpha=0.5)
+        drift_anim, = ax_drift.plot([], [], '#B71C1C', lw=2)
+        ax_drift.set_xlabel('Max ISDR [%]', fontsize=8)
+        ax_drift.set_ylabel('Base Shear [kN]', fontsize=8)
+        ax_drift.set_title('Base Shear vs Max ISDR', fontsize=9, fontweight='bold')
+        ax_drift.set_xlim(0, np.max(spo_midr) * 1.2)
+        ax_drift.set_ylim(0, np.max(spo_rxn) * 1.15)
+        ax_drift.grid(True, ls=':', alpha=0.4)
+        ax_drift.tick_params(labelsize=8)
 
-            # 2D Model Plot Cleanup
-            # Remove dynamically drawn lines (deformed elements) from the LAST frame
-            while len(ax_model.lines) > num_static_lines:
+        def update(anim_frame):
+            frame = int(frame_indices[anim_frame])
+            while len(ax_model.lines) > n_static_lines:
                 ax_model.lines[-1].remove()
-
-            # Remove dynamically drawn collections (deformed nodes) from the LAST frame
-            while len(ax_model.collections) > num_static_collections:
+            while len(ax_model.collections) > n_static_colls:
                 ax_model.collections[-1].remove()
 
-            # 2D Model Plot Redraw (Deformed Shape)
-            # Get displacement data for the current frame
-            current_disps_floor = spo_disps[frame]
-            # Include ground floor (index 0) displacement = 0
-            full_node_disps = np.insert(current_disps_floor, 0, 0, axis=0)
+            full_disps = np.concatenate(([0.0], spo_disps[frame]))
+            xd = [horiz_und[i] + full_disps[i] * deform_factor for i in range(len(nodeList))]
+            zd = list(vert_und)
 
-            # Calculate deformed coordinates based on push_dir
-            if push_dir == 1: # X-Z plane
-                X_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
-                Z_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
-                plot_coords_def = (X_def, Z_def)
-            elif push_dir == 2: # Y-Z plane
-                Y_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
-                Z_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
-                plot_coords_def = (Y_def, Z_def)
-            elif push_dir == 3: # Z-X plane
-                Z_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
-                X_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
-                plot_coords_def = (Z_def, X_def)
-            else:
-                 plot_coords_def = plot_coords_und
+            ax_model.scatter(xd, zd, marker='o', s=50, color='#1565C0', zorder=5)
+            for ii, jj in ele_pairs:
+                ax_model.plot([xd[ii], xd[jj]], [zd[ii], zd[jj]],
+                              color='#1565C0', lw=2.0, zorder=4)
 
-            # Plot Deformed Shape (Blue)
-            ax_model.scatter(plot_coords_def[0], plot_coords_def[1],
-                              marker='o', s=50, color='blue', label='Deformed Nodes')
-            for eleTag in elementList:
-                [NodeItag, NodeJtag] = ops.eleNodes(eleTag)
-                i = nodeList.index(NodeItag)
-                j = nodeList.index(NodeJtag)
-                x_def = [plot_coords_def[0][i], plot_coords_def[0][j]]
-                y_def = [plot_coords_def[1][i], plot_coords_def[1][j]]
-                ax_model.plot(x_def, y_def, color='blue', linewidth=1.5)
+            current_shear = spo_rxn[frame]
+            for i, (xdi, zdi) in enumerate(zip(xd[1:], zd[1:]), start=0):
+                arrow_len = phi_norm[i] * current_shear * arrow_scale
+                ax_model.annotate(
+                    '',
+                    xy     =(xdi,             zdi),
+                    xytext =(xdi - arrow_len, zdi),
+                    arrowprops=dict(arrowstyle='->', color='#E65100',
+                                   lw=1.5, mutation_scale=10),
+                    zorder=6
+                )
 
-            ax_model.set_title(f'Frame: {frame}/{num_frames-1} (Scale: {deform_factor}x)')
-
-            # Pushover Curve Update
-            curve_anim.set_data(spo_top_disp[:frame+1], spo_rxn[:frame+1])
-
-            # Max Drift vs Base Shear Update (Using spo_midr)
-            drift_anim.set_data(spo_midr[:frame+1], spo_rxn[:frame+1])
-
-            # Return the artists that were modified
+            ax_model.set_title(
+                f'Deformed Shape - Step {frame + 1}/{total_steps}',
+                fontsize=9, fontweight='bold'
+            )
+            curve_anim.set_data(spo_top_disp[:frame + 1], spo_rxn[:frame + 1])
+            drift_anim.set_data(spo_midr[:frame + 1],     spo_rxn[:frame + 1])
             return curve_anim, drift_anim
 
-        # Create the animation object
-        ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=50, blit=False)
-
-        # Directory check
+        ani = animation.FuncAnimation(fig, update, frames=num_frames,
+                                      interval=50, blit=False)
         if export_path:
-            directory = os.path.dirname(export_path)
-            if directory and not os.path.exists(directory):
-                print(f"Creating directory: {directory}")
-                os.makedirs(directory, exist_ok=True)
-
-        # Save the animation
-        print(f"\nSaving animation to: {export_path}")
-
-        try:
-            if export_path.lower().endswith('.gif'):
-                ani.save(export_path, writer='pillow', dpi=150)
-            elif export_path.lower().endswith('.mp4'):
-                ani.save(export_path, writer='ffmpeg', dpi=200)
-            else:
-                print("WARNING: Animation path extension not recognized. Saving as GIF.")
-                ani.save(export_path + ".gif", writer='pillow', dpi=150)
-        except Exception as e:
-            print(f"Failed to save animation: {e}")
-
+            os.makedirs(os.path.dirname(export_path) or '.', exist_ok=True)
+            print(f'Saving SPO animation ({num_frames} frames) to: {export_path}')
+            try:
+                if export_path.lower().endswith('.gif'):
+                    ani.save(export_path, writer='pillow', dpi=dpi)
+                elif export_path.lower().endswith('.mp4'):
+                    ani.save(export_path, writer='ffmpeg', dpi=dpi)
+                else:
+                    ani.save(export_path + '.gif', writer='pillow', dpi=dpi)
+            except Exception as e:
+                print(f'Failed to save SPO animation: {e}')
         plt.close(fig)
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                   ANIMATE CYCLIC PUSHOVER ANALYSES                                          #
-    #                                                                                                             #
-    ###############################################################################################################
     def animate_cpo(self,
                     cpo_dict,
                     nodeList,
@@ -793,8 +607,8 @@ class plotter:
         """
         Generates and saves the CPO animation using FuncAnimation, showing:
         1. Deformed model shape.
-        2. Base shear vs. top displacement (hysteretic curve, spanning negative/positive).
-        3. Base shear vs. maximum interstorey drift (newly updated to show hysteresis).
+        2. Base shear vs. top displacement (hysteretic curve).
+        3. Base shear vs. maximum interstorey drift (hysteretic curve).
 
         The animation figure uses ``self.figsize_anim`` with
         ``constrained_layout`` so that every exported frame has identical,
@@ -802,95 +616,119 @@ class plotter:
 
         Parameters
         ----------
-        cpo_dict: dict
+        cpo_dict : dict
             The analysis results dictionary returned by do_cpo_analysis.
-        nodeList: list
+        nodeList : list
             List of node tags in the model.
-        elementList: list
+        elementList : list
             List of element tags in the model.
-        push_dir: int
+        push_dir : int
             Direction of the pushover analysis (1=X, 2=Y, 3=Z).
-        export_path: str
-            File path to save the animation (e.g., 'cpo_animation.gif' or 'cpo_animation.mp4').
+        export_path : str
+            File path to save the animation (.gif or .mp4).
 
         Returns
         -------
         None
-            The animation is written to ``export_path``; the figure is closed afterwards
-            to free memory.
+            The animation is written to ``export_path``; the figure is closed
+            afterwards to free memory.
         """
         # Data Extraction and Processing
         cpo_top_disp = cpo_dict['cpo_top_disp']
-        cpo_rxn = cpo_dict['cpo_rxn']
-        cpo_disps = cpo_dict['cpo_disps']
-        cpo_drifts = cpo_dict['cpo_idr']
+        cpo_rxn      = cpo_dict['cpo_rxn']
+        cpo_disps    = cpo_dict['cpo_disps']
+        cpo_drifts   = cpo_dict['cpo_idr']
 
-        deform_factor = 1.0 # Scaling factor for visualization
-        num_frames = len(cpo_top_disp)
+        deform_factor    = 1.0
+        total_steps      = len(cpo_top_disp)
+        max_frames_cpo   = 150
+        frame_step_cpo   = max(1, total_steps // max_frames_cpo)
+        frame_indices_cpo = np.arange(0, total_steps, frame_step_cpo)
+        if frame_indices_cpo[-1] != total_steps - 1:
+            frame_indices_cpo = np.append(frame_indices_cpo, total_steps - 1)
+        num_frames = len(frame_indices_cpo)
 
-        # Calculate the maximum interstorey drift at each step:
-        # Find the drift (with sign) of the floor that experiences the maximum absolute drift at this step.
-        max_drift_indices = np.argmax(np.abs(cpo_drifts), axis=1)
-        governing_drift_history = cpo_drifts[np.arange(num_frames), max_drift_indices]
+        # Find the drift (with sign) of the floor with the maximum absolute
+        # drift at each step.
+        max_drift_indices       = np.argmax(np.abs(cpo_drifts), axis=1)
+        governing_drift_history = cpo_drifts[np.arange(total_steps), max_drift_indices]
 
         # Max absolute drift for setting limits
         max_drift_limit = np.max(np.abs(governing_drift_history))
+
+        # Pre-compute cumulative dissipated energy [kN·m] via trapezoidal rule:
+        # dE[i] = 0.5 * (F[i] + F[i-1]) * (u[i] - u[i-1])
+        # Energy is always accumulated (absolute value of increment) so the
+        # curve is monotonically increasing.
+        cpo_top_disp_arr = np.asarray(cpo_top_disp)
+        cpo_rxn_arr      = np.asarray(cpo_rxn)
+        du      = np.diff(cpo_top_disp_arr)
+        f_avg   = 0.5 * (cpo_rxn_arr[:-1] + cpo_rxn_arr[1:])
+        dE      = np.abs(f_avg * du)          # always positive increment
+        cumul_energy = np.concatenate(([0.0], np.cumsum(dE)))  # length = num_frames
+        max_energy   = cumul_energy[-1] * 1.1
 
         # Get undeformed coordinates once
         NodeCoordListX_und = [ops.nodeCoord(tag, 1) for tag in nodeList]
         NodeCoordListY_und = [ops.nodeCoord(tag, 2) for tag in nodeList]
         NodeCoordListZ_und = [ops.nodeCoord(tag, 3) for tag in nodeList]
 
-        # Determine the plotting coordinates based on push_dir for the 2D view
         if push_dir == 1:
             plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
-            x_label_model = 'X-Direction [m]'
-            y_label_model = 'Z-Direction [m]'
+            x_label_model   = 'X-Direction [m]'
+            y_label_model   = 'Z-Direction [m]'
         elif push_dir == 2:
             plot_coords_und = (NodeCoordListY_und, NodeCoordListZ_und)
-            x_label_model = 'Y-Direction [m]'
-            y_label_model = 'Z-Direction [m]'
+            x_label_model   = 'Y-Direction [m]'
+            y_label_model   = 'Z-Direction [m]'
         elif push_dir == 3:
             plot_coords_und = (NodeCoordListZ_und, NodeCoordListX_und)
-            x_label_model = 'Z-Direction [m]'
-            y_label_model = 'X-Direction [m]'
+            x_label_model   = 'Z-Direction [m]'
+            y_label_model   = 'X-Direction [m]'
         else:
             plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
-            x_label_model = 'X-Direction [m]'
-            y_label_model = 'Z-Direction [m]'
+            x_label_model   = 'X-Direction [m]'
+            y_label_model   = 'Z-Direction [m]'
 
-        # Max coordinate for consistent plot limits
         max_abs_coord_x = np.max(np.abs(plot_coords_und[0]))
         max_abs_coord_y = np.max(np.abs(plot_coords_und[1]))
-        model_x_lim = (-max_abs_coord_x * 3.0, max_abs_coord_x * 3.0)
+        # For stick models all nodes share x=0; use the max expected deformation
+        # (last cpo_top_disp value) to set a sensible x-axis width.
+        x_half = max(max_abs_coord_x * 3.0,
+                     np.max(np.abs(cpo_top_disp)) * 2.0, 0.01)
+        model_x_lim = (-x_half, x_half)
         model_y_lim = (0, max_abs_coord_y * 1.5)
 
         # Initialize the Figure and Subplots
-        fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
+        fig = plt.figure(figsize=self.figsize_anim)
+        gs  = gridspec.GridSpec(3, 2, figure=fig,
+                                left=0.07, right=0.97,
+                                top=0.95,  bottom=0.08,
+                                hspace=0.55, wspace=0.35)
+        ax_model  = fig.add_subplot(gs[:, 0])   # full-height left panel
+        ax_curve  = fig.add_subplot(gs[0, 1])
+        ax_drift  = fig.add_subplot(gs[1, 1])
+        ax_energy = fig.add_subplot(gs[2, 1])
 
-        # Layout: (1, 2, 1) is big left plot; (2, 2, 2) is top right; (2, 2, 4) is bottom right
-        ax_model = fig.add_subplot(1, 2, 1)
-        ax_curve = fig.add_subplot(2, 2, 2)
-        ax_drift = fig.add_subplot(2, 2, 4)
+        # Store count of static artists for cleanup in update()
+        num_static_lines       = len(elementList)
+        num_static_collections = 1
 
-        # Store the number of static (undeformed) artists for easy cleanup in update()
-        num_static_lines = len(elementList)
-        num_static_collections = 1 # For the single undeformed nodes scatter plot
-
-        # Set up static plot elements (Undeformed Shape)
+        # Static (undeformed) background
         ax_model.scatter(plot_coords_und[0], plot_coords_und[1],
-                         marker='o', s=50, color='gray', alpha=0.5, label='Undeformed Nodes')
+                         marker='o', s=50, color='gray', alpha=0.5,
+                         label='Undeformed Nodes')
         for eleTag in elementList:
             try:
                 [NodeItag, NodeJtag] = ops.eleNodes(eleTag)
                 i = nodeList.index(NodeItag)
                 j = nodeList.index(NodeJtag)
-            except:
+            except Exception:
                 continue
-
             x_und = [plot_coords_und[0][i], plot_coords_und[0][j]]
             y_und = [plot_coords_und[1][i], plot_coords_und[1][j]]
-            ax_model.plot(x_und, y_und, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+            ax_model.plot(x_und, y_und,
+                          color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
 
         ax_model.set_xlabel(x_label_model)
         ax_model.set_ylabel(y_label_model)
@@ -903,104 +741,108 @@ class plotter:
         ax_curve.set_xlabel('Top Displacement [m]')
         ax_curve.set_ylabel('Base Shear [kN]')
         ax_curve.set_title('Hysteretic Curve (Base Shear vs Top Disp)')
-        ax_curve.plot(cpo_top_disp, cpo_rxn, 'gray', linewidth=1, alpha=0.5, label='History')
-        curve_anim, = ax_curve.plot([], [], 'blue', linewidth=2, label='Current Step')
+        ax_curve.plot(cpo_top_disp, cpo_rxn, 'gray', linewidth=1,
+                      alpha=0.5, label='History')
+        curve_anim, = ax_curve.plot([], [], 'blue', linewidth=2,
+                                    label='Current Step')
         ax_curve.legend(loc='lower right')
-
-        # Set limits for cyclic analysis (must cover negative space)
         max_x_curve = np.max(np.abs(cpo_top_disp)) * 1.1
         max_y_curve = np.max(np.abs(cpo_rxn)) * 1.1
         ax_curve.set_xlim(-max_x_curve, max_x_curve)
         ax_curve.set_ylim(-max_y_curve, max_y_curve)
         ax_curve.grid(True)
 
-        # Governing Drift Hysteresis (Base Shear vs MIDR) - UPDATED
+        # Governing Drift Hysteresis (Base Shear vs MIDR)
         ax_drift.set_xlabel('Maximum Interstorey Drift [-]')
         ax_drift.set_ylabel('Base Shear [kN]')
         ax_drift.set_title('Hysteretic Curve (Base Shear vs MIDR)')
-        # Plot full history in gray
-        ax_drift.plot(governing_drift_history, cpo_rxn, 'gray', linewidth=1, alpha=0.5, label='History')
-        # Plot current step in green
-        drift_anim, = ax_drift.plot([], [], 'green', linewidth=2, label='Current Step')
+        ax_drift.plot(governing_drift_history, cpo_rxn, 'gray', linewidth=1,
+                      alpha=0.5, label='History')
+        drift_anim, = ax_drift.plot([], [], 'green', linewidth=2,
+                                    label='Current Step')
         ax_drift.legend(loc='lower right')
-
-        # Set limits for cyclic analysis (must cover negative space for drift) - UPDATED
         ax_drift.set_xlim(-max_drift_limit * 1.1, max_drift_limit * 1.1)
         ax_drift.set_ylim(-max_y_curve, max_y_curve)
         ax_drift.grid(True)
 
+        # Dissipated Energy vs Step
+        ax_energy.set_xlabel('Step [-]')
+        ax_energy.set_ylabel('Dissipated Energy [kN\u00b7m]')
+        ax_energy.set_title('Cumulative Dissipated Energy')
+        ax_energy.plot(np.arange(total_steps), cumul_energy, 'gray', linewidth=1,
+                       alpha=0.5, label='History')
+        energy_anim, = ax_energy.plot([], [], 'green', linewidth=2,
+                                      label='Current Step')
+        ax_energy.legend(loc='upper left')
+        ax_energy.set_xlim(0, total_steps * 1.05)
+        ax_energy.set_ylim(0, max_energy if max_energy > 0 else 1.0)
+        ax_energy.grid(True)
 
-        # The update function for FuncAnimation
         def update(frame):
             nonlocal num_static_lines, num_static_collections
 
-            # 2D Model Plot Cleanup
+            # Remove deformed artists from previous frame
             while len(ax_model.lines) > num_static_lines:
                 ax_model.lines[-1].remove()
-
             while len(ax_model.collections) > num_static_collections:
                 ax_model.collections[-1].remove()
 
-            # 2D Model Plot Redraw (Deformed Shape)
+            # Deformed coordinates
             current_disps_floor = cpo_disps[frame]
-            # Include ground floor (index 0) displacement = 0
-            full_node_disps = np.insert(current_disps_floor, 0, 0, axis=0)
+            full_node_disps     = np.insert(current_disps_floor, 0, 0, axis=0)
 
-            # Calculate deformed coordinates based on push_dir
-            if push_dir == 1: # X-Z plane
-                X_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+            if push_dir == 1:
+                X_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor
+                         for i in range(len(nodeList))]
                 Z_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
                 plot_coords_def = (X_def, Z_def)
-            elif push_dir == 2: # Y-Z plane
-                Y_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+            elif push_dir == 2:
+                Y_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor
+                         for i in range(len(nodeList))]
                 Z_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
                 plot_coords_def = (Y_def, Z_def)
-            elif push_dir == 3: # Z-X plane
-                Z_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor for i in range(len(nodeList))]
+            elif push_dir == 3:
+                Z_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor
+                         for i in range(len(nodeList))]
                 X_def = [plot_coords_und[1][i] for i in range(len(nodeList))]
                 plot_coords_def = (Z_def, X_def)
             else:
                 plot_coords_def = plot_coords_und
 
-            # Plot Deformed Shape (Blue)
+            # Deformed shape
             ax_model.scatter(plot_coords_def[0], plot_coords_def[1],
-                             marker='o', s=50, color='blue', label='Deformed Nodes')
+                             marker='o', s=50, color='blue',
+                             label='Deformed Nodes')
             for eleTag in elementList:
                 try:
                     [NodeItag, NodeJtag] = ops.eleNodes(eleTag)
                     i = nodeList.index(NodeItag)
                     j = nodeList.index(NodeJtag)
-                except:
+                except Exception:
                     continue
-
                 x_def = [plot_coords_def[0][i], plot_coords_def[0][j]]
                 y_def = [plot_coords_def[1][i], plot_coords_def[1][j]]
                 ax_model.plot(x_def, y_def, color='blue', linewidth=1.5)
 
-            ax_model.set_title(f'Frame: {frame}/{num_frames-1} (Scale: {deform_factor}x)')
+            ax_model.set_title(f'Step: {frame}/{total_steps - 1} (Scale: {deform_factor}x)')
 
-            # Hysteretic Curve Update (Top Disp)
-            curve_anim.set_data(cpo_top_disp[:frame+1], cpo_rxn[:frame+1])
+            curve_anim.set_data(cpo_top_disp[:frame + 1], cpo_rxn[:frame + 1])
+            drift_anim.set_data(governing_drift_history[:frame + 1],
+                                cpo_rxn[:frame + 1])
+            energy_anim.set_data(np.arange(frame + 1), cumul_energy[:frame + 1])
+            return curve_anim, drift_anim, energy_anim
 
-            # Governing Drift Hysteresis Update
-            drift_anim.set_data(governing_drift_history[:frame+1], cpo_rxn[:frame+1])
+        ani = animation.FuncAnimation(fig, update,
+                                      frames=frame_indices_cpo,
+                                      interval=50, blit=False)
 
-            # Return the artists that were modified
-            return curve_anim, drift_anim
-
-        # Create the animation object
-        ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=50, blit=False)
-
-        # Directory check
         if export_path:
             directory = os.path.dirname(export_path)
             if directory and not os.path.exists(directory):
                 print(f"Creating directory: {directory}")
                 os.makedirs(directory, exist_ok=True)
 
-        # Save the animation
         print(f"\nSaving animation to: {export_path}")
-
         try:
             if export_path.lower().endswith('.gif'):
                 ani.save(export_path, writer='pillow', dpi=150)
@@ -1014,7 +856,6 @@ class plotter:
 
         plt.close(fig)
 
-    ###############################################################################################################
     #                                                                                                             #
     #                                   ANIMATE NONLINEAR TIME-HISTORY ANALYSES                                   #
     #                                                                                                             #
@@ -1026,202 +867,347 @@ class plotter:
                      nrha_disps,
                      nrha_accels,
                      drift_thresholds=None,
-                     export_path=None):
+                     export_path=None,
+                     frame_step=5,
+                     dpi=100,
+                     collapse_time=None,
+                     true_peak_drift=None,
+                     true_peak_accel=None):
         """
         Animate the seismic response for a nonlinear time-history analysis (NRHA).
 
-        Creates a three-panel animated figure that updates frame by frame as the
-        ground motion progresses:
+        Four-panel layout (self.figsize_anim)
+        -------------------------------------
+        Panel 1 - Floor displacement profile [m] vs. elevation.
+        Panel 2 - Storey drift profile [%] vs. elevation (staircase style,
+                  matching plot_demand_profiles).
+        Panel 3 - Floor acceleration profile [g] vs. elevation.
+        Panel 4 - Input ground motion time-history with elapsed portion highlighted.
+                  If collapse_time is provided, an 'X' marker is drawn at that
+                  instant to indicate when the MinMax material limit was exceeded.
 
-        - **Top panel** – Floor displacement profile (m) vs. elevation.
-        - **Middle panel** – Floor acceleration profile (g) vs. elevation.
-        - **Bottom panel** – Input ground motion time-history with the elapsed
-          portion highlighted.
-
-        Line colors update cumulatively based on the worst damage state reached
-        so far (blue → green → yellow → orange → red), if ``drift_thresholds``
-        are provided.
-
-        The animation figure uses ``self.figsize_anim`` with
-        ``constrained_layout`` so that every exported frame has identical,
-        deterministic pixel dimensions.
+        Line colours update cumulatively based on worst damage state reached so
+        far (blue -> green -> yellow -> orange -> red) when drift_thresholds given.
 
         Parameters
         ----------
         control_nodes : array-like of int
-            OpenSees node tags for each controlled floor level (including the base).
-            Storey heights are inferred from their Z-coordinates.
-        acc : array-like of float
-            Ground acceleration time-history [g].  Length must match ``dts``.
-        dts : array-like of float
-            Time stamps corresponding to each acceleration sample [s].
-        nrha_disps : ndarray, shape (n_steps, n_nodes)
-            Absolute lateral displacement of every control node at each time step [m].
-        nrha_accels : ndarray, shape (n_steps, n_nodes)
-            Absolute acceleration of every control node at each time step [m/s²].
-            Values are converted to *g* internally for display.
-        drift_thresholds : list of float or None, optional
-            Inter-storey drift thresholds that define successive damage states.
-            Supply in ascending order (e.g. ``[0.005, 0.01, 0.02, 0.04]``).
-            If None, the displacement line is drawn in blue throughout.
-        export_path : str or None, optional
-            Full file path (including extension) for the exported animation.
-            Supported: ``.gif`` (Pillow) and ``.mp4`` (FFmpeg, with GIF fallback).
-            If None, the animation is shown interactively instead of saved.
+        acc : array-like of float  [g]
+        dts : array-like of float  [s]
+        nrha_disps : ndarray (n_steps, n_nodes)  [m]
+        nrha_accels : ndarray (n_steps, n_nodes)  [m/s^2]
+        drift_thresholds : list of float or None
+        export_path : str or None
+        frame_step : int, optional
+            Render every N-th timestep. Default 5.
+        dpi : int, optional
+            Export resolution. Default 100.
+        collapse_time : float or None, optional
+            Time [s] at which the MinMax material limit was exceeded (i.e. the
+            last recorded timestep when conv_index turned -1).  When provided,
+            a red 'X' marker is drawn on the ground-motion panel at that instant.
+        true_peak_drift : ndarray (n_storeys,) or None, optional
+            True peak IDR per storey [ratio] from the full-resolution time-step
+            loop (peak_drift[:,0] from do_nrha_analysis).  When provided the
+            peak drift annotation shows this value instead of the subsampled max.
+        true_peak_accel : ndarray (n_nodes,) or None, optional
+            True peak absolute floor acceleration per node [g] from the full-
+            resolution loop (peak_accel[:,0] from do_nrha_analysis).  When
+            provided the peak accel annotation shows this value instead of the
+            subsampled max.
 
         Returns
         -------
-        ani : matplotlib.animation.FuncAnimation
-            The animation object. Useful for further manipulation or inline
-            display in Jupyter notebooks.
+        ani : FuncAnimation
         """
-        # Compute storey heights from Z coordinates ---
+        acc  = np.asarray(acc)
+        dts  = np.asarray(dts)
+        nrha_disps  = np.asarray(nrha_disps)
+        nrha_accels = np.asarray(nrha_accels)
+
+        # Subsample for speed
+        frame_indices = np.arange(0, len(dts), frame_step)
+        num_frames    = len(frame_indices)
+
+        # Storey geometry
         node_z_coords = np.array([ops.nodeCoord(n, 3) for n in control_nodes])
-        sorted_idx = np.argsort(node_z_coords)
+        sorted_idx    = np.argsort(node_z_coords)
         control_nodes = np.array(control_nodes)[sorted_idx]
         node_z_coords = node_z_coords[sorted_idx]
         storey_heights = np.diff(node_z_coords)
+        n_storeys      = len(storey_heights)
 
         if np.any(storey_heights <= 1e-6):
-            print("⚠️ Warning: Zero or near-zero storey height detected")
+            print("Warning: Zero or near-zero storey height detected")
 
-        # Initialize Figure and Axes ---
+        # Pre-compute axis limits from full data for stable axes
+        max_abs_disp  = np.max(np.abs(nrha_disps))  if nrha_disps.size  else 0.01
+        max_abs_accel = np.max(np.abs(nrha_accels / 9.81)) if nrha_accels.size else 1.0
+
+        # Pre-compute storey drifts for ALL frames to get drift xlim.
+        # If collapse_time is given, exclude the final frame (which is at/past
+        # the MinMax limit and would produce an artificially large drift value).
+        all_drifts_pct = (
+            np.abs(np.diff(nrha_disps, axis=1)) / storey_heights[np.newaxis, :] * 100.0
+        )
+        if collapse_time is not None and all_drifts_pct.shape[0] > 1:
+            drifts_for_xlim = all_drifts_pct[:-1]   # exclude last (collapsed) step
+        else:
+            drifts_for_xlim = all_drifts_pct
+        max_drift_pct = np.max(drifts_for_xlim) if drifts_for_xlim.size else 1.0
+        xlim_drift = max(max_drift_pct * 1.2, 0.5)
+
+        elev_pad = 0.1 * storey_heights.mean()
+        ylim_elev = (node_z_coords[0] - elev_pad, node_z_coords[-1] + elev_pad)
+
+        # Figure — 4 rows, height ratios give more space to profiles, less to GM
         fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
-        gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 0.6], figure=fig)
+        gs  = gridspec.GridSpec(4, 1, height_ratios=[1, 1, 1, 0.7], figure=fig)
 
-        ax1 = fig.add_subplot(gs[0])  # Displacement
-        ax2 = fig.add_subplot(gs[1])  # Acceleration
-        ax3 = fig.add_subplot(gs[2])  # Ground motion
+        ax_disp  = fig.add_subplot(gs[0])   # displacement profile
+        ax_drift = fig.add_subplot(gs[1])   # storey drift profile
+        ax_accel = fig.add_subplot(gs[2])   # acceleration profile
+        ax_gm    = fig.add_subplot(gs[3])   # ground motion
 
-        # Plot undeformed shape (gray background)
-        ax1.plot(np.zeros_like(control_nodes), node_z_coords, color='gray', lw=1.0, alpha=0.6)
-        ax2.plot(np.zeros_like(control_nodes), node_z_coords, color='gray', lw=1.0, alpha=0.6)
+        # ── Static background elements ────────────────────────────────────────
+        # Undeformed centreline
+        ax_disp.plot(np.zeros_like(node_z_coords),  node_z_coords,
+                     color='gray', lw=1.0, alpha=0.6)
+        ax_accel.plot(np.zeros_like(node_z_coords), node_z_coords,
+                      color='gray', lw=1.0, alpha=0.6)
+        # Drift zero-line (staircase x=0)
+        x_zero, y_zero = [], []
+        for s in range(n_storeys):
+            y_zero.extend([node_z_coords[s], node_z_coords[s+1]])
+            x_zero.extend([0.0, 0.0])
+        y_zero.append(node_z_coords[-1]); x_zero.append(0.0)
+        ax_drift.plot(x_zero, y_zero, color='gray', lw=1.0, alpha=0.6)
 
-        # Plot ground motion background
-        ax3.plot(dts, acc, color='lightgray', lw=1.0, alpha=0.6)
+        # Ground motion ghost
+        ax_gm.plot(dts, acc, color='lightgray', lw=1.0, alpha=0.8)
 
-        # Initialize Lines
-        line_disp, = ax1.plot([], [], 'o-', color="blue", lw=2.0, markersize=6)
-        line_acc, = ax2.plot([], [], 'o-', color="red", lw=2.0, markersize=6)
-        line_acc_time, = ax3.plot([], [], color="green", lw=1.8)
+        # MinMax collapse marker — draw once as a static artist
+        if collapse_time is not None:
+            collapse_acc = float(np.interp(collapse_time, dts, acc))
+            ax_gm.plot(collapse_time, collapse_acc,
+                       marker='x', markersize=12, color='#E53935',
+                       markeredgewidth=2.5, zorder=10,
+                       label=f'MinMax exceeded ({collapse_time:.2f}s)')
+            ax_gm.axvline(collapse_time, color='#E53935', lw=0.8,
+                          ls='--', alpha=0.7)
+            ax_gm.legend(fontsize=7, loc='upper right')
 
-        # Grid and formatting
-        for ax in (ax1, ax2, ax3):
-            ax.grid(True, ls='--', alpha=0.4)
-
-        ax1.set_title("Floor Displacements (m)")
-        ax1.set_xlabel("Displacement (m)")
-        ax1.set_ylabel("Elevation (m)")
-        ax1.set_ylim(node_z_coords[0] - 0.1 * storey_heights.mean(),
-                     node_z_coords[-1] + 0.1 * storey_heights.mean())
-
-        ax2.set_title("Floor Accelerations (g)")
-        ax2.set_xlabel("Acceleration (g)")
-        ax2.set_ylabel("Elevation (m)")
-        ax2.set_ylim(node_z_coords[0] - 0.1 * storey_heights.mean(),
-                     node_z_coords[-1] + 0.1 * storey_heights.mean())
-        ax2.set_xlim(-5.0, 5.0)
-
-        ax3.set_title("Input Ground Motion")
-        ax3.set_xlabel("Time (s)")
-        ax3.set_ylabel("Acceleration (g)")
-        ax3.set_xlim(0, dts[-1])
-        ax3.set_ylim(np.floor(acc.min()), np.ceil(acc.max()))
-
-        # Damage state colors
-        damage_state_colors = ['#1E88E5', '#43A047', '#FDD835', '#FB8C00', '#E53935']
-
-        # Trackers for cumulative state
+        # ── Damage state colours ─────────────────────────────────────────────
+        # Index 0 = no damage (blue) … index 4 = collapse (red).
+        # Per-storey: each storey independently tracks its worst-ever state so
+        # colours never regress (a storey that turned red stays red).
+        damage_colors = ['#1E88E5', '#43A047', '#FDD835', '#FB8C00', '#E53935']
+        n_ds          = len(damage_colors)
+        # Worst damage state reached so far, per storey (for drift staircase
+        # and disp/accel segments) — shape (n_storeys,)
+        storey_damage_state = np.zeros(n_storeys, dtype=int)
+        # Ground-motion trace uses the worst storey state (structure-level)
         max_damage_state = 0
-        max_drift_val = 0.0
-        max_accel_val = 0.0
 
-        # Persistent Annotations
-        drift_annot = ax1.text(0.02, 0.9, "", transform=ax1.transAxes,
-                               fontsize=9, color="black", bbox=dict(facecolor='white', alpha=0.5))
-        accel_annot = ax2.text(0.02, 0.9, "", transform=ax2.transAxes,
-                               fontsize=9, color="black", bbox=dict(facecolor='white', alpha=0.5))
+        # Seed peak annotations from true full-resolution values
+        max_drift_val = float(np.max(true_peak_drift) * 100.0) if true_peak_drift is not None else 0.0
+        max_accel_val = float(np.max(true_peak_accel))         if true_peak_accel is not None else 0.0
 
-        # Update function
-        def update(frame):
-            nonlocal max_damage_state, max_drift_val, max_accel_val
+        # ── Animated lines — one segment per storey/interval ─────────────────
+        # drift staircase: one vertical Line2D per storey + one horizontal
+        # connector per inter-storey junction (coloured like the storey below).
+        # Base connector: horizontal from 0 → drift[0] at z[0] (ground level).
+        drift_lines      = [ax_drift.plot([], [], color=damage_colors[0], lw=2.5)[0]
+                            for _ in range(n_storeys)]          # verticals
+        drift_h_lines    = [ax_drift.plot([], [], color=damage_colors[0], lw=2.5)[0]
+                            for _ in range(n_storeys)]          # horizontals at top of each storey
+        drift_base_line, = ax_drift.plot([], [], color=damage_colors[0], lw=2.5)  # base horizontal
+        # displacement profile: one segment per storey interval + node markers
+        disp_lines   = [ax_disp.plot([], [], 'o-', color=damage_colors[0],
+                                     lw=2.0, ms=5)[0]
+                        for _ in range(n_storeys)]
+        # acceleration profile: one segment per storey interval + node markers
+        accel_lines  = [ax_accel.plot([], [], 'o-', color=damage_colors[0],
+                                      lw=2.0, ms=5)[0]
+                        for _ in range(n_storeys)]
+        # ground motion trace — single line, coloured by worst global state
+        line_gm_trace, = ax_gm.plot([], [], color=damage_colors[0], lw=1.6)
 
-            disp_values = nrha_disps[frame, :]
-            accel_values = nrha_accels[frame, :] / 9.81  # convert to g
+        # ── Axis formatting ───────────────────────────────────────────────────
+        ax_disp.set_title('Floor Displacements', fontsize=9, fontweight='bold')
+        ax_disp.set_xlabel('Displacement [m]', fontsize=8)
+        ax_disp.set_ylabel('Elevation [m]', fontsize=8)
+        ax_disp.set_xlim(-max(max_abs_disp * 1.2, 0.01), max(max_abs_disp * 1.2, 0.01))
+        ax_disp.set_ylim(ylim_elev)
+        ax_disp.grid(True, ls=':', alpha=0.4)
+        ax_disp.tick_params(labelsize=8)
 
-            line_disp.set_data(disp_values, node_z_coords)
-            line_acc.set_data(accel_values, node_z_coords)
+        ax_drift.set_title('Storey Drift Profile', fontsize=9, fontweight='bold')
+        ax_drift.set_xlabel(r'Storey Drift [%]', fontsize=8)
+        ax_drift.set_ylabel('Elevation [m]', fontsize=8)
+        ax_drift.set_xlim(0, xlim_drift)
+        ax_drift.set_ylim(ylim_elev)
+        ax_drift.grid(True, ls=':', alpha=0.4)
+        ax_drift.tick_params(labelsize=8)
 
-            #line_acc_time.set_data(dts[:frame], acc[:frame])
-            current_t = dts[:frame+1]
-            current_a = acc[:frame+1]
-            line_acc_time.set_data(current_t, current_a)
+        ax_accel.set_title('Floor Accelerations', fontsize=9, fontweight='bold')
+        ax_accel.set_xlabel('Acceleration [g]', fontsize=8)
+        ax_accel.set_ylabel('Elevation [m]', fontsize=8)
+        ax_accel.set_xlim(-max(max_abs_accel * 1.2, 0.5), max(max_abs_accel * 1.2, 0.5))
+        ax_accel.set_ylim(ylim_elev)
+        ax_accel.grid(True, ls=':', alpha=0.4)
+        ax_accel.tick_params(labelsize=8)
 
-            # Interstory drift
-            interstory_drifts = np.abs(np.diff(disp_values)) / storey_heights
-            current_drift = np.max(interstory_drifts)
-            current_accel = np.max(np.abs(accel_values))
+        ax_gm.set_title('Input Ground Motion', fontsize=9, fontweight='bold')
+        ax_gm.set_xlabel('Time [s]', fontsize=8)
+        ax_gm.set_ylabel('Accel [g]', fontsize=8)
+        ax_gm.set_xlim(0, dts[-1])
+        ax_gm.set_ylim(np.floor(acc.min()), np.ceil(acc.max()))
+        ax_gm.grid(True, ls=':', alpha=0.4)
+        ax_gm.tick_params(labelsize=8)
 
-            # Update cumulative maxima
-            max_drift_val = max(max_drift_val, current_drift)
-            max_accel_val = max(max_accel_val, current_accel)
+        # Annotations — anchored inside axes with clip_on so they never overflow
+        drift_annot = ax_drift.text(0.97, 0.97, '', transform=ax_drift.transAxes,
+                                    fontsize=7, ha='right', va='top', clip_on=True,
+                                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                                              edgecolor='gray', alpha=0.7))
+        accel_annot = ax_accel.text(0.97, 0.97, '', transform=ax_accel.transAxes,
+                                    fontsize=7, ha='right', va='top', clip_on=True,
+                                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                                              edgecolor='gray', alpha=0.7))
 
-            # Update annotations continuously
-            drift_annot.set_text(f"Max drift: {max_drift_val:.4f}")
-            accel_annot.set_text(f"Max accel: {max_accel_val:.3f} g")
+        # Threshold lines on drift panel
+        if drift_thresholds:
+            thr_colors = damage_colors[1:]
+            for ti, thr in enumerate(drift_thresholds):
+                ax_drift.axvline(thr * 100.0,
+                                 color=thr_colors[min(ti, len(thr_colors)-1)],
+                                 lw=0.8, ls='--', alpha=0.7)
 
-            # Cumulative damage state logic
+        # Damage state legend — one coloured patch per state, placed in ax_drift
+        ds_labels = ['No damage', 'Minor', 'Moderate', 'Extensive', 'Collapse']
+        legend_patches = [
+            mpatches.Patch(facecolor=damage_colors[i], label=ds_labels[i])
+            for i in range(len(damage_colors))
+        ]
+        ax_drift.legend(handles=legend_patches, fontsize=6, loc='lower right',
+                        framealpha=0.7, edgecolor='gray',
+                        handlelength=1.2, handleheight=0.8)
+
+        def update(anim_frame):
+            nonlocal storey_damage_state, max_damage_state, max_drift_val, max_accel_val
+            frame = int(frame_indices[anim_frame])
+
+            disp_values  = nrha_disps[frame, :]
+            accel_values = nrha_accels[frame, :]   # already in g
+
+            # ── Per-storey drift [%] ──────────────────────────────────────────
+            storey_drifts_pct = (
+                np.abs(np.diff(disp_values)) / storey_heights * 100.0
+            )
+            # Cap on final collapsed frame
+            if collapse_time is not None and anim_frame == num_frames - 1:
+                storey_drifts_pct = np.clip(storey_drifts_pct, 0.0, xlim_drift)
+
+            # ── Per-storey damage state (cumulative — never regresses) ────────
             if drift_thresholds is not None and len(drift_thresholds) > 0:
-                # Determine the current frame's damage state for all floors
-                frame_states = np.sum(interstory_drifts[:, None] > np.array(drift_thresholds), axis=1)
-                # Take the highest among all floors
-                frame_max_state = frame_states.max() if len(frame_states) > 0 else 0
-                # Update cumulative maximum damage state
-                if frame_max_state > max_damage_state:
-                    max_damage_state = frame_max_state
-                color = damage_state_colors[min(max_damage_state, len(damage_state_colors)-1)]
-            else:
-                color = "blue"
+                thr_arr = np.array(drift_thresholds)   # ratios, not %
+                for s in range(n_storeys):
+                    ds = int(np.sum(storey_drifts_pct[s] / 100.0 > thr_arr))
+                    if ds > storey_damage_state[s]:
+                        storey_damage_state[s] = ds
+            # Worst global state drives GM trace colour
+            global_state = int(storey_damage_state.max())
+            if global_state > max_damage_state:
+                max_damage_state = global_state
 
-            # Always apply the cumulative damage color
-            line_disp.set_color(color)
-            line_acc.set_color(color)
-            line_acc_time.set_color(color)
+            # ── Drift staircase ───────────────────────────────────────────────
+            # Vertical bars (one per storey) + horizontal connectors at each
+            # junction. The horizontal at the top of storey s uses the colour
+            # of storey s (the storey below the junction), as requested.
+            for s in range(n_storeys):
+                c = damage_colors[min(storey_damage_state[s], n_ds - 1)]
+                # Vertical: constant x = drift[s], from z[s] to z[s+1]
+                drift_lines[s].set_data(
+                    [storey_drifts_pct[s], storey_drifts_pct[s]],
+                    [node_z_coords[s],     node_z_coords[s + 1]]
+                )
+                drift_lines[s].set_color(c)
+                # Horizontal at top of storey s: from drift[s] to drift[s+1]
+                # (or to 0 for the topmost storey), at elevation z[s+1].
+                next_drift = storey_drifts_pct[s + 1] if s + 1 < n_storeys else 0.0
+                drift_h_lines[s].set_data(
+                    [storey_drifts_pct[s], next_drift],
+                    [node_z_coords[s + 1], node_z_coords[s + 1]]
+                )
+                drift_h_lines[s].set_color(c)
+            # Base horizontal: from 0 to drift[0] at ground elevation z[0]
+            c_base = damage_colors[min(storey_damage_state[0], n_ds - 1)]
+            drift_base_line.set_data([0.0, storey_drifts_pct[0]],
+                                     [node_z_coords[0], node_z_coords[0]])
+            drift_base_line.set_color(c_base)
 
-            return line_disp, line_acc, line_acc_time, drift_annot, accel_annot
+            # ── Displacement profile — one segment per storey interval ────────
+            for s in range(n_storeys):
+                c = damage_colors[min(storey_damage_state[s], n_ds - 1)]
+                disp_lines[s].set_data(
+                    [disp_values[s],       disp_values[s + 1]],
+                    [node_z_coords[s],     node_z_coords[s + 1]]
+                )
+                disp_lines[s].set_color(c)
 
-        # Create animation
-        ani = FuncAnimation(fig, update, frames=len(dts), interval=10, blit=False, repeat=False)
+            # ── Acceleration profile — one segment per storey interval ────────
+            for s in range(n_storeys):
+                c = damage_colors[min(storey_damage_state[s], n_ds - 1)]
+                accel_lines[s].set_data(
+                    [accel_values[s],      accel_values[s + 1]],
+                    [node_z_coords[s],     node_z_coords[s + 1]]
+                )
+                accel_lines[s].set_color(c)
 
-        # Save or show
+            # ── Ground motion trace ───────────────────────────────────────────
+            line_gm_trace.set_data(dts[:frame + 1], acc[:frame + 1])
+            line_gm_trace.set_color(damage_colors[min(max_damage_state, n_ds - 1)])
+
+            # ── Peak annotations ──────────────────────────────────────────────
+            current_drift_max = float(np.max(storey_drifts_pct))
+            current_accel_max = float(np.max(np.abs(accel_values)))
+            max_drift_val = max(max_drift_val, current_drift_max)
+            max_accel_val = max(max_accel_val, current_accel_max)
+            drift_annot.set_text(f'Peak drift: {max_drift_val:.2f}%')
+            accel_annot.set_text(f'Peak accel: {max_accel_val:.3f} g')
+
+            return (*drift_lines, *drift_h_lines, drift_base_line,
+                    *disp_lines, *accel_lines,
+                    line_gm_trace, drift_annot, accel_annot)
+
+        ani = FuncAnimation(fig, update, frames=num_frames,
+                            interval=10, blit=False, repeat=False)
+
         if export_path:
-            print(f"\nSaving animation to: {export_path}")
+            print(f'\nSaving NRHA animation ({num_frames} frames) to: {export_path}')
             try:
                 if export_path.lower().endswith('.gif'):
-                    ani.save(export_path, writer='pillow', dpi=self.resolution)
+                    ani.save(export_path, writer='pillow', dpi=dpi)
                 elif export_path.lower().endswith('.mp4'):
                     try:
-                        ani.save(export_path, writer='ffmpeg', dpi=self.resolution)
+                        ani.save(export_path, writer='ffmpeg', dpi=dpi)
                     except Exception:
-                        print("FFmpeg not found — falling back to Pillow GIF encoding.")
-                        ani.save(export_path.replace('.mp4', '.gif'), writer='pillow', dpi=self.resolution)
+                        print("FFmpeg not found - falling back to Pillow GIF.")
+                        ani.save(export_path.replace('.mp4', '.gif'),
+                                 writer='pillow', dpi=dpi)
                 else:
-                    print("WARNING: Unknown extension (.gif or .mp4 recommended). Saving as GIF.")
-                    ani.save(export_path + ".gif", writer='pillow', dpi=self.resolution)
+                    print("Unknown extension - saving as GIF.")
+                    ani.save(export_path + '.gif', writer='pillow', dpi=dpi)
                 plt.close(fig)
             except Exception as e:
-                print(f"Animation save failed: {e}")
+                print(f'Animation save failed: {e}')
                 plt.show()
         else:
             plt.show()
 
         return ani
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                         PLOT DEMAND PROFILES                                                #
-    #                                                                                                             #
-    ###############################################################################################################
     def plot_demand_profiles(self,
                              peak_drift_list,
                              peak_accel_list,
