@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import openseespy.opensees as ops
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
+import matplotlib.colors as mcolors
 from scipy.stats import norm, lognorm
 import matplotlib.gridspec as gridspec
 from scipy.interpolate import interp1d
@@ -503,8 +504,14 @@ class plotter:
             except Exception:
                 continue
 
-        fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
-        gs  = fig.add_gridspec(2, 2, width_ratios=[1.1, 1])
+        _FS = 11  # uniform fontsize for all SPO animation text
+
+        fig = plt.figure(figsize=self.figsize_anim)
+        gs  = gridspec.GridSpec(2, 2, figure=fig,
+                                width_ratios=[1.1, 1],
+                                left=0.07, right=0.97,
+                                top=0.95,  bottom=0.08,
+                                hspace=0.45, wspace=0.35)
         ax_model = fig.add_subplot(gs[:, 0])
         ax_curve = fig.add_subplot(gs[0, 1])
         ax_drift = fig.add_subplot(gs[1, 1])
@@ -516,35 +523,35 @@ class plotter:
             ax_model.plot([horiz_und[ii], horiz_und[jj]],
                           [vert_und[ii],  vert_und[jj]],
                           color='gray', ls='--', lw=1.0, alpha=0.5, zorder=2)
-        ax_model.set_xlabel(x_label_model, fontsize=9)
-        ax_model.set_ylabel('Elevation [m]', fontsize=9)
+        ax_model.set_xlabel(x_label_model, fontsize=_FS)
+        ax_model.set_ylabel('Elevation [m]', fontsize=_FS)
         ax_model.set_xlim(model_xlim)
         ax_model.set_ylim(model_ylim)
         ax_model.grid(True, ls=':', alpha=0.4)
-        ax_model.tick_params(labelsize=8)
+        ax_model.tick_params(labelsize=_FS)
 
         n_static_lines = len(ax_model.lines)
         n_static_colls = len(ax_model.collections)
 
-        ax_curve.plot(spo_top_disp, spo_rxn, color='gray', lw=1.5, alpha=0.5)
-        curve_anim, = ax_curve.plot([], [], '#1565C0', lw=2)
-        ax_curve.set_xlabel('Roof Displacement [m]', fontsize=8)
-        ax_curve.set_ylabel('Base Shear [kN]', fontsize=8)
-        ax_curve.set_title('Base Shear vs Roof Displacement', fontsize=9, fontweight='bold')
+        ax_curve.plot(spo_top_disp, spo_rxn, color='gray', lw=2, alpha=0.5)
+        curve_anim, = ax_curve.plot([], [], 'blue', lw=2)
+        ax_curve.set_xlabel('Roof Displacement [m]', fontsize=_FS)
+        ax_curve.set_ylabel('Base Shear [kN]', fontsize=_FS)
+        ax_curve.set_title('Base Shear vs Roof Displacement', fontsize=_FS, fontweight='bold')
         ax_curve.set_xlim(0, np.max(spo_top_disp) * 1.1)
         ax_curve.set_ylim(0, np.max(spo_rxn) * 1.15)
         ax_curve.grid(True, ls=':', alpha=0.4)
-        ax_curve.tick_params(labelsize=8)
+        ax_curve.tick_params(labelsize=_FS)
 
-        ax_drift.plot(spo_midr, spo_rxn, color='gray', lw=1.5, alpha=0.5)
-        drift_anim, = ax_drift.plot([], [], '#B71C1C', lw=2)
-        ax_drift.set_xlabel('Max ISDR [%]', fontsize=8)
-        ax_drift.set_ylabel('Base Shear [kN]', fontsize=8)
-        ax_drift.set_title('Base Shear vs Max ISDR', fontsize=9, fontweight='bold')
+        ax_drift.plot(spo_midr, spo_rxn, color='gray', lw=2, alpha=0.5)
+        drift_anim, = ax_drift.plot([], [], 'green', lw=2)
+        ax_drift.set_xlabel('Max ISDR [%]', fontsize=_FS)
+        ax_drift.set_ylabel('Base Shear [kN]', fontsize=_FS)
+        ax_drift.set_title('Base Shear vs Max ISDR', fontsize=_FS, fontweight='bold')
         ax_drift.set_xlim(0, np.max(spo_midr) * 1.2)
         ax_drift.set_ylim(0, np.max(spo_rxn) * 1.15)
         ax_drift.grid(True, ls=':', alpha=0.4)
-        ax_drift.tick_params(labelsize=8)
+        ax_drift.tick_params(labelsize=_FS)
 
         def update(anim_frame):
             frame = int(frame_indices[anim_frame])
@@ -576,7 +583,7 @@ class plotter:
 
             ax_model.set_title(
                 f'Deformed Shape - Step {frame + 1}/{total_steps}',
-                fontsize=9, fontweight='bold'
+                fontsize=_FS, fontweight='bold'
             )
             curve_anim.set_data(spo_top_disp[:frame + 1], spo_rxn[:frame + 1])
             drift_anim.set_data(spo_midr[:frame + 1],     spo_rxn[:frame + 1])
@@ -730,53 +737,59 @@ class plotter:
             ax_model.plot(x_und, y_und,
                           color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
 
-        ax_model.set_xlabel(x_label_model)
-        ax_model.set_ylabel(y_label_model)
-        ax_model.set_title('Deformed Model Shape (Cyclic Pushover)')
+        _FS = 11  # uniform fontsize for all CPO animation text
+
+        ax_model.set_xlabel(x_label_model, fontsize=_FS)
+        ax_model.set_ylabel(y_label_model, fontsize=_FS)
+        ax_model.set_title('Deformed Model Shape (Cyclic Pushover)', fontsize=_FS, fontweight='bold')
         ax_model.set_xlim(model_x_lim)
         ax_model.set_ylim(model_y_lim)
         ax_model.grid(True)
+        ax_model.tick_params(labelsize=_FS)
 
         # Hysteretic Curve (Base Shear vs Top Disp)
-        ax_curve.set_xlabel('Top Displacement [m]')
-        ax_curve.set_ylabel('Base Shear [kN]')
-        ax_curve.set_title('Hysteretic Curve (Base Shear vs Top Disp)')
-        ax_curve.plot(cpo_top_disp, cpo_rxn, 'gray', linewidth=1,
+        ax_curve.set_xlabel('Top Displacement [m]', fontsize=_FS)
+        ax_curve.set_ylabel('Base Shear [kN]', fontsize=_FS)
+        ax_curve.set_title('Hysteretic Curve', fontsize=_FS, fontweight='bold')
+        ax_curve.plot(cpo_top_disp, cpo_rxn, 'gray', linewidth=2,
                       alpha=0.5, label='History')
         curve_anim, = ax_curve.plot([], [], 'blue', linewidth=2,
                                     label='Current Step')
-        ax_curve.legend(loc='lower right')
+        ax_curve.legend(loc='lower right', fontsize=_FS)
         max_x_curve = np.max(np.abs(cpo_top_disp)) * 1.1
         max_y_curve = np.max(np.abs(cpo_rxn)) * 1.1
         ax_curve.set_xlim(-max_x_curve, max_x_curve)
         ax_curve.set_ylim(-max_y_curve, max_y_curve)
         ax_curve.grid(True)
+        ax_curve.tick_params(labelsize=_FS)
 
         # Governing Drift Hysteresis (Base Shear vs MIDR)
-        ax_drift.set_xlabel('Maximum Interstorey Drift [-]')
-        ax_drift.set_ylabel('Base Shear [kN]')
-        ax_drift.set_title('Hysteretic Curve (Base Shear vs MIDR)')
-        ax_drift.plot(governing_drift_history, cpo_rxn, 'gray', linewidth=1,
+        ax_drift.set_xlabel('Maximum Interstorey Drift [-]', fontsize=_FS)
+        ax_drift.set_ylabel('Base Shear [kN]', fontsize=_FS)
+        ax_drift.set_title('Hysteretic Curve', fontsize=_FS, fontweight='bold')
+        ax_drift.plot(governing_drift_history, cpo_rxn, 'gray', linewidth=2,
                       alpha=0.5, label='History')
         drift_anim, = ax_drift.plot([], [], 'green', linewidth=2,
                                     label='Current Step')
-        ax_drift.legend(loc='lower right')
+        ax_drift.legend(loc='lower right', fontsize=_FS)
         ax_drift.set_xlim(-max_drift_limit * 1.1, max_drift_limit * 1.1)
         ax_drift.set_ylim(-max_y_curve, max_y_curve)
         ax_drift.grid(True)
+        ax_drift.tick_params(labelsize=_FS)
 
         # Dissipated Energy vs Step
-        ax_energy.set_xlabel('Step [-]')
-        ax_energy.set_ylabel('Dissipated Energy [kN\u00b7m]')
-        ax_energy.set_title('Cumulative Dissipated Energy')
+        ax_energy.set_xlabel('Step [-]', fontsize=_FS)
+        ax_energy.set_ylabel('Dissipated Energy [kN\u00b7m]', fontsize=_FS)
+        ax_energy.set_title('Cumulative Dissipated Energy', fontsize=_FS, fontweight='bold')
         ax_energy.plot(np.arange(total_steps), cumul_energy, 'gray', linewidth=1,
                        alpha=0.5, label='History')
         energy_anim, = ax_energy.plot([], [], 'green', linewidth=2,
                                       label='Current Step')
-        ax_energy.legend(loc='upper left')
+        ax_energy.legend(loc='lower right', fontsize=_FS)
         ax_energy.set_xlim(0, total_steps * 1.05)
         ax_energy.set_ylim(0, max_energy if max_energy > 0 else 1.0)
         ax_energy.grid(True)
+        ax_energy.tick_params(labelsize=_FS)
 
         def update(frame):
             nonlocal num_static_lines, num_static_collections
@@ -824,7 +837,7 @@ class plotter:
                 y_def = [plot_coords_def[1][i], plot_coords_def[1][j]]
                 ax_model.plot(x_def, y_def, color='blue', linewidth=1.5)
 
-            ax_model.set_title(f'Step: {frame}/{total_steps - 1} (Scale: {deform_factor}x)')
+            ax_model.set_title(f'Step: {frame}/{total_steps - 1} (Scale: {deform_factor}x)', fontsize=_FS, fontweight='bold')
 
             curve_anim.set_data(cpo_top_disp[:frame + 1], cpo_rxn[:frame + 1])
             drift_anim.set_data(governing_drift_history[:frame + 1],
@@ -1084,15 +1097,6 @@ class plotter:
                                  color=thr_colors[min(ti, len(thr_colors)-1)],
                                  lw=0.8, ls='--', alpha=0.7)
 
-        # Damage state legend — one coloured patch per state, placed in ax_drift
-        ds_labels = ['No damage', 'Minor', 'Moderate', 'Extensive', 'Collapse']
-        legend_patches = [
-            mpatches.Patch(facecolor=damage_colors[i], label=ds_labels[i])
-            for i in range(len(damage_colors))
-        ]
-        ax_drift.legend(handles=legend_patches, fontsize=6, loc='lower right',
-                        framealpha=0.7, edgecolor='gray',
-                        handlelength=1.2, handleheight=0.8)
 
         def update(anim_frame):
             nonlocal storey_damage_state, max_damage_state, max_drift_val, max_accel_val
@@ -1633,129 +1637,148 @@ class plotter:
                           pFlag=True,
                           export_path=None):
         """
-        Visualizes Multiple Stripe Analysis (MSA) results by plotting individual
-        response points and lognormal distribution fits at each intensity level.
+        Visualizes Multiple Stripe Analysis (MSA) results.
 
-        This method generates a 'stripe' plot where the vertical axis represents
-        the Intensity Measure (IM) and the horizontal axis represents the
-        Engineering Demand Parameter (EDP). For each stripe, it calculates and
-        overlays a lognormal Probability Density Function (PDF) to illustrate
-        the statistical distribution of structural response at that hazard level.
-
-        The figure uses ``self.figsize`` with ``constrained_layout`` and is
-        saved without ``bbox_inches='tight'`` so that every output image has
-        identical, deterministic pixel dimensions.
+        For each intensity stripe the method plots:
+        - Individual ground-motion response points coloured and sized by IM level.
+        - A filled lognormal PDF silhouette scaled to the inter-stripe spacing.
+        - A vertical line at the lognormal median and dashed lines at the 16th/84th
+          percentiles, both labelled on the first stripe only.
+        - A compact statistics table (inset axes) listing median and dispersion per stripe.
 
         Parameters
         ----------
         stripe_imls : 2D array
-            Matrix of intensity measure levels corresponding to each ground
-            motion and stripe.
-
+            Matrix of IM levels (n_gmrs × n_stripes); only the first row is used
+            as the unique IM level for each stripe.
         stripe_edps : 2D array
-            Matrix of structural responses (ratios). The method automatically
-            converts these to percentages (%) for plotting.
-
+            Matrix of EDP responses (n_gmrs × n_stripes) as dimensionless ratios.
+            Converted to percent internally.
         imt_label : str
-            Label for the Y-axis (e.g., 'Sa(T1) [g]').
-
+            Y-axis label (e.g. 'Sa(T1) [g]').
         edp_label : str
-            Label for the X-axis base (e.g., 'Maximum Inter-storey Drift').
-            The unit '[%]' is appended automatically.
-
+            X-axis label (e.g. 'Peak Inter-Storey Drift').  '[%]' is appended.
         xlims : tuple of float
-            (min, max) limits for the X-axis (EDP axis).
-
+            (min, max) for the EDP (x) axis.
         ylims : tuple of float
-            (min, max) limits for the Y-axis (IML axis).
-
+            (min, max) for the IM (y) axis.
         title : str, optional
-            Custom plot title. If None, a default MSA title is used.
-
+            Figure title.  Defaults to a standard MSA title.
         pFlag : bool, default True
-            If True, displays the plot. If False, closes the figure to save memory.
-
+            Show/save the figure when True; close silently when False.
         export_path : str, optional
-            File path to save the generated image.
-
-        Returns
-        -------
-        None
+            Full file path to save the figure.
         """
-        # --- Conversion from Ratio to Percent ---
-        stripe_edps = stripe_edps * 100
-
+        # ── Data preparation ─────────────────────────────────────────────────
+        stripe_edps  = np.asarray(stripe_edps, dtype=float) * 100.0   # → %
+        stripe_imls  = np.asarray(stripe_imls, dtype=float)
         num_gmrs, num_stripes = stripe_edps.shape
-        unique_imls = stripe_imls[0, :] # Discrete IM levels (y-axis values)
+        unique_imls  = stripe_imls[0, :]                               # 1-D IM levels
 
+        # Colour map: low IM = cool blue, high IM = warm red
+        cmap   = plt.cm.RdYlBu_r
+        norm   = mcolors.Normalize(vmin=unique_imls.min(), vmax=unique_imls.max())
+        sm     = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+
+        # Inter-stripe spacing for PDF height scaling
+        if num_stripes > 1:
+            stripe_gap = np.diff(unique_imls).min() * 0.72
+        else:
+            stripe_gap = unique_imls[0] * 0.20
+
+        # ── Figure / axes ────────────────────────────────────────────────────
         fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
-        # Plot the raw data points (The Stripes)
+        # ── Per-stripe rendering ──────────────────────────────────────────────
         for j in range(num_stripes):
-            im_level = unique_imls[j]
+            im_level   = unique_imls[j]
             edp_values = stripe_edps[:, j]
+            stripe_col = cmap(norm(im_level))
 
-            # Scatter individual GM results: x=EDP (%), y=IML
-            ax.scatter(edp_values, [im_level] * num_gmrs,
-                       color='gray', alpha=0.3, s=15, zorder=2, label='GM Stripes' if j==0 else "")
+            # --- scatter: individual GM points ---
+            ax.scatter(edp_values, np.full(num_gmrs, im_level),
+                       color=stripe_col, s=50, alpha=0.70, zorder=3,
+                       linewidths=0.5, edgecolors='white',
+                       label='Ground-motion results' if j == 0 else '')
 
-            # 2. Calculate Log-Normal PDF for this stripe
-            valid_edps = edp_values[edp_values > 0]
-            if len(valid_edps) > 1:
-                log_edp = np.log(valid_edps)
-                mu_ln = np.mean(log_edp)
-                sigma_ln = np.std(log_edp)
+            # --- lognormal fit ---
+            valid = edp_values[edp_values > 0]
+            if len(valid) < 2:
+                continue
 
-                # Create x-range for the PDF
-                x_range = np.linspace(max(0.001, min(edp_values)*0.5), max(edp_values)*1.5, 300)
-                pdf_values = stats.lognorm.pdf(x_range, s=sigma_ln, scale=np.exp(mu_ln))
+            log_v    = np.log(valid)
+            mu_ln    = log_v.mean()
+            sigma_ln = max(log_v.std(ddof=1), 1e-6)
+            median_v = np.exp(mu_ln)
+            p16_v    = np.exp(mu_ln - sigma_ln)
+            p84_v    = np.exp(mu_ln + sigma_ln)
 
-                # Scale and Shift the PDF vertically
-                if len(unique_imls) > 1:
-                    scale_factor = np.diff(unique_imls).min() * 0.7
-                else:
-                    scale_factor = im_level * 0.2
+            x_lo  = max(xlims[0] * 0.5, valid.min() * 0.3, 0.001)
+            x_hi  = min(xlims[1] * 1.5, valid.max() * 2.0)
+            x_pdf = np.linspace(x_lo, x_hi, 500)
+            pdf_v = stats.lognorm.pdf(x_pdf, s=sigma_ln, scale=np.exp(mu_ln))
+            pdf_s = (pdf_v / pdf_v.max()) * stripe_gap * 0.85
 
-                pdf_scaled = (pdf_values / max(pdf_values)) * scale_factor
+            # filled silhouette
+            ax.fill_betweenx(im_level + pdf_s, x_pdf,
+                             np.full_like(x_pdf, im_level),
+                             where=(im_level + pdf_s > im_level),
+                             facecolor=stripe_col, alpha=0.25, zorder=2)
+            # crisp outline
+            ax.plot(x_pdf, im_level + pdf_s, color=stripe_col,
+                    lw=2.0, alpha=0.95, zorder=4)
 
-                # Plot the PDF curve and fill
-                ax.plot(x_range, im_level + pdf_scaled, color='royalblue', lw=1.5, zorder=4)
-                ax.fill_between(x_range, im_level, im_level + pdf_scaled,
-                                color='royalblue', alpha=0.2, zorder=3, label='Lognormal Fit' if j==0 else "")
+            # median line — full PDF height
+            ax.vlines(median_v, im_level, im_level + stripe_gap * 0.85,
+                      color=stripe_col, lw=2.5, zorder=5,
+                      label='Lognormal median' if j == 0 else '')
 
-        # Styling
-        default_title = f"MSA: {imt_label} vs {edp_label}"
+            # 16th / 84th percentile ticks — 55% of PDF height
+            for pval in (p16_v, p84_v):
+                ax.vlines(pval, im_level, im_level + stripe_gap * 0.50,
+                          color=stripe_col, lw=1.5, ls='--', zorder=5,
+                          label=(r'16$^{\rm th}$ / 84$^{\rm th}$ percentile'
+                                 if j == 0 and pval == p16_v else ''))
+
+            # horizontal bracket connecting 16th-84th at 50% height
+            ax.hlines(im_level + stripe_gap * 0.50, p16_v, p84_v,
+                      color=stripe_col, lw=1.2, ls='--', alpha=0.75, zorder=4)
+
+        # ── Styling ──────────────────────────────────────────────────────────
+        default_title = f"Multiple Stripe Analysis — {edp_label} vs {imt_label}"
         self._set_plot_style(ax,
                              title=title if title else default_title,
-                             xlabel=f"{edp_label}",
+                             xlabel=f"{edp_label} [%]",
                              ylabel=imt_label)
+        ax.set_xlim(xlims)
+        ax.set_ylim(ylims)
+        ax.grid(True, which='major', ls=':', lw=0.6, alpha=0.5)
+        ax.grid(True, which='minor', ls=':', lw=0.3, alpha=0.3)
+        ax.spines[['top', 'right']].set_visible(False)
 
-        ax.grid(True, which="both", ls="-", alpha=0.15)
+        # ── Legend (deduplicated) ─────────────────────────────────────────────
+        seen, h_out, l_out = set(), [], []
+        for h, l in zip(*ax.get_legend_handles_labels()):
+            if l and l not in seen:
+                seen.add(l); h_out.append(h); l_out.append(l)
+        if h_out:
+            ax.legend(h_out, l_out, loc='upper right',
+                      fontsize=self.font_sizes['legend'],
+                      framealpha=0.85, edgecolor='#cccccc')
 
-        # Only show legend if we have labels
-        handles, labels = ax.get_legend_handles_labels()
-        if labels:
-            ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
-
-        ax.set_xlim([xlims[0], xlims[1]])
-        ax.set_ylim([ylims[0], ylims[1]])
-
-        # Save or Show
+        # ── Save / show ───────────────────────────────────────────────────────
         if pFlag:
             if export_path:
-                # Save to disk
                 directory = os.path.dirname(export_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
                 plt.show()
-            # Show if no path OR if you want to see it after saving
-            if not export_path:
-                # Display but do not save to disk
-                plt.show()
             else:
-                # Close the plot to free memory after saving if not showing
-                plt.close()
+                plt.show()
+        else:
+            plt.close(fig)
 
     ###############################################################################################################
     #                                                                                                             #

@@ -709,7 +709,7 @@ class modeller():
         # Optional printing
         if pFlag:
             ops.modalProperties('-print')
-            print(r'Fundamental Period: T = {.3f} s'.format(T[0]))
+            print(f'Fundamental Period: T = {T[0]:.3f} s')
 
         # Optional plotting
         if plot_modes:
