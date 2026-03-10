@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import signal, integrate
 
+
 class IMCalculator:
     """
     A class to compute various intensity measures (IMs) from a ground-motion record, such as response spectrum,
@@ -45,7 +46,6 @@ class IMCalculator:
         Computes the filtered incremental velocity (FIV3) based on a ground motion record and specified parameters.
 
     """
-
 
     def __init__(self, acc, dt, damping=0.05):
         """
@@ -123,8 +123,16 @@ class IMCalculator:
             dp = p[i + 1] - p[i]
             dp_bar = dp + A * v[:, i] + B * a[:, i]
             du = dp_bar / k_bar
-            dv = (gamma / (beta * self.dt)) * du - (gamma / beta) * v[:, i] + self.dt * (1 - gamma / (2 * beta)) * a[:, i]
-            da = du / (beta * self.dt**2) - v[:, i] / (beta * self.dt) - a[:, i] / (2 * beta)
+            dv = (
+                (gamma / (beta * self.dt)) * du
+                - (gamma / beta) * v[:, i]
+                + self.dt * (1 - gamma / (2 * beta)) * a[:, i]
+            )
+            da = (
+                du / (beta * self.dt**2)
+                - v[:, i] / (beta * self.dt)
+                - a[:, i] / (2 * beta)
+            )
 
             u[:, i + 1] = u[:, i] + du
             v[:, i + 1] = v[:, i] + dv
@@ -152,7 +160,9 @@ class IMCalculator:
             Spectral acceleration (g) at the given period
         """
         periods, _, _, sa = self.get_spectrum()
-        return np.interp(period, periods, sa)  # Interpolate to find SA at the requested period
+        return np.interp(
+            period, periods, sa
+        )  # Interpolate to find SA at the requested period
 
     def get_saavg(self, period):
         """
@@ -169,7 +179,9 @@ class IMCalculator:
             Average spectral acceleration at the given period
         """
         periods, _, _, sa = self.get_spectrum()
-        period_range = np.linspace(0.2 * period, 1.5 * period, 10)  # Range around the target period
+        period_range = np.linspace(
+            0.2 * period, 1.5 * period, 10
+        )  # Range around the target period
 
         # Interpolate SA values for the defined period range
         sa_values = np.interp(period_range, periods, sa)
@@ -178,7 +190,6 @@ class IMCalculator:
         sa_values = np.clip(sa_values, 1e-6, None)  # Prevent underflow
 
         return np.exp(np.mean(np.log(sa_values)))  # Geometric mean
-
 
     def get_saavg_user_defined(self, periods_list):
         """
@@ -204,7 +215,6 @@ class IMCalculator:
 
         return np.exp(np.mean(np.log(sa_values)))  # Geometric mean
 
-
     def get_velocity_displacement_history(self):
         """
         Compute velocity and displacement history with drift correction.
@@ -219,19 +229,18 @@ class IMCalculator:
         acc_m_s2 = self.acc * 9.81  # Convert g to m/s² if needed
 
         # High-pass filter to remove baseline drift
-        sos = signal.butter(4, 0.1, btype='highpass', fs=1/self.dt, output='sos')
+        sos = signal.butter(4, 0.1, btype="highpass", fs=1 / self.dt, output="sos")
         acc_filtered = signal.sosfilt(sos, acc_m_s2)
 
         # Integrate acceleration to get velocity
         vel = integrate.cumulative_trapezoid(acc_filtered, dx=self.dt, initial=0)
-        vel = signal.detrend(vel, type='linear')  # Remove linear drift
+        vel = signal.detrend(vel, type="linear")  # Remove linear drift
 
         # Integrate velocity to get displacement
         disp = integrate.cumulative_trapezoid(vel, dx=self.dt, initial=0)
-        disp = signal.detrend(disp, type='linear')  # Remove residual drift
+        disp = signal.detrend(disp, type="linear")  # Remove residual drift
 
         return vel, disp
-
 
     def get_amplitude_ims(self):
         """
@@ -262,7 +271,7 @@ class IMCalculator:
         AI : float
             Arias intensity (m/s)
         """
-        ai = np.cumsum(self.acc ** 2) * (np.pi / (2 * 9.81)) * self.dt
+        ai = np.cumsum(self.acc**2) * (np.pi / (2 * 9.81)) * self.dt
         return ai[-1]  # Final Arias Intensity value
 
     def get_cav(self):
@@ -286,7 +295,7 @@ class IMCalculator:
         sig_duration : float
             Significant duration (s)
         """
-        ai = np.cumsum(self.acc ** 2) * (np.pi / (2 * 9.81)) * self.dt
+        ai = np.cumsum(self.acc**2) * (np.pi / (2 * 9.81)) * self.dt
         ai_norm = ai / ai[-1]  # Normalize AI
 
         t_start = np.where(ai_norm >= start)[0][0] * self.dt
@@ -362,8 +371,8 @@ class IMCalculator:
         tim = [self.dt * i for i in range(len(self.acc))]
 
         # Apply a 2nd order Butterworth low pass filter to the ground motion
-        Wn = beta/period/(0.5/self.dt)
-        b, a = signal.butter(2, Wn, 'low')
+        Wn = beta / period / (0.5 / self.dt)
+        b, a = signal.butter(2, Wn, "low")
         ugf = signal.filtfilt(b, a, self.acc)
 
         # Get the filtered incremental velocity
@@ -371,12 +380,12 @@ class IMCalculator:
         t = np.array([])
         for i in range(len(tim)):
             # Check if there is enough length in the remaining time series
-            if tim[i] < tim[-1] - alpha*period:
+            if tim[i] < tim[-1] - alpha * period:
                 # Get the snippet of the filtered acceleration history
-                ugf_pc = ugf[i:i+int(np.floor(alpha*period/self.dt))]
+                ugf_pc = ugf[i : i + int(np.floor(alpha * period / self.dt))]
 
                 # Integrate the snippet
-                FIV = np.append(FIV, self.dt*integrate.trapezoid(ugf_pc))
+                FIV = np.append(FIV, self.dt * integrate.trapezoid(ugf_pc))
 
                 # Log the time
                 t = np.append(t, tim[i])
