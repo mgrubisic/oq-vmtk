@@ -2,7 +2,7 @@ import numpy as np
 from scipy import signal, integrate
 
 
-class IMCalculator:
+class imcalculator:
     """
     A class to compute various intensity measures (IMs) from a ground-motion record, such as response spectrum,
     spectral acceleration, amplitude-based IMs, Arias Intensity, Cumulative Absolute Velocity (CAV),
