@@ -2,16 +2,21 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import openseespy.opensees as ops
+import matplotlib.lines as mlines
+from matplotlib.lines import Line2D
 from openquake.vmtk.units import units
 from openquake.vmtk.plotter import plotter
 
-class modeller():
-    """
-    A class to model and analyze multi-degree-of-freedom (MDOF) oscillators using OpenSees.
 
-    This class provides functionality to create, analyze, and visualize structural models
-    for dynamic and static analyses, including gravity analysis, modal analysis, static
-    pushover analysis, cyclic pushover analysis, and nonlinear time-history analysis.
+class modeller:
+    """
+    A class to model and analyze multi-degree-of-freedom (MDOF)
+    oscillators using OpenSees.
+
+    This class provides functionality to create, analyze, and visualize
+    structural models for dynamic and static analyses, including gravity
+    analysis, modal analysis, static pushover analysis, cyclic pushover
+    analysis, and nonlinear time-history analysis.
 
     Attributes
     ----------
@@ -21,7 +26,7 @@ class modeller():
         List of storey heights in meters.
     floor_masses : list
         List of floor masses in tonnes.
-    storey_disps : np.array
+    storey_drifts : np.array
         Array of storey displacements (size = number of storeys, CapPoints).
     storey_forces : np.array
         Array of storey forces (size = number of storeys, CapPoints).
@@ -30,29 +35,77 @@ class modeller():
 
     Methods
     -------
-    __init__(number_storeys, storey_heights, floor_masses, storey_disps, storey_forces, degradation)
+    __init__(number_storeys, storey_heights, floor_masses, storey_drifts,
+             storey_forces, degradation)
         Initializes the modeller object and validates input parameters.
-    create_Pinching4_material(mat1Tag, mat2Tag, storey_forces, storey_disps, degradation)
+    self.create_Pinching4_material(
+        mat1Tag,
+        mat2Tag,
+        storey_forces,
+        storey_drifts,
+        self.degradation,
+    )
         Creates a Pinching4 material model for the MDOF oscillator.
+
     compile_model()
         Compiles and sets up the MDOF oscillator model in OpenSees.
+
     plot_model(display_info=True)
         Plots the 3D visualization of the OpenSees model.
-    do_gravity_analysis(nG=100, ansys_soe='UmfPack', constraints_handler='Transformation', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-6, init_iter=500, algorithm_type='Newton', integrator='LoadControl', analysis='Static')
+
+    do_gravity_analysis(nG=100, ansys_soe='UmfPack',
+        constraints_handler='Transformation', numberer='RCM',
+        test_type='NormDispIncr', init_tol=1.0e-6, init_iter=500,
+        algorithm_type='Newton', integrator='LoadControl',
+        analysis='Static')
         Performs gravity analysis on the MDOF system.
-    do_modal_analysis(num_modes=3, solver='-genBandArpack', doRayleigh=False, pFlag=False)
-        Performs modal analysis to determine natural frequencies and mode shapes.
-    do_spo_analysis(ref_disp, disp_scale_factor, push_dir, phi, pFlag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='EnergyIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton', save_animation_path)
+
+    do_modal_analysis(num_modes=3, solver='-genBandArpack',
+        doRayleigh=False, pFlag=False)
+        Performs modal analysis to determine natural frequencies and
+        mode shapes.
+
+    do_spo_analysis(ref_disp, disp_scale_factor, push_dir, phi,
+        pFlag=True, num_steps=200, ansys_soe='BandGeneral',
+        constraints_handler='Transformation', numberer='RCM',
+        test_type='EnergyIncr', init_tol=1.0e-5, init_iter=1000,
+        algorithm_type='KrylovNewton', save_animation_path)
         Performs static pushover analysis (SPO) on the MDOF system.
-    do_cpo_analysis(ref_disp, mu_levels, push_dir, dispIncr, pFlag=True, num_steps=200, ansys_soe='BandGeneral', constraints_handler='Transformation', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-5, init_iter=1000, algorithm_type='KrylovNewton', safe_animation_path)
+
+    do_cpo_analysis(ref_disp, mu_levels, push_dir, dispIncr,
+        pFlag=True, num_steps=200, ansys_soe='BandGeneral',
+        constraints_handler='Transformation', numberer='RCM',
+        test_type='NormDispIncr', init_tol=1.0e-5, init_iter=1000,
+        algorithm_type='KrylovNewton', safe_animation_path)
         Performs cyclic pushover analysis (CPO) on the MDOF system.
-    do_nrha_analysis(fnames, dt_gm, sf, t_max, dt_ansys, pFlag=True, xi=0.05, ansys_soe='BandGeneral', constraints_handler='Plain', numberer='RCM', test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50, algorithm_type='Newton', save_animation_path, drift_thresholds)
-        Performs nonlinear time-history analysis (NRHA) on the MDOF system.
-    do_incremental_dynamic_analysis(fnames, dt_gm, t_max, dt_ansys,target_drift=0.05, initial_sf = 0.1, hunt_step =2.0,max_fill_gap=0.2, max_runs =15, capping_drift = 0.10, xi=0.05, pFlag=False))
-        Performs nonlinear time-history analysis (NRHA) on the MDOF system.
+
+    do_nrha_analysis(fnames, dt_gm, sf, t_max, dt_ansys, pFlag=True,
+        xi=0.05, ansys_soe='BandGeneral',
+        constraints_handler='Plain', numberer='RCM',
+        test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50,
+        algorithm_type='Newton', save_animation_path,
+        drift_thresholds)
+        Performs nonlinear time-history analysis (NRHA) on the MDOF
+        system.
+
+    do_incremental_dynamic_analysis(fnames, dt_gm, t_max, dt_ansys,
+        target_drift=0.05, initial_sf=0.1, hunt_step=2.0,
+        max_fill_gap=0.2, max_runs=15, capping_drift=0.10,
+        xi=0.05, pFlag=False)
+        Performs incremental dynamic analysis (IDA) on the MDOF
+        system.
 
     """
-    def __init__(self, number_storeys, storey_heights, floor_masses, storey_disps, storey_forces, degradation):
+
+    def __init__(
+        self,
+        number_storeys,
+        storey_heights,
+        floor_masses,
+        storey_drifts,
+        storey_forces,
+        degradation,
+    ):
         """
         Initializes the modeller object and validates the input parameters.
 
@@ -60,163 +113,345 @@ class modeller():
         ----------
         number_storeys : int
             The number of storeys in the building model.
+
         storey_heights : list
             List of storey heights in meters (e.g., [2.5, 3.0]).
+
         floor_masses : list
             List of floor masses in tonnes (e.g., [1000, 1200]).
-        storey_disps : np.array
-            Array of storey displacements (size = number of storeys, CapPoints).
+
+        storey_drifts : np.array
+            Array of inter-storey displacements
+            (size = number of storeys, CapPoints).
+
         storey_forces : np.array
             Array of storey forces (size = number of storeys, CapPoints).
+
         degradation : bool
             Boolean to enable or disable hysteresis degradation.
 
         Raises
         ------
+        TypeError
+            If any input has an incorrect type.
+
         ValueError
-            If the number of entries in `storey_heights` or `floor_masses` does not match `number_storeys`.
+            If any input has an invalid value or inconsistent dimensions.
         """
 
-        ### Run tests on input parameters
-        if len(storey_heights)!=number_storeys or len(floor_masses)!=number_storeys:
-            raise ValueError('Number of entries exceed the number of storeys!')
+        # number_storeys check
+        if not isinstance(number_storeys, int) or number_storeys < 1:
+            raise ValueError("'number_storeys' must be a positive integer.")
+
+        # storey_heights check
+        if not hasattr(storey_heights, '__len__'):
+            raise TypeError("'storey_heights' must be a list or array.")
+        if len(storey_heights) != number_storeys:
+            raise ValueError(
+                f"'storey_heights' length ({len(storey_heights)}) "
+                f"must match 'number_storeys' ({number_storeys})."
+            )
+        if any(h <= 0 for h in storey_heights):
+            raise ValueError(
+                "All values in 'storey_heights' must be positive.")
+
+        # floor_masses check
+        if not hasattr(floor_masses, '__len__'):
+            raise TypeError("'floor_masses' must be a list or array.")
+        if len(floor_masses) != number_storeys:
+            raise ValueError(
+                f"'floor_masses' length ({len(floor_masses)}) "
+                f"must match 'number_storeys' ({number_storeys})."
+            )
+        if any(m <= 0 for m in floor_masses):
+            raise ValueError("All values in 'floor_masses' must be positive.")
+
+        # storey_drifts and storey_forces check
+        storey_drifts = np.atleast_2d(storey_drifts)
+        storey_forces = np.atleast_2d(storey_forces)
+
+        if storey_drifts.shape[0] != number_storeys:
+            raise ValueError(
+                f"'storey_drifts' must have {number_storeys} rows "
+                f"(one per storey), got {storey_drifts.shape[0]}."
+            )
+        if storey_forces.shape[0] != number_storeys:
+            raise ValueError(
+                f"'storey_forces' must have {number_storeys} rows "
+                f"(one per storey), got {storey_forces.shape[0]}."
+            )
+        if storey_drifts.shape != storey_forces.shape:
+            raise ValueError(
+                f"'storey_drifts' and 'storey_forces' must have "
+                f"the same shape, got {storey_drifts.shape} "
+                f"and {storey_forces.shape}."
+            )
+        cap_points = storey_drifts.shape[1]
+        if cap_points not in (2, 3, 4):
+            raise ValueError(
+                f"Each storey must have 2, 3, or 4 capacity points "
+                f"(bilinear/trilinear/quadrilinear), "
+                f"got {cap_points}."
+            )
+        if np.any(storey_drifts <= 0):
+            raise ValueError("All values in 'storey_drifts' must be positive.")
+        if np.any(storey_forces <= 0):
+            raise ValueError("All values in 'storey_forces' must be positive.")
+        for i in range(number_storeys):
+            if not np.all(np.diff(storey_drifts[i]) > 0):
+                raise ValueError(
+                    f"'storey_drifts' for storey {i + 1} must be "
+                    f"strictly increasing.")
+
+        # degradation check
+        if not isinstance(degradation, bool):
+            raise TypeError(
+                f"'degradation' must be a bool, "
+                f"got {type(degradation).__name__}.")
 
         self.number_storeys = number_storeys
-        self.storey_heights  = storey_heights
-        self.floor_masses   = floor_masses
-        self.storey_disps   = storey_disps
-        self.storey_forces  = storey_forces
-        self.degradation    = degradation
+        self.storey_heights = storey_heights
+        self.floor_masses = floor_masses
+        self.storey_drifts = storey_drifts
+        self.storey_forces = storey_forces
+        self.degradation = degradation
 
-
-    def create_Pinching4_material(self, mat1Tag, mat2Tag, storey_forces, storey_disps, degradation):
+    def create_Pinching4_material(
+        self,
+        mat1Tag,
+        mat2Tag,
+        storey_forces,
+        storey_drifts,
+        degradation,
+    ):
         """
-        Creates a Pinching4 material model for the multi-degree-of-freedom material object in stick model analysis.
+        Creates a Pinching4 material model for the multi-degree-of-freedom
+        material object in stick model analysis.
 
-        The Pinching4 material model is used to simulate hysteretic behavior in structures under dynamic loading,
-        including degradation if enabled. The method assigns the material properties to the building storeys based
+        The Pinching4 material model is used to simulate hysteretic behavior
+        in structures under dynamic loading,
+        including degradation if enabled. The method assigns the material
+        properties to the building storeys based
         on the given parameters.
 
         Parameters
         ----------
         mat1Tag : int
             Material tag for the first material in the Pinching4 model.
+
         mat2Tag : int
             Material tag for the second material in the Pinching4 model.
+
         storey_forces : np.array
             Array of storey forces at each storey in the model.
-        storey_disps : np.array
+
+        storey_drifts : np.array
             Array of storey displacements corresponding to the forces.
+
         degradation : bool
-            Boolean flag to enable or disable hysteresis degradation in the Pinching4 material model.
+            Boolean flag to enable or disable hysteresis degradation in the
+            Pinching4 material model.
 
         Returns
         -------
         None
-            This method does not return any value but modifies the internal material definitions for the model.
+            This method does not return any value but modifies the internal
+            material definitions for the model.
 
         References:
         -----------
-        1) Vamvatsikos D (2011) Software—earthquake, steel dynamics and probability, viewed January 2021.
-        http://users.ntua.gr/divamva/software.html
+        1) Vamvatsikos D (2011) Software—earthquake, steel dynamics and
+           probability, viewed January 2021.
+           http://users.ntua.gr/divamva/software.html
 
-        2) Martins, L., Silva, V., Crowley, H. et al. Vulnerability modellers toolkit, an open-source platform
-        for vulnerability analysis. Bull Earthquake Eng 19, 5691–5709 (2021). https://doi.org/10.1007/s10518-021-01187-w
+        2) Martins, L., Silva, V., Crowley, H. et al. Vulnerability
+           modellers toolkit, an open-source platform for vulnerability
+           analysis. Bull Earthquake Eng 19, 5691-5709 (2021).
+           https://doi.org/10.1007/s10518-021-01187-w
 
-        3) Minjie Zhu, Frank McKenna, Michael H. Scott, OpenSeesPy: Python library for the OpenSees finite element framework,
-        SoftwareX, Volume 7, 2018, Pages 6-11, ISSN 2352-7110, https://doi.org/10.1016/j.softx.2017.10.009.
-        (https://www.sciencedirect.com/science/article/pii/S2352711017300584)
+        3) Minjie Zhu, Frank McKenna, Michael H. Scott, OpenSeesPy: Python
+           library for the OpenSees finite element framework, SoftwareX,
+           Volume 7, 2018, Pages 6-11, ISSN 2352-7110,
+           https://doi.org/10.1016/j.softx.2017.10.009.
+           (https://www.sciencedirect.com/science/article/
+           pii/S2352711017300584)
 
         Notes
         -----
-        The `mat1Tag` and `mat2Tag` represent different materials used in the Pinching4 hysteretic model,
-        where the degradation flag controls the material's degradation behavior during the simulation.
+        The `mat1Tag` and `mat2Tag` represent different materials used in
+        the Pinching4 hysteretic model, where the degradation flag controls
+        the material's degradation behavior during the simulation.
         """
 
-        force=np.zeros([5,1])
-        disp =np.zeros([5,1])
+        force = np.zeros([5, 1])
+        disp = np.zeros([5, 1])
 
         # Bilinear
-        if len(storey_forces)==2:
-              #bilinear curve
-              force[1]=storey_forces[0]
-              force[4]=storey_forces[-1]
+        if len(storey_forces) == 2:
 
-              disp[1]=storey_disps[0]
-              disp[4]=storey_disps[-1]
-
-              disp[2]=disp[1]+(disp[4]-disp[1])/3
-              disp[3]=disp[1]+2*((disp[4]-disp[1])/3)
-
-              force[2]=np.interp(disp[2],storey_disps,storey_forces)
-              force[3]=np.interp(disp[3],storey_disps,storey_forces)
+            # Force values for bilinear curve are assigned based on the
+            # first and last points of the storey capacity curve
+            force[1] = storey_forces[0]
+            force[4] = storey_forces[-1]
+            # Displacement values for bilinear curve are assigned based on
+            # the first and last points of the storey capacity curve
+            disp[1] = storey_drifts[0]
+            disp[4] = storey_drifts[-1]
+            # Intermediate disp points: divide range into 3 equal parts
+            disp[2] = disp[1] + (disp[4] - disp[1]) / 3
+            disp[3] = disp[1] + 2 * ((disp[4] - disp[1]) / 3)
+            # Interpolate forces at intermediate displacement points
+            force[2] = np.interp(disp[2], storey_drifts, storey_forces)
+            force[3] = np.interp(disp[3], storey_drifts, storey_forces)
 
         # Trilinear
-        elif len(storey_forces)==3:
+        elif len(storey_forces) == 3:
 
-              force[1]=storey_forces[0]
-              force[4]=storey_forces[-1]
-
-              disp[1]=storey_disps[0]
-              disp[4]=storey_disps[-1]
-
-              force[2]=storey_forces[1]
-              disp[2] =storey_disps[1]
-
-              disp[3]=np.mean([disp[2],disp[-1]])
-              force[3]=np.interp(disp[3],storey_disps,storey_forces)
+            # Force values: first, last, and second point of curve
+            force[1] = storey_forces[0]
+            force[4] = storey_forces[-1]
+            # Displacement values: first and last points of curve
+            disp[1] = storey_drifts[0]
+            disp[4] = storey_drifts[-1]
+            # First intermediate point: second capacity curve point
+            force[2] = storey_forces[1]
+            disp[2] = storey_drifts[1]
+            # Second intermediate: midpoint between pt2 and end
+            disp[3] = np.mean([disp[2], disp[-1]])
+            force[3] = np.interp(disp[3], storey_drifts, storey_forces)
 
         # Quadrilinear
-        elif len(storey_forces)==4:
-              force[1]=storey_forces[0]
-              force[4]=storey_forces[-1]
+        elif len(storey_forces) == 4:
 
-              disp[1]=storey_disps[0]
-              disp[4]=storey_disps[-1]
+            # Force values: first and last points of capacity curve
+            force[1] = storey_forces[0]
+            force[4] = storey_forces[-1]
+            # Displacement values: first and last points of curve
+            disp[1] = storey_drifts[0]
+            disp[4] = storey_drifts[-1]
+            # First intermediate point: second capacity curve point
+            force[2] = storey_forces[1]
+            disp[2] = storey_drifts[1]
+            # Second intermediate point: third capacity curve point
+            force[3] = storey_forces[2]
+            disp[3] = storey_drifts[2]
 
-              force[2]=storey_forces[1]
-              disp[2]=storey_disps[1]
-
-              force[3]=storey_forces[2]
-              disp[3]=storey_disps[2]
-
-        if degradation==True:
-            matargs=[force[1,0],disp[1,0],force[2,0],disp[2,0],force[3,0],disp[3,0],force[4,0],disp[4,0],
-                                 -1*force[1,0],-1*disp[1,0],-1*force[2,0],-1*disp[2,0],-1*force[3,0],-1*disp[3,0],-1*force[4,0],-1*disp[4,0],
-                                 0.5,0.25,0.05,
-                                 0.5,0.25,0.05,
-                                 0,0.1,0,0,0.2,
-                                 0,0.1,0,0,0.2,
-                                 0,0.4,0,0.4,0.9,
-                                 10,'energy']
+        if degradation is True:
+            matargs = [
+                force[1, 0],
+                disp[1, 0],
+                force[2, 0],
+                disp[2, 0],
+                force[3, 0],
+                disp[3, 0],
+                force[4, 0],
+                disp[4, 0],
+                -1 * force[1, 0],
+                -1 * disp[1, 0],
+                -1 * force[2, 0],
+                -1 * disp[2, 0],
+                -1 * force[3, 0],
+                -1 * disp[3, 0],
+                -1 * force[4, 0],
+                -1 * disp[4, 0],
+                0.5,
+                0.25,
+                0.05,
+                0.5,
+                0.25,
+                0.05,
+                0,
+                0.1,
+                0,
+                0,
+                0.2,
+                0,
+                0.1,
+                0,
+                0,
+                0.2,
+                0,
+                0.4,
+                0,
+                0.4,
+                0.9,
+                10,
+                "energy",
+            ]
         else:
-            matargs=[force[1,0],disp[1,0],force[2,0],disp[2,0],force[3,0],disp[3,0],force[4,0],disp[4,0],
-                                 -1*force[1,0],-1*disp[1,0],-1*force[2,0],-1*disp[2,0],-1*force[3,0],-1*disp[3,0],-1*force[4,0],-1*disp[4,0],
-                                 0.5,0.25,0.05,
-                                 0.5,0.25,0.05,
-                                 0,0,0,0,0,
-                                 0,0,0,0,0,
-                                 0,0,0,0,0,
-                                 10,'energy']
+            matargs = [
+                force[1, 0],
+                disp[1, 0],
+                force[2, 0],
+                disp[2, 0],
+                force[3, 0],
+                disp[3, 0],
+                force[4, 0],
+                disp[4, 0],
+                -1 * force[1, 0],
+                -1 * disp[1, 0],
+                -1 * force[2, 0],
+                -1 * disp[2, 0],
+                -1 * force[3, 0],
+                -1 * disp[3, 0],
+                -1 * force[4, 0],
+                -1 * disp[4, 0],
+                0.5,
+                0.25,
+                0.05,
+                0.5,
+                0.25,
+                0.05,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                10,
+                "energy",
+            ]
 
-        ops.uniaxialMaterial('Pinching4', mat1Tag,*matargs)
-        ops.uniaxialMaterial('MinMax', mat2Tag, mat1Tag, '-min', -1*disp[-1,0], '-max', disp[-1,0])
+        # Create the Pinching4 material in OpenSees with the defined parameters
+        ops.uniaxialMaterial("Pinching4", mat1Tag, *matargs)
+        # Create a MinMax material in OpenSees to define the limits of the
+        # hysteretic behavior based on the maximum positive and negative
+        # displacements, ensuring that the material response is constrained
+        # within these bounds during the analysis
+        ops.uniaxialMaterial(
+            "MinMax", mat2Tag, mat1Tag, "-min", -1 * disp[-1, 0], "-max",
+            disp[-1, 0]
+        )
 
     def compile_model(self):
         """
-        Compiles and sets up the multi-degree-of-freedom (MDOF) oscillator model in OpenSees.
+        Compiles and sets up the multi-degree-of-freedom (MDOF) oscillator
+        model in OpenSees.
 
-        This method constructs the model by defining nodes, assigning masses, imposing boundary conditions,
-        and creating elements with associated material models for each storey in the building structure.
-        It also defines rigid elastic materials for restrained degrees of freedom and nonlinear materials
-        for unrestrained degrees of freedom. The method finally assembles the model for dynamic analysis.
+        This method constructs the model by defining nodes, assigning masses,
+        imposing boundary conditions, and creating elements with associated
+        material models for each storey in the building structure.
+        It also defines rigid elastic materials for restrained degrees of
+        freedom and nonlinear materials
+        for unrestrained degrees of freedom. The method finally assembles
+        the model for dynamic analysis.
 
         The process involves:
         1. Initializing the OpenSees model.
         2. Creating base and floor nodes.
         3. Assigning masses and degrees of freedom.
         4. Applying boundary conditions for the nodes.
-        5. Creating zero-length elements for each storey with their respective material properties.
+        5. Creating zero-length elements for each storey with their
+           respective material properties.
 
         Parameters
         ----------
@@ -228,80 +463,115 @@ class modeller():
 
         Notes
         -----
-        - The method uses OpenSees' `ops.node`, `ops.mass`, and `ops.element` to define nodes, masses,
-          and zero-length elements for the MDOF oscillator.
-        - Boundary conditions are applied with the base node being fully fixed, while the upper storeys
-          have horizontal degrees of freedom released.
-        - The material model used for each storey is a Pinching4 hysteretic model, created by the
-          `create_Pinching4_material` method.
+        - The method uses OpenSees' `ops.node`, `ops.mass`, and `ops.element`
+          to define nodes, masses, and zero-length elements for the MDOF
+          oscillator.
+        - Boundary conditions are applied with the base node being fully
+          fixed, while the upper storeys have horizontal degrees of freedom
+          released.
+        - The material model used for each storey is a Pinching4 hysteretic
+          model, created by the `create_Pinching4_material` method.
         """
 
+        # Set model builder
+        ops.wipe()  # wipe existing model
+        ops.model("basic", "-ndm", 3, "-ndf", 6)
 
-        ### Set model builder
-        ops.wipe() # wipe existing model
-        ops.model('basic', '-ndm', 3, '-ndf', 6)
-
-        ### Define base node (tag = 0)
+        # Define base node (tag = 0)
         ops.node(0, *[0.0, 0.0, 0.0])
 
-        ### Define floor nodes (tag = 1+)
+        # Define floor nodes (tag = 1+)
         current_height = 0.0
 
-        # Use range based on the length of heights to ensure we never go out of bounds
+        # Use range based on the length of heights to ensure we never
+        # go out of bounds
         for i in range(len(self.storey_heights)):
-            nodeTag = i + 1 # Nodes will be 1, 2, 3...
 
+            # Node tags start from 1 for the first floor node
+            nodeTag = i + 1
+            # Accumulate storey height to get current node elevation
             current_height += self.storey_heights[i]
+            # Assign the corresponding floor mass for the current node
             current_mass = self.floor_masses[i]
-
+            # Define node coordinates (X, Y, Z) with Z being the current height
             coords = [0.0, 0.0, current_height]
             # Assign mass to X and Y translations
             masses = [current_mass, current_mass, 1e-9, 1e-9, 1e-9, 1e-9]
-
+            # Create the node and assign mass
             ops.node(nodeTag, *coords)
             ops.mass(nodeTag, *masses)
 
         # Update number_storeys to match the actual number of nodes created
         self.number_storeys = len(self.storey_heights)
 
-        ### Get list of model nodes
+        # Get list of model nodes
         nodeList = ops.getNodeTags()
-        ### Impose boundary conditions
+        # Impose boundary conditions
         for i in nodeList:
             # fix the base node against all DOFs
-            if i==0:
-                ops.fix(i,1,1,1,1,1,1)
+            if i == 0:
+                ops.fix(i, 1, 1, 1, 1, 1, 1)
             # release the horizontal DOFs (1,2) and fix remaining
             else:
-                ops.fix(i,0,0,1,1,1,1)
+                ops.fix(i, 0, 0, 1, 1, 1, 1)
 
-        ### Get number of zerolength elements required
+        # Get number of zerolength elements required
         nodeList = ops.getNodeTags()
 
         for i in range(self.number_storeys):
 
-            ### define the material tag associated with each storey
-            mat1Tag = int(f'1{i}00') # hysteretic material tag
-            mat2Tag = int(f'1{i}01') # min-max material tag
+            # Define the material tag associated with each storey
+            mat1Tag = int(f"1{i}00")  # hysteretic material tag
+            mat2Tag = int(f"1{i}01")  # min-max material tag
 
-            ### get the backbone curve definition
-            current_storey_disps = self.storey_disps[i,:].tolist() # deformation capacity (i.e., storey displacement in m)
-            current_storey_forces = self.storey_forces[i,:].tolist() # strength capacity (i.e., storey base shear in kN)
+            # Extract backbone curve (drifts and forces) for this storey
+            current_storey_drifts = self.storey_drifts[
+                i, :
+            ].tolist()
+            current_storey_forces = self.storey_forces[
+                i, :
+            ].tolist()
 
-            ### Create rigid elastic materials for the restrained dofs
-            rigM = int(f'1{i}02')
-            ops.uniaxialMaterial('Elastic', rigM, 1e16)
+            # Create rigid elastic materials for the restrained dofs
+            rigM = int(f"1{i}02")
+            ops.uniaxialMaterial("Elastic", rigM, 1e16)
 
-            ### Create the nonlinear material for the unrestrained dofs
-            self.create_Pinching4_material(mat1Tag, mat2Tag, current_storey_forces, current_storey_disps, self.degradation)
+            # Create the nonlinear material for the unrestrained dofs
+            self.create_Pinching4_material(
+                mat1Tag,
+                mat2Tag,
+                current_storey_forces,
+                current_storey_drifts,
+                self.degradation,
+            )
 
-            ### Define element connectivity
-            eleTag = int(f'200{i}')
-            eleNodes = [i, i+1]
+            # Define element connectivity
+            eleTag = int(f"200{i}")
+            eleNodes = [i, i + 1]
 
-            ### Create the element
-            ops.element('zeroLength', eleTag, eleNodes[0], eleNodes[1], '-mat', mat2Tag, mat2Tag, rigM, rigM, rigM, rigM, '-dir', 1, 2, 3, 4, 5, 6, '-doRayleigh', 1)
-
+            # Create the element
+            ops.element(
+                "zeroLength",
+                eleTag,
+                eleNodes[0],
+                eleNodes[1],
+                "-mat",
+                mat2Tag,
+                mat2Tag,
+                rigM,
+                rigM,
+                rigM,
+                rigM,
+                "-dir",
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                "-doRayleigh",
+                1,
+            )
 
     def plot_model(self, pFlag=True, export_path=None):
         """
@@ -320,179 +590,286 @@ class modeller():
             If True, the plot is processed (saved/shown).
 
         export_path : str, optional
-            Full path including filename to save the plot. Creates directories if missing.
+            Full path including filename to save the plot.
+            Creates directories if missing.
 
         Returns
         -------
         None
         """
-        import matplotlib.lines as mlines
-        from matplotlib.lines import Line2D
 
-        # ── Collect data from OpenSees domain ────────────────────────────────
-        nodeList    = ops.getNodeTags()
+        # Get list of model nodes to extract their coordinates and masses
+        # for plotting
+        nodeList = ops.getNodeTags()
         NodeCoordListZ, NodeMassList = [], []
         for tag in nodeList:
             NodeCoordListZ.append(ops.nodeCoord(tag, 3))
             NodeMassList.append(ops.nodeMass(tag, 1))
 
-        n_st    = self.number_storeys
+        n_st = self.number_storeys
         total_h = max(NodeCoordListZ)
 
-        # ── Colours ───────────────────────────────────────────────────────────
-        COL_BASE   = '#B71C1C'
-        COL_NODE   = '#1565C0'
-        COL_ANN    = '#37474F'
-        COL_GRID   = '#EBEBEB'
-        COL_SPRING = '#546E7A'
-        BG         = 'white'
-        s_colors   = [plt.cm.tab10(i % 10) for i in range(n_st)]
+        # Define colors for different plot elements
+        COL_BASE = "#B71C1C"
+        COL_NODE = "#1565C0"
+        COL_ANN = "#37474F"
+        COL_GRID = "#EBEBEB"
+        COL_SPRING = "#546E7A"
+        BG = "white"
+        s_colors = [plt.cm.tab10(i % 10) for i in range(n_st)]
 
-        # ── Spring drawing helper ─────────────────────────────────────────────
+        # Custom function to draw zigzag spring symbols representing the
+        # zero-length Pinching4 elements
         def _draw_spring(ax, x, z_bot, z_top, color, n_teeth=6, width=0.06):
-            pad   = (z_top - z_bot) * 0.15
+            pad = (z_top - z_bot) * 0.15
             n_pts = n_teeth * 2 + 1
-            zs    = np.linspace(z_bot + pad, z_top - pad, n_pts)
-            xs    = np.empty(n_pts)
-            xs[0] = x; xs[-1] = x
+            zs = np.linspace(z_bot + pad, z_top - pad, n_pts)
+            xs = np.empty(n_pts)
+            xs[0] = x
+            xs[-1] = x
             for k in range(1, n_pts - 1):
                 xs[k] = x + width if k % 2 == 1 else x - width
-            ax.plot([x, x], [z_bot, z_bot + pad], color=color, lw=1.5, zorder=3)
-            ax.plot([x, x], [z_top - pad, z_top], color=color, lw=1.5, zorder=3)
-            ax.plot(xs, zs, color=color, lw=1.5, zorder=3,
-                    solid_capstyle='round', solid_joinstyle='round')
+            ax.plot([x, x], [z_bot, z_bot + pad],
+                    color=color, lw=1.5, zorder=3)
+            ax.plot([x, x], [z_top - pad, z_top],
+                    color=color, lw=1.5, zorder=3)
+            ax.plot(
+                xs,
+                zs,
+                color=color,
+                lw=1.5,
+                zorder=3,
+                solid_capstyle="round",
+                solid_joinstyle="round",
+            )
 
-        # ── Custom legend handler that draws a zigzag spring icon ─────────────
+        # Custom legend handler that draws a zigzag spring icon for the
+        # zero-length Pinching4 elements in the legend box, ensuring that
+        # the legend accurately represents the spring symbols used in the
+        # node elevation diagram, enhancing the clarity and visual appeal of
+        # the plot while maintaining consistency with the overall design and
+        # color scheme
         class _SpringHandler:
             def legend_artist(self, legend, orig_handle, fontsize, handlebox):
                 x0, y0 = handlebox.xdescent, handlebox.ydescent
-                w, h   = handlebox.width, handlebox.height
-                n      = 4; n_pts = n * 2 + 1
-                xs_l   = np.linspace(x0 + 2, x0 + w - 2, n_pts)
-                ys_l   = np.empty(n_pts)
-                cy     = y0 + h / 2; amp = h * 0.38
-                ys_l[0] = cy; ys_l[-1] = cy
+                w, h = handlebox.width, handlebox.height
+                n = 4
+                n_pts = n * 2 + 1
+                xs_l = np.linspace(x0 + 2, x0 + w - 2, n_pts)
+                ys_l = np.empty(n_pts)
+                cy = y0 + h / 2
+                amp = h * 0.38
+                ys_l[0] = cy
+                ys_l[-1] = cy
                 for k in range(1, n_pts - 1):
                     ys_l[k] = cy + amp if k % 2 == 1 else cy - amp
-                line = mlines.Line2D(xs_l, ys_l, color=COL_SPRING, lw=1.5,
-                                     solid_capstyle='round',
-                                     solid_joinstyle='round')
+                line = mlines.Line2D(
+                    xs_l,
+                    ys_l,
+                    color=COL_SPRING,
+                    lw=1.5,
+                    solid_capstyle="round",
+                    solid_joinstyle="round",
+                )
                 handlebox.add_artist(line)
                 return line
 
-        # ── Figure ────────────────────────────────────────────────────────────
+        # Create the figure and axes for the two subplots, setting the
+        # background color and defining the layout with specified width
+        # ratios to ensure that the node elevation diagram and
+        # force-deformation backbones are visually balanced and clearly
+        # distinguishable, while maintaining a cohesive color scheme
+        # throughout the plot
         fig, (ax1, ax2) = plt.subplots(
-            1, 2, figsize=(10, 6),
-            gridspec_kw={'width_ratios': [1, 2.2]})
+            1, 2, figsize=(10, 6), gridspec_kw={"width_ratios": [1, 2.2]}
+        )
         fig.patch.set_facecolor(BG)
         ax1.set_facecolor(BG)
         ax2.set_facecolor(BG)
 
-        # ═════════════════════════════════════════════════════════════════════
-        # LEFT — node elevation diagram
-        # ═════════════════════════════════════════════════════════════════════
         col_x = 0.0
 
         for i in range(n_st):
-            _draw_spring(ax1, col_x,
-                         NodeCoordListZ[i], NodeCoordListZ[i + 1],
-                         COL_SPRING)
+            _draw_spring(
+                ax1, col_x,
+                NodeCoordListZ[i], NodeCoordListZ[i + 1],
+                COL_SPRING
+            )
 
         for i, (z, m) in enumerate(zip(NodeCoordListZ, NodeMassList)):
-            mk = 's' if i == 0 else 'o'
+            mk = "s" if i == 0 else "o"
             co = COL_BASE if i == 0 else COL_NODE
             sz = 160 if i == 0 else 120
-            ax1.scatter(col_x, z, s=sz, marker=mk, color=co,
-                        edgecolors='white', linewidths=1.2, zorder=5)
-            ax1.plot([col_x + 0.02, col_x + 0.09], [z, z],
-                     lw=0.7, color='#B0BEC5', zorder=1)
-            ax1.text(col_x + 0.11, z,
-                     f'Node {i}   z = {z:.2f} m   m = {m:.3f} t',
-                     fontsize=7, color=COL_ANN,
-                     va='center', ha='left', fontfamily='monospace')
+            ax1.scatter(
+                col_x,
+                z,
+                s=sz,
+                marker=mk,
+                color=co,
+                edgecolors="white",
+                linewidths=1.2,
+                zorder=5,
+            )
+            ax1.plot(
+                [col_x + 0.02, col_x + 0.09], [z, z],
+                lw=0.7, color="#B0BEC5", zorder=1
+            )
+            ax1.text(
+                col_x + 0.11,
+                z,
+                f"Node {i}   z = {z:.2f} m   m = {m:.3f} t",
+                fontsize=7,
+                color=COL_ANN,
+                va="center",
+                ha="left",
+                fontfamily="monospace",
+            )
 
-        # ── Storey brackets (left of spring) ─────────────────────────────────
-        bx_st = -0.12   # vertical bar of individual storey brackets
+        # Storey brackets (left of spring)
+        bx_st = -0.12  # vertical bar of individual storey brackets
         for i in range(n_st):
-            z_bot = NodeCoordListZ[i]; z_top = NodeCoordListZ[i + 1]
-            z_mid = (z_bot + z_top) / 2.0; sh = z_top - z_bot
-            ax1.plot([bx_st - 0.03, bx_st], [z_bot, z_bot], lw=0.7, color='#90A4AE')
-            ax1.plot([bx_st - 0.03, bx_st], [z_top, z_top], lw=0.7, color='#90A4AE')
-            ax1.plot([bx_st - 0.03, bx_st - 0.03], [z_bot, z_top],
-                     lw=0.7, color='#90A4AE')
-            ax1.text(bx_st - 0.05, z_mid, f'{sh:.2f} m',
-                     fontsize=6, color='#90A4AE', ha='right', va='center')
+            z_bot = NodeCoordListZ[i]
+            z_top = NodeCoordListZ[i + 1]
+            z_mid = (z_bot + z_top) / 2.0
+            sh = z_top - z_bot
+            ax1.plot([bx_st - 0.03, bx_st], [z_bot, z_bot],
+                     lw=0.7, color="#90A4AE")
+            ax1.plot([bx_st - 0.03, bx_st], [z_top, z_top],
+                     lw=0.7, color="#90A4AE")
+            ax1.plot(
+                [bx_st - 0.03, bx_st - 0.03], [z_bot, z_top],
+                lw=0.7, color="#90A4AE"
+            )
+            ax1.text(
+                bx_st - 0.05,
+                z_mid,
+                f"{sh:.2f} m",
+                fontsize=6,
+                color="#90A4AE",
+                ha="right",
+                va="center",
+            )
 
-        # ── Element ID labels (right of spring) ───────────────────────────────
+        # Element ID labels (right of spring)
         ele_list = ops.getEleTags()
         for i in range(n_st):
             z_mid = (NodeCoordListZ[i] + NodeCoordListZ[i + 1]) / 2.0
             ele_id = ele_list[i] if i < len(ele_list) else i
-            ax1.text(col_x + 0.09, z_mid,
-                     f'Ele. {ele_id}',
-                     fontsize=6.5, color=COL_SPRING,
-                     ha='left', va='center', style='italic')
+            ax1.text(
+                col_x + 0.09,
+                z_mid,
+                f"Ele. {ele_id}",
+                fontsize=6.5,
+                color=COL_SPRING,
+                ha="left",
+                va="center",
+                style="italic",
+            )
 
-        # axis styling
-        for sp in ['top', 'right', 'bottom']:
+        # Axis styling
+        for sp in ["top", "right", "bottom"]:
             ax1.spines[sp].set_visible(False)
-        ax1.spines['left'].set_color('#90A4AE')
-        ax1.spines['left'].set_linewidth(0.8)
+        ax1.spines["left"].set_color("#90A4AE")
+        ax1.spines["left"].set_linewidth(0.8)
         ax1.set_xticks([])
         ax1.set_xlim(-0.40, 1.45)
         ax1.set_ylim(0, total_h + 0.5)
-        ax1.set_ylabel('Height,  z  [m]', fontsize=9, fontweight='bold',
-                       color=COL_ANN, labelpad=6)
-        ax1.tick_params(axis='y', labelsize=8, colors=COL_ANN)
-        ax1.set_title('Node Positions', fontsize=10, fontweight='bold',
-                      color='#1A237E', pad=8)
+        ax1.set_ylabel(
+            "Height,  z  [m]",
+            fontsize=9, fontweight="bold", color=COL_ANN, labelpad=6
+        )
+        ax1.tick_params(axis="y", labelsize=8, colors=COL_ANN)
+        ax1.set_title(
+            "Node Positions",
+            fontsize=10, fontweight="bold", color="#1A237E", pad=8
+        )
 
-        # ═════════════════════════════════════════════════════════════════════
-        # RIGHT — storey force-deformation backbones
-        # ═════════════════════════════════════════════════════════════════════
         ax2.grid(True, color=COL_GRID, linewidth=0.7, zorder=0)
         ax2.set_axisbelow(True)
 
         for i in range(n_st):
-            d  = np.concatenate(([0.0], self.storey_disps[i, :]))
-            f  = np.concatenate(([0.0], self.storey_forces[i, :]))
+            d = np.concatenate(([0.0], self.storey_drifts[i, :]))
+            f = np.concatenate(([0.0], self.storey_forces[i, :]))
             sc = s_colors[i]
-            ax2.plot(d, f, color=sc, lw=1.8, zorder=3,
-                     label=f'Storey {i + 1}', solid_capstyle='round')
-            ax2.scatter(d[1:], f[1:], color=sc, s=25, zorder=4,
-                        edgecolors='white', linewidths=0.6)
+            ax2.plot(
+                d,
+                f,
+                color=sc,
+                lw=1.8,
+                zorder=3,
+                label=f"Storey {i + 1}",
+                solid_capstyle="round",
+            )
+            ax2.scatter(
+                d[1:],
+                f[1:],
+                color=sc,
+                s=25,
+                zorder=4,
+                edgecolors="white",
+                linewidths=0.6,
+            )
 
-        for sp in ['top', 'right']:
+        for sp in ["top", "right"]:
             ax2.spines[sp].set_visible(False)
-        ax2.spines['left'].set_color(COL_ANN)
-        ax2.spines['left'].set_linewidth(1.0)
-        ax2.spines['bottom'].set_color(COL_ANN)
-        ax2.spines['bottom'].set_linewidth(1.0)
+        ax2.spines["left"].set_color(COL_ANN)
+        ax2.spines["left"].set_linewidth(1.0)
+        ax2.spines["bottom"].set_color(COL_ANN)
+        ax2.spines["bottom"].set_linewidth(1.0)
 
         ax2.set_xlim(left=0)
         ax2.set_ylim(bottom=0)
-        ax2.set_xlabel('Storey Drift Capacity,  \u03b4\u1d62  [m]',
-                       fontsize=9, fontweight='bold', color=COL_ANN, labelpad=7)
-        ax2.set_ylabel('Storey Shear Force,  V\u1d62  [kN]',
-                       fontsize=9, fontweight='bold', color=COL_ANN, labelpad=7)
+        ax2.set_xlabel(
+            "Storey Drift Capacity,  \u03b4\u1d62  [m]",
+            fontsize=9,
+            fontweight="bold",
+            color=COL_ANN,
+            labelpad=7,
+        )
+        ax2.set_ylabel(
+            "Storey Shear Force,  V\u1d62  [kN]",
+            fontsize=9,
+            fontweight="bold",
+            color=COL_ANN,
+            labelpad=7,
+        )
         ax2.tick_params(labelsize=8, colors=COL_ANN)
-        ax2.set_title('Storey Force\u2013Deformation Relationships',
-                      fontsize=10, fontweight='bold', color='#1A237E', pad=8)
+        ax2.set_title(
+            "Storey Force\u2013Deformation Relationships",
+            fontsize=10,
+            fontweight="bold",
+            color="#1A237E",
+            pad=8,
+        )
 
-        # ── Legends — same vertical level below each panel ────────────────────
-        spring_handle = Line2D([], [], color=COL_SPRING, lw=1.5,
-                               label='Zero-length spring')
+        # Legends: same vertical level below each panel
+        spring_handle = Line2D(
+            [], [], color=COL_SPRING, lw=1.5, label="Zero-length spring"
+        )
         handles1 = [
-            Line2D([0], [0], marker='s', color='w',
-                   markerfacecolor=COL_BASE, markersize=7,
-                   label='Fixed base node'),
-            Line2D([0], [0], marker='o', color='w',
-                   markerfacecolor=COL_NODE, markersize=7,
-                   label='Floor node'),
+            Line2D(
+                [0],
+                [0],
+                marker="s",
+                color="w",
+                markerfacecolor=COL_BASE,
+                markersize=7,
+                label="Fixed base node",
+            ),
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor=COL_NODE,
+                markersize=7,
+                label="Floor node",
+            ),
             spring_handle,
         ]
         handles2 = [
-            Line2D([0], [0], color=s_colors[i], lw=1.8, label=f'Storey {i + 1}')
+            Line2D([0], [0], color=s_colors[i],
+                   lw=1.8, label=f"Storey {i + 1}")
             for i in range(n_st)
         ]
 
@@ -500,28 +877,45 @@ class modeller():
         plt.subplots_adjust(bottom=0.16)
         fig.canvas.draw()
 
-        p1    = ax1.get_position()
-        p2    = ax2.get_position()
+        p1 = ax1.get_position()
+        p2 = ax2.get_position()
         leg_y = 0.01
 
-        fig.legend(handles=handles1,
-                   handler_map={spring_handle: _SpringHandler()},
-                   fontsize=7.5, ncol=3, loc='lower center',
-                   bbox_to_anchor=(p1.x0 + p1.width / 2, leg_y),
-                   bbox_transform=fig.transFigure,
-                   framealpha=0.95, edgecolor='#CFD8DC',
-                   borderpad=0.6, handletextpad=0.4)
-        fig.legend(handles=handles2,
-                   fontsize=7.5, ncol=min(n_st, 5), loc='lower center',
-                   bbox_to_anchor=(p2.x0 + p2.width / 2, leg_y),
-                   bbox_transform=fig.transFigure,
-                   framealpha=0.95, edgecolor='#CFD8DC',
-                   borderpad=0.6, handletextpad=0.4)
+        fig.legend(
+            handles=handles1,
+            handler_map={spring_handle: _SpringHandler()},
+            fontsize=7.5,
+            ncol=3,
+            loc="lower center",
+            bbox_to_anchor=(p1.x0 + p1.width / 2, leg_y),
+            bbox_transform=fig.transFigure,
+            framealpha=0.95,
+            edgecolor="#CFD8DC",
+            borderpad=0.6,
+            handletextpad=0.4,
+        )
+        fig.legend(
+            handles=handles2,
+            fontsize=7.5,
+            ncol=min(n_st, 5),
+            loc="lower center",
+            bbox_to_anchor=(p2.x0 + p2.width / 2, leg_y),
+            bbox_transform=fig.transFigure,
+            framealpha=0.95,
+            edgecolor="#CFD8DC",
+            borderpad=0.6,
+            handletextpad=0.4,
+        )
 
-        # ── Super-title ───────────────────────────────────────────────────────
-        label = 'SDOF Oscillator' if n_st == 1 else f'{n_st}-Storey MDOF'
-        fig.suptitle(f'OpenSees {label}  \u2014  Stick-and-Mass Model',
-                     fontsize=11, fontweight='bold', color='#1A237E', y=1.01)
+        # Super-title
+        label = "SDOF Oscillator" if n_st == 1 else f"{n_st}-Storey MDOF"
+        fig.suptitle(
+            f"OpenSees {label}  \u2014  Stick-and-Mass Model",
+            fontsize=11,
+            fontweight="bold",
+            color="#1A237E",
+            y=1.01,
+        )
 
         # Save or Show
         if pFlag:
@@ -536,25 +930,30 @@ class modeller():
         else:
             plt.close()
 
-##########################################################################
-#                             ANALYSIS MODULES                           #
-##########################################################################
-    def do_gravity_analysis(self, nG=100,
-                            ansys_soe='UmfPack',
-                            constraints_handler='Transformation',
-                            numberer='RCM',
-                            test_type='NormDispIncr',
-                            init_tol = 1.0e-6,
-                            init_iter = 500,
-                            algorithm_type='Newton' ,
-                            integrator='LoadControl',
-                            analysis='Static'):
+    ##########################################################################
+    #                             ANALYSIS MODULES                           #
+    ##########################################################################
+    def do_gravity_analysis(
+        self,
+        nG=100,
+        ansys_soe="UmfPack",
+        constraints_handler="Transformation",
+        numberer="RCM",
+        test_type="NormDispIncr",
+        init_tol=1.0e-6,
+        init_iter=500,
+        algorithm_type="Newton",
+        integrator="LoadControl",
+        analysis="Static",
+    ):
         """
-        Perform a gravity analysis on a multi-degree-of-freedom (MDOF) system in OpenSees.
+        Perform a gravity analysis on a multi-degree-of-freedom
+        (MDOF) system in OpenSees.
 
-        This method sets up and runs a gravity analysis using specified parameters for various analysis objects
-        in OpenSees. The gravity analysis solves for the static equilibrium of the system under self-weight loads
-        (e.g., gravity loads).
+        This method sets up and runs a gravity analysis using specified
+        parameters for various analysis objects in OpenSees. The gravity
+        analysis solves for the static equilibrium of the system under
+        self-weight loads (e.g., gravity loads).
 
         Parameters
         ----------
@@ -562,40 +961,53 @@ class modeller():
             Number of gravity analysis steps to perform. Default is 100.
 
         ansys_soe: string, optional
-            The system of equations type to be used in the analysis. This defines how the system of equations
-            will be solved. Default is 'UmfPack' (sparse direct solver).
+            The system of equations type to be used in the analysis.
+            This defines how the system of equations will be solved.
+            Default is 'UmfPack' (sparse direct solver).
 
         constraints_handler: string, optional
-            The constraints handler determines how the constraint equations are enforced in the analysis.
-            It controls the enforcement of specified values for degrees-of-freedom (DOFs) or relationships
-            between them. Default is 'Transformation' (transforming the constrained DOFs into active ones).
+            The constraints handler determines how the constraint
+            equations are enforced in the analysis. It controls the
+            enforcement of specified values for degrees-of-freedom
+            (DOFs) or relationships between them. Default is
+            'Transformation' (transforming the constrained DOFs into
+            active ones).
 
         numberer: string, optional
-            The degree-of-freedom numberer defines how DOFs are numbered. This is important for system
-            efficiency in solving. Default is 'RCM' (Reverse Cuthill-McKee, a reordering algorithm).
+            The degree-of-freedom numberer defines how DOFs are
+            numbered. This is important for system efficiency in
+            solving. Default is 'RCM' (Reverse Cuthill-McKee, a
+            reordering algorithm).
 
         test_type: string, optional
-            Defines the test type used to check the convergence of the solution. It is used in constructing
-            the LinearSOE and LinearSolver objects. Default is 'NormDispIncr' (norm of displacement increment).
+            Defines the test type used to check the convergence of the
+            solution. It is used in constructing the LinearSOE and
+            LinearSolver objects. Default is 'NormDispIncr' (norm of
+            displacement increment).
 
         init_tol: float, optional
-            The tolerance criterion for checking convergence. A smaller value means stricter convergence.
-            Default is 1.0e-6.
+            The tolerance criterion for checking convergence. A smaller
+            value means stricter convergence. Default is 1.0e-6.
 
         init_iter: int, optional
-            The maximum number of iterations to check for convergence. Default is 500.
+            The maximum number of iterations to check for convergence.
+            Default is 500.
 
         algorithm_type: string, optional
-            Defines the solution algorithm used in the analysis. Common options are 'Newton' (Newton-Raphson)
-            for solving the system of equations. Default is 'Newton'.
+            Defines the solution algorithm used in the analysis. Common
+            options are 'Newton' (Newton-Raphson) for solving the
+            system of equations. Default is 'Newton'.
 
         integrator: string, optional
-            Defines the integrator for the analysis. The integrator dictates how the analysis steps are taken
-            in time or load. Default is 'LoadControl' (control load increments).
+            Defines the integrator for the analysis. The integrator
+            dictates how the analysis steps are taken in time or load.
+            Default is 'LoadControl' (control load increments).
 
         analysis: string, optional
-            Defines the type of analysis to be performed. 'Static' is typically used for gravity analysis,
-            but other options (e.g., 'Transient') can be used depending on the type of analysis. Default is 'Static'.
+            Defines the type of analysis to be performed. 'Static' is
+            typically used for gravity analysis, but other options
+            (e.g., 'Transient') can be used depending on the type of
+            analysis. Default is 'Static'.
 
         Returns
         -------
@@ -603,157 +1015,195 @@ class modeller():
 
         Notes
         -----
-        - This method sets up the analysis using OpenSees by defining the system of equations, constraints
-          handler, numberer, convergence test, solution algorithm, integrator, and analysis type.
-        - The gravity analysis solves for the static equilibrium under self-weight or gravity loads and is
-          typically used to determine the initial equilibrium state of a structure before dynamic loading.
-        - The analysis can be modified by changing the parameters to adjust solver settings, tolerance,
-          and other relevant options.
-        - After the analysis is completed, the analysis objects are wiped to ensure a clean state for further analyses.
+        - This method sets up the analysis using OpenSees by defining the
+          system of equations, constraints handler, numberer, convergence
+          test, solution algorithm, integrator, and analysis type.
+        - The gravity analysis solves for the static equilibrium under
+          self-weight or gravity loads and is typically used to determine
+          the initial equilibrium state of a structure before dynamic loading.
+        - The analysis can be modified by changing the parameters to adjust
+          solver settings, tolerance, and other relevant options.
+        - After the analysis is completed, the analysis objects are wiped to
+          ensure a clean state for further analyses.
         """
 
-        ### Define the analysis objects and run gravity analysis
-        ops.system(ansys_soe) # creates the system of equations, a sparse solver with partial pivoting
-        ops.constraints(constraints_handler) # creates the constraint handler, the transformation method
-        ops.numberer(numberer) # creates the DOF numberer, the reverse Cuthill-McKee algorithm
-        ops.test(test_type, init_tol, init_iter, 3) # creates the convergence test
-        ops.algorithm(algorithm_type) # creates the solution algorithm, a Newton-Raphson algorithm
-        ops.integrator(integrator, (1/nG)) # creates the integration scheme
-        ops.analysis(analysis) # creates the analysis object
-        ops.analyze(nG) # perform the gravity load analysis
-        ops.loadConst('-time', 0.0)
-
-        ### Wipe the analysis objects
+        # Define the analysis objects and run gravity analysis
+        # System of equations: sparse solver with partial pivoting
+        ops.system(ansys_soe)
+        # Constraints handler: enforces DOF constraints
+        ops.constraints(constraints_handler)
+        # DOF numberer: controls equation numbering order
+        ops.numberer(numberer)
+        # Convergence test: checks solution convergence
+        ops.test(test_type, init_tol, init_iter, 3)
+        # Solution algorithm: iterative solver (e.g., Newton-Raphson)
+        ops.algorithm(algorithm_type)
+        # Integrator: controls load increment steps
+        ops.integrator(integrator, (1 / nG))
+        # Analysis type: static gravity analysis
+        ops.analysis(analysis)
+        # Run analysis for nG steps to reach gravity equilibrium
+        ops.analyze(nG)
+        # Reset time to zero for subsequent analyses
+        ops.loadConst("-time", 0.0)
+        # Cleanup analysis objects for a clean subsequent state
         ops.wipeAnalysis()
 
-    def do_modal_analysis(self,
-                          num_modes=3,
-                          solver = '-genBandArpack',
-                          doRayleigh=False,
-                          pFlag=False,
-                          plot_modes=True,
-                          export_path = None):
+    def do_modal_analysis(
+        self,
+        num_modes=3,
+        solver="-genBandArpack",
+        doRayleigh=False,
+        pFlag=False,
+        plot_modes=True,
+        export_path=None,
+    ):
         """
-        Perform modal analysis on a multi-degree-of-freedom (MDOF) system to determine its natural frequencies
-        and mode shapes.
+        Perform modal analysis on a multi-degree-of-freedom (MDOF)
+        system to determine its natural frequencies and mode shapes.
 
-        This method calculates the natural frequencies and corresponding mode shapes of the system. The natural
-        frequencies are determined by solving the eigenvalue problem, and the mode shapes are normalized
-        for the system's degrees of freedom. The results can be used to assess the dynamic characteristics
-        of the system.
+        This method calculates the natural frequencies and corresponding
+        mode shapes of the system. The natural frequencies are
+        determined by solving the eigenvalue problem, and the mode
+        shapes are normalized for the system's degrees of freedom. The
+        results can be used to assess the dynamic characteristics of
+        the system.
 
         Parameters
         ----------
         num_modes: int, optional
-            The number of modes to consider in the analysis. Default is 3. This parameter determines how many
-            modes will be computed in the modal analysis.
+            The number of modes to consider in the analysis. Default
+            is 3. This parameter determines how many modes will be
+            computed in the modal analysis.
 
         solver: string, optional
-            The type of solver to use for the eigenvalue problem. Default is '-genBandArpack', which uses a
-            generalized banded Arnoldi method for large sparse eigenvalue problems.
+            The type of solver to use for the eigenvalue problem.
+            Default is '-genBandArpack', which uses a generalized
+            banded Arnoldi method for large sparse eigenvalue problems.
 
         doRayleigh: bool, optional
-            Flag to enable or disable Rayleigh damping in the modal analysis. This parameter is not used directly
-            in this method but can be set in the OpenSees model. Default is False.
+            Flag to enable or disable Rayleigh damping in the modal
+            analysis. This parameter is not used directly in this
+            method but can be set in the OpenSees model. Default is
+            False.
 
         pFlag: bool, optional
-            Flag to control whether to print the modal analysis report. If True, the fundamental period and
-            mode shape will be printed to the console. Default is False.
+            Flag to control whether to print the modal analysis
+            report. If True, the fundamental period and mode shape
+            will be printed to the console. Default is False.
 
         plot_modes: bool, optional
-            Flag to control whether to plot the modes. If True, the mode shapes are plotted against the
-            undeformed shape. Default is True
+            Flag to control whether to plot the modes. If True, the
+            mode shapes are plotted against the undeformed shape.
+            Default is True
 
         export_path: str, optional
-            If a string path is provided (e.g., 'modal_results.png'), the plot will be saved to this location.
-            If None, the plot will be only displayed and not saved. Default is None.
+            If a string path is provided (e.g., 'modal_results.png'),
+            the plot will be saved to this location. If None, the plot
+            will be only displayed and not saved. Default is None.
 
         Returns
         -------
         T: array
-            The periods of vibration for the system, calculated as 2π/ω, where ω are the natural frequencies
-            obtained from the eigenvalue problem.
+            The periods of vibration for the system, calculated as
+            2π/ω, where ω are the natural frequencies obtained from
+            the eigenvalue problem.
 
         mode_shape: list
-            A list of the normalized mode shapes for the system, with each element representing the displacement
-            in the x-direction for the corresponding mode. The mode shapes are normalized by the last node's
-            displacement.
+            A list of the normalized mode shapes for the system, with
+            each element representing the displacement in the
+            x-direction for the corresponding mode. The mode shapes
+            are normalized by the last node's displacement.
         """
 
-        # Get frequency and period
+        # Solve eigenvalue problem and compute natural frequencies and T
         self.omega = np.power(ops.eigen(solver, num_modes), 0.5)
-        T = 2.0*np.pi/self.omega
+        T = 2.0 * np.pi / self.omega
 
-        # Extract mode shape vectors
+        # Get node list for mode shape extraction
         node_list = ops.getNodeTags()
 
-        # Fallback: determine the largest node tag index for eigenvector extraction
-        if not hasattr(self, 'number_storyes'):
-            self.number_storeys = len(node_list)
+        # Extract and normalise mode shapes for each mode
         mode_shape_vectors = []
-        for mode_num in range(1, num_modes+1):
-            # Extract X, Y, Z displacements for all nodes in the current mode
-            ux_all = np.array([ops.nodeEigenvector(tag, mode_num, 1) for tag in node_list])
-            uy_all = np.array([ops.nodeEigenvector(tag, mode_num, 2) for tag in node_list])
-            uz_all = np.array([ops.nodeEigenvector(tag, mode_num, 3) for tag in node_list])
+        for mode_num in range(1, num_modes + 1):
+            # Extract X, Y, Z displacements for all nodes
+            ux_all = np.array(
+                [ops.nodeEigenvector(tag, mode_num, 1)
+                 for tag in node_list]
+            )
+            uy_all = np.array(
+                [ops.nodeEigenvector(tag, mode_num, 2)
+                 for tag in node_list]
+            )
+            uz_all = np.array(
+                [ops.nodeEigenvector(tag, mode_num, 3)
+                 for tag in node_list]
+            )
 
-            # Combine into a single (N_nodes x 3) vector for plotting
+            # Stack into (n_nodes x 3) mode shape array
             mode_vector = np.column_stack((ux_all, uy_all, uz_all))
 
             # Normalization
             max_disp = np.max(np.abs(mode_vector))
-            if max_disp!=0:
-                mode_vector/=max_disp
+            if max_disp != 0:
+                mode_vector /= max_disp
             mode_shape_vectors.append(mode_vector)
 
-        # Optional printing
+        # Print modal analysis report if pFlag is True
         if pFlag:
-            ops.modalProperties('-print')
-            print(f'Fundamental Period: T = {T[0]:.3f} s')
+            ops.modalProperties("-print")
+            print(f"Fundamental Period: T = {T[0]:.3f} s")
 
-        # Optional plotting
+        # Plot the mode shapes if plot_modes is True
         if plot_modes:
             # Initialise the plotter class
-            pl=plotter()
-            pl.plot_modes(node_list, mode_shape_vectors, T, export_path =export_path)
+            pl = plotter()
+            pl.plot_modes(node_list, mode_shape_vectors,
+                          T, export_path=export_path)
 
         # Internal cleanup of analysis objects
         ops.wipeAnalysis()
 
         return T, mode_shape_vectors
 
-    def do_spo_analysis(self,
-                        ref_disp,
-                        disp_scale_factor,
-                        push_dir,
-                        phi,
-                        pFlag=True,
-                        num_steps=200,
-                        ansys_soe='BandGeneral',
-                        constraints_handler='Transformation',
-                        numberer='RCM',
-                        test_type='EnergyIncr',
-                        init_tol=1.0e-5,
-                        init_iter=1000,
-                        algorithm_type='KrylovNewton',
-                        save_animation_path=None):
+    def do_spo_analysis(
+        self,
+        ref_disp,
+        disp_scale_factor,
+        push_dir,
+        phi,
+        pFlag=True,
+        num_steps=200,
+        ansys_soe="BandGeneral",
+        constraints_handler="Transformation",
+        numberer="RCM",
+        test_type="EnergyIncr",
+        init_tol=1.0e-5,
+        init_iter=1000,
+        algorithm_type="KrylovNewton",
+        save_animation_path=None,
+    ):
         """
-        Perform static pushover analysis (SPO) on a multi-degree-of-freedom (MDOF) system.
-
-        This method simulates a static pushover analysis where a lateral load pattern is incrementally applied
-        to the structure. The displacement at the control node is increased step by step, and the corresponding
-        base shear, floor displacements, and forces in non-linear elements are recorded. The analysis helps in
-        evaluating the structural response to lateral loads, such as earthquake forces.
+        Perform static pushover analysis (SPO) on a stick model.
+        This method simulates a static pushover analysis where a lateral
+        load pattern is incrementally applied to the structure. The
+        displacement at the control node is increased step by step, and the
+        corresponding base shear, floor displacements, and forces in
+        non-linear elements are recorded. The analysis helps in evaluating
+        the structural response to lateral loads, such as earthquake forces.
+        evaluating the structural response to lateral loads.
 
         Parameters
         ----------
         ref_disp: float
-            The reference displacement at which the analysis starts, corresponding to the yield or other
-            significant displacement (e.g., 1mm).
+            The reference displacement at which the analysis starts,
+            corresponding to the yield or other significant
+            displacement (e.g., 1mm).
 
         disp_scale_factor: float
-            The scale factor applied to the reference displacement to determine the final displacement.
-            The analysis will be run to this scaled displacement.
+            The scale factor applied to the reference displacement to
+            determine the final displacement. The analysis will be run
+            to this scaled displacement.
 
         push_dir: int
             The direction in which the pushover load is applied:
@@ -762,158 +1212,235 @@ class modeller():
                 3 = Z direction
 
         phi: list of floats
-            The lateral load pattern shape. This is typically a mode shape or a predefined load distribution.
-            For example, it can be the first-mode shape from the calibrateModel function.
+            The lateral load pattern shape. This is typically a mode
+            shape or a predefined load distribution. For example, it
+            can be the first-mode shape from the calibrate_model
+            function.
 
         pFlag: bool, optional
-            Flag to print (or not) the pushover analysis steps. If True, detailed feedback on each step will be printed. Default is True.
+            Flag to print (or not) the pushover analysis steps. If
+            True, detailed feedback on each step will be printed.
+            Default is True.
 
         num_steps: int, optional
-            The number of steps to increment the pushover load. Default is 200.
+            The number of steps to increment the pushover load.
+            Default is 200.
 
         ansys_soe: string, optional
-            The type of system of equations solver to use. Default is 'BandGeneral'.
+            The type of system of equations solver to use. Default is
+            'BandGeneral'.
 
         constraints_handler: string, optional
-            The constraints handler object to determine how constraint equations are enforced. Default is 'Transformation'.
+            The constraints handler object to determine how constraint
+            equations are enforced. Default is 'Transformation'.
 
         numberer: string, optional
-            The degree-of-freedom (DOF) numberer object to determine the mapping between equation numbers and degrees-of-freedom. Default is 'RCM'.
+            The degree-of-freedom (DOF) numberer object to determine
+            the mapping between equation numbers and
+            degrees-of-freedom. Default is 'RCM'.
 
         test_type: string, optional
-            The type of test to use for the linear system of equations. Default is 'EnergyIncr'.
+            The type of test to use for the linear system of
+            equations. Default is 'EnergyIncr'.
 
         init_tol: float, optional
-            The tolerance criterion to check for convergence. Default is 1.0e-5.
+            The tolerance criterion to check for convergence.
+            Default is 1.0e-5.
 
         init_iter: int, optional
-            The maximum number of iterations to perform when checking for convergence. Default is 1000.
+            The maximum number of iterations to perform when checking
+            for convergence. Default is 1000.
 
         algorithm_type: string, optional
-            The type of algorithm used to solve the system. Default is 'KrylovNewton'.
+            The type of algorithm used to solve the system. Default
+            is 'KrylovNewton'.
 
         save_animation_path: string, optional,
-            If provided, saves the figure to this path (e.g., 'spo.gif')
+            If provided, saves the figure to this path
+            (e.g., 'spo.gif')
 
         Returns
         -------
         spo_dict: dict
-            A dictionary containing the SPO results with the following keys:
-            'spo_disps': array - Displacements at each floor level (TimeSteps x Floors).
-            'spo_rxn': array - Base shear recorded at the base (TimeSteps).
-            'spo_disps_spring': array - Displacements in the storey zero-length elements (TimeSteps x Springs).
-            'spo_forces_spring': array - Shear forces in the storey zero-length elements (TimeSteps x Springs).
-            'spo_idr': array - Interstorey drift ratio history for each storey (TimeSteps x Storeys).
-            'spo_midr': array - Maximum interstorey drift ratio history (max IDR across all stories at each step, TimeSteps).
+            A dictionary containing the SPO results with keys:
+            'spo_disps': array - Displacements at each floor level
+                (TimeSteps x Floors).
+            'spo_rxn': array - Base shear at the base (TimeSteps).
+            'spo_disps_spring': array - Displacements in storey
+                zero-length elements (TimeSteps x Springs).
+            'spo_forces_spring': array - Shear forces in storey
+                zero-length elements (TimeSteps x Springs).
+            'spo_idr': array - Interstorey drift ratio history for
+                each storey (TimeSteps x Storeys).
+            'spo_midr': array - Max interstorey drift ratio history
+                (max IDR across all storeys at each step, TimeSteps).
         """
 
-        # --- Setup OpenSees Model for Analysis ---
+        # Set up linear time series and plain load pattern
         ops.timeSeries("Linear", 1)
         ops.pattern("Plain", 1, 1)
 
+        # Identify control node, pattern nodes, and reaction nodes
         nodeList = ops.getNodeTags()
+        # Control node: top node monitored for displacement
         control_node = nodeList[-1]
+        # Pattern nodes: floor nodes receiving lateral loads
         pattern_nodes = nodeList[1:]
-        rxn_nodes = [nodeList[0]] # Base node for reaction calculation
+        # Reaction nodes: base node(s) for base shear recording
+        rxn_nodes = [nodeList[0]]
 
-        # Apply the lateral load pattern
+        # Apply lateral loads to floor nodes scaled by phi and mass
         for i in np.arange(len(pattern_nodes)):
-            load_val = 1.0 if len(pattern_nodes)==1 else phi[i]*self.floor_masses[i]
+            load_val = 1.0 if len(
+                pattern_nodes) == 1 else phi[i] * self.floor_masses[i]
             if push_dir == 1:
-                ops.load(pattern_nodes[i], load_val, 0.0, 0.0, 0.0, 0.0, 0.0)
+                ops.load(
+                    pattern_nodes[i], load_val, 0.0, 0.0, 0.0, 0.0, 0.0)
             elif push_dir == 2:
-                ops.load(pattern_nodes[i], 0.0, load_val, 0.0, 0.0, 0.0, 0.0)
+                ops.load(
+                    pattern_nodes[i], 0.0, load_val, 0.0, 0.0, 0.0, 0.0)
             elif push_dir == 3:
-                ops.load(pattern_nodes[i], 0.0, 0.0, load_val, 0.0, 0.0, 0.0)
+                ops.load(
+                    pattern_nodes[i], 0.0, 0.0, load_val, 0.0, 0.0, 0.0)
 
-        # Set analysis objects
+        # Set up analysis objects
         ops.system(ansys_soe)
         ops.constraints(constraints_handler)
         ops.numberer(numberer)
         ops.test(test_type, init_tol, init_iter)
         ops.algorithm(algorithm_type)
 
-        # Set integrator
-        target_disp = float(ref_disp)*float(disp_scale_factor)
-        delta_disp = target_disp/(1.0*num_steps)
-        ops.integrator('DisplacementControl', control_node, push_dir, delta_disp)
-        ops.analysis('Static')
+        # Displacement-control integrator toward target displacement
+        target_disp = float(ref_disp) * float(disp_scale_factor)
+        delta_disp = target_disp / (1.0 * num_steps)
+        ops.integrator("DisplacementControl",
+                       control_node, push_dir, delta_disp)
+        ops.analysis("Static")
 
+        # Get element list for spring force/displacement recording
         elementList = ops.getEleTags()
 
+        # Print analysis header if requested
         if pFlag is True:
-            print(f"\n------ Static Pushover Analysis of Node # {control_node} to {target_disp} ---------")
+            print(
+                f"\n------ Static Pushover Analysis of Node "
+                f"# {control_node} to {target_disp} ---------"
+            )
 
+        # Initialize convergence flag, step counter, and load factor
         ok = 0
         step = 1
         loadf = 1.0
 
-        # Initialize result arrays with current state (usually 0.0)
-        spo_rxn = np.array([0.])
-        spo_top_disp = np.array([ops.nodeResponse(control_node, push_dir,1)]) # Used for animation and Pushover Curve
-        spo_disps = np.array([[ops.nodeResponse(node, push_dir, 1) for node in pattern_nodes]])
-        spo_disps_spring = np.array([[ops.eleResponse(ele, 'deformation')[0] for ele in elementList]])
-        spo_forces_spring = np.array([[ops.eleResponse(ele, 'force')[0] for ele in elementList]])
+        # Initialize result arrays for base shear, displacements,
+        # spring deformations, and spring forces
+        spo_rxn = np.array([0.0])
+        spo_top_disp = np.array(
+            [ops.nodeResponse(control_node, push_dir, 1)]
+        )  # Used for animation and Pushover Curve
+        spo_disps = np.array(
+            [[ops.nodeResponse(node, push_dir, 1) for node in pattern_nodes]]
+        )
+        spo_disps_spring = np.array(
+            [[ops.eleResponse(ele, "deformation")[0] for ele in elementList]]
+        )
+        spo_forces_spring = np.array(
+            [[ops.eleResponse(ele, "force")[0] for ele in elementList]]
+        )
 
-        # Main Analysis Loop
+        # Main pushover loop: step to target displacement
         while step <= num_steps and ok == 0 and loadf > 0:
 
+            # Perform one analysis step and check convergence
             ok = ops.analyze(1)
 
-            # Adaptive Convergence Scheme
+            # Adaptive convergence: relax criteria if step fails
             if ok != 0:
-                if pFlag: print('FAILED: Trying relaxing convergence...')
-                ops.test(test_type, init_tol*0.01, init_iter)
+                if pFlag:
+                    print("FAILED! Trying relaxing convergence.")
+                ops.test(test_type, init_tol * 0.01, init_iter)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
-                if pFlag: print('FAILED: Trying relaxing convergence with more iterations...')
-                ops.test(test_type, init_tol*0.01, init_iter*10)
+                if pFlag:
+                    print(
+                        "FAILED! Trying relaxing convergence "
+                        "with more iterations.")
+                ops.test(test_type, init_tol * 0.01, init_iter * 10)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
-                if pFlag: print('FAILED: Trying relaxing convergence with more iteration and Newton with initial then current...')
-                ops.test(test_type, init_tol*0.01, init_iter*10)
-                ops.algorithm('Newton', 'initialThenCurrent')
+                if pFlag:
+                    print(
+                        "FAILED! Trying relaxing convergence with "
+                        "more iterations and Newton with "
+                        "InitialThenCurrent."
+                    )
+                ops.test(test_type, init_tol * 0.01, init_iter * 10)
+                ops.algorithm("Newton", "initialThenCurrent")
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
-                if pFlag: print('FAILED: Trying relaxing convergence with more iteration and Newton with initial...')
-                ops.test(test_type, init_tol*0.01, init_iter*10)
-                ops.algorithm('Newton', 'initial')
+                if pFlag:
+                    print(
+                        "FAILED! Trying relaxing convergence with "
+                        "more iterations and Newton with initial."
+                    )
+                ops.test(test_type, init_tol * 0.01, init_iter * 10)
+                ops.algorithm("Newton", "initial")
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
-                if pFlag: print('FAILED: Attempting a Hail Mary...')
-                ops.test('FixedNumIter', init_iter*10)
+                if pFlag:
+                    print("FAILED! Attempting a Hail Mary.")
+                ops.test("FixedNumIter", init_iter * 10)
                 ok = ops.analyze(1)
                 ops.test(test_type, init_tol, init_iter)
-                if ok != 0: # Final check before breaking
+                # Final check before breaking
+                if ok != 0:
                     break
 
+            # Get current load factor (time)
             loadf = ops.getTime()
 
+            # Print step progress if requested
             if pFlag is True:
                 curr_disp = ops.nodeDisp(control_node, push_dir)
-                print(f'Currently pushed node {control_node} to {curr_disp:.4f} with load factor {loadf:.4f}')
+                print(
+                    f"Currently pushed node {control_node} to "
+                    f"{curr_disp:.4f} with load factor {loadf:.4f}"
+                )
 
+            # Advance step counter
             step += 1
 
-            # Record Results
-            spo_top_disp = np.append(spo_top_disp, ops.nodeResponse(control_node, push_dir, 1))
+            # Record results: base shear, displacements, spring forces
+            spo_top_disp = np.append(
+                spo_top_disp, ops.nodeResponse(control_node, push_dir, 1)
+            )
 
-            current_disps = np.array([ops.nodeResponse(node, push_dir, 1) for node in pattern_nodes])
+            current_disps = np.array(
+                [ops.nodeResponse(node, push_dir, 1) for node in pattern_nodes]
+            )
             spo_disps = np.append(spo_disps, np.array([current_disps]), axis=0)
 
-            spo_disps_spring = np.append(spo_disps_spring, np.array([
-                [ops.eleResponse(ele, 'deformation')[0] for ele in elementList]
-            ]), axis=0)
+            spo_disps_spring = np.append(
+                spo_disps_spring,
+                np.array(
+                    [[ops.eleResponse(ele, "deformation")[0]
+                      for ele in elementList]]
+                ),
+                axis=0,
+            )
 
-            spo_forces_spring = np.append(spo_forces_spring, np.array([
-                [ops.eleResponse(ele, 'force')[0] for ele in elementList]
-            ]), axis=0)
+            spo_forces_spring = np.append(
+                spo_forces_spring,
+                np.array([[ops.eleResponse(ele, "force")[0]
+                         for ele in elementList]]),
+                axis=0,
+            )
 
             ops.reactions()
             temp = 0
@@ -921,23 +1448,19 @@ class modeller():
                 temp += ops.nodeReaction(n, push_dir)
             spo_rxn = np.append(spo_rxn, -temp)
 
-
-        # Final Cleanup and Output
+        # Check final convergence status and print results if pFlag is True
         if ok != 0:
-            print('------ ANALYSIS FAILED --------')
+            print("------ ANALYSIS FAILED! --------")
         elif ok == 0:
-            print('~~~~~~~ ANALYSIS SUCCESSFUL ~~~~~~~~~')
+            print("~~~~~~~ ANALYSIS SUCCESSFUL! ~~~~~~~~~")
         if loadf < 0:
-            print('Stopped because of load factor below zero')
+            print("Stopped because of load factor below zero")
 
+        # Cleanup analysis objects
         ops.wipeAnalysis()
 
-        # Calculate Interstorey Drift Ratio (IDR) and Max IDR (MIDR)
-        # Use a COPY of the original displacement history for IDR calculation
+        # Calculate Interstorey Drift Ratio (IDR) from floor disps
         idr_disps = spo_disps.copy()
-
-        if not hasattr(self, 'storey_heights'):
-            raise AttributeError("Cannot calculate IDR: 'storey_heights' property is required but not defined in the class.")
 
         # Prepend ground floor (zero displacement)
         ground_disps = np.zeros((idr_disps.shape[0], 1))
@@ -958,49 +1481,78 @@ class modeller():
         # Handle Animation (Call updated function with spo_midr)
         if save_animation_path:
             pl = plotter()
-            pl.animate_spo(spo_top_disp, spo_rxn, spo_disps, spo_midr, nodeList, elementList, push_dir, phi, save_animation_path)
+            pl.animate_spo(
+                spo_top_disp,
+                spo_rxn,
+                spo_disps,
+                spo_midr,
+                nodeList,
+                elementList,
+                push_dir,
+                phi,
+                save_animation_path,
+            )
 
         # Pack and Return results into a dictionary
-        spo_dict = {'spo_disps': spo_disps,
-                    'spo_rxn': spo_rxn,
-                    'spo_disps_spring': spo_disps_spring,
-                    'spo_forces_spring': spo_forces_spring,
-                    'spo_idr': spo_idr,
-                    'spo_midr': spo_midr}
+        spo_dict = {
+            "spo_disps": spo_disps,
+            "spo_rxn": spo_rxn,
+            "spo_disps_spring": spo_disps_spring,
+            "spo_forces_spring": spo_forces_spring,
+            "spo_idr": spo_idr,
+            "spo_midr": spo_midr,
+        }
 
         return spo_dict
 
-    def do_cpo_analysis(self,
-                        ref_disp,
-                        mu_levels,
-                        push_dir,
-                        dispIncr,
-                        phi,
-                        pFlag=True,
-                        max_step=None,
-                        ansys_soe='BandGeneral',
-                        constraints_handler='Transformation',
-                        numberer='RCM',
-                        test_type='NormDispIncr',
-                        init_tol=1.0e-5,
-                        init_iter=1000,
-                        algorithm_type='KrylovNewton',
-                        save_animation_path=None):
+    def do_cpo_analysis(
+        self,
+        ref_disp,
+        mu_levels,
+        push_dir,
+        dispIncr,
+        phi,
+        pFlag=True,
+        max_step=None,
+        ansys_soe="BandGeneral",
+        constraints_handler="Transformation",
+        numberer="RCM",
+        test_type="NormDispIncr",
+        init_tol=1.0e-5,
+        init_iter=1000,
+        algorithm_type="KrylovNewton",
+        save_animation_path=None,
+    ):
         """
-        Perform cyclic pushover (CPO) analysis on a Multi-Degree-of-Freedom (MDOF) system.
+        Perform cyclic pushover analysis (CPO) on a stick model.
+        This method simulates a cyclic pushover analysis where a lateral
+        load pattern is incrementally applied to the structure. This
+        procedure simulates a cyclic lateral loading protocol in which
+        the stick model is subjected to alternating displacement-controlled
+        loading cycles at the control node. This approach allows the
+        evaluation of strength degradation, stiffness deterioration, pinching
+        effects, and energy dissipation capacity under repeated lateral
+        loading, providing a more realistic representation of structural
+        behaviour under seismic cyclic demands compared to a monotonic
+        pushover analysis.
 
         Parameters
         ----------
         ref_disp: float
-            Reference displacement (e.g., yield displacement) for scaling the cycles.
+            Reference displacement (e.g., yield displacement) for scaling
+            the cycles.
+
         mu_levels: list
             Target ductility factors (mu) for each cycle level.
+
         push_dir: int
             Direction of the pushover analysis (1=X, 2=Y, 3=Z).
+
         dispIncr: int
             Minimum number of displacement increments per half-cycle. Used
             directly when ``max_step`` is None, or as a lower bound when
             ``max_step`` is set. A value of 5-10 is typical.
+
         max_step: float or None, optional, default=None
             Maximum displacement increment size per analysis step [m]. When
             set, ``numIncr`` for each half-cycle is computed as
@@ -1009,90 +1561,125 @@ class modeller():
             For example, setting ``max_step = ref_disp * 0.1`` limits each
             step to 10% of the reference displacement. Set to ``None`` to
             use a fixed ``dispIncr`` for every half-cycle.
+
         phi: list of floats
             The lateral load pattern shape vector (scaled by mass).
+
         pFlag: bool, optional, default=True
             If True, prints feedback during the analysis steps.
+
         save_animation_path: str, optional, default=None
-            If provided, the path to save the animation (e.g., 'cpo.gif' or 'cpo.mp4').
+            If provided, the path to save the animation
+            (e.g., 'cpo.gif' or 'cpo.mp4').
+
         ansys_soe: string, optional, default='BandGeneral'
             System of equations solver.
+
         constraints_handler: string, optional, default='Transformation'
             Constraint handler method.
+
         numberer: string, optional, default='RCM'
             The numberer method.
+
         test_type: string, optional, default='NormDispIncr'
             Convergence test type.
-        init_tol: float, optional, default=1e-5
+
+        init_tol: float, optional, default=1.0e-5
             The initial tolerance for convergence.
+
         init_iter: int, optional, default=1000
             The maximum number of iterations for the solver.
-        algorithm_type: string, optional, default='KrylovNewton'
-            The type of algorithm used to solve the system of equations.
+
+        algorithm_type: string, optional, default='KrylovNewton
+            The solution algorithm type.
+
         save_animation_path: string, optional,
             If provided, saves the figure to this path (e.g., 'cpo.gif')
 
         Returns
         -------
         cpo_dict: dict
-            A dictionary containing all the analysis results (displacements, base_shear, etc.).
+            A dictionary containing all the analysis results.
         """
 
-        if mu_levels is None:
-            mu_levels = [1, 2, 4, 6, 8, 10]
-
-        # Apply the load pattern
+        # Define the analysis objects
         ops.timeSeries("Linear", 1)
-        ops.pattern("Plain",1,1)
+        ops.pattern("Plain", 1, 1)
 
         # Get all tags needed for analysis and animation
         nodeList = ops.getNodeTags()
         elementList = ops.getEleTags()
 
-        # Ensure model has nodes
-        if not nodeList:
-            print("ERROR: No nodes found in the OpenSees model.")
-            return None
-
+        # Control node: top node, pattern nodes: floor nodes
         control_node = nodeList[-1]
-        pattern_nodes = nodeList[1:] # All nodes above ground
-        rxn_nodes = [nodeList[0]] # Ground node
+        pattern_nodes = nodeList[1:]
+        # Reaction nodes: base node(s) for base shear recording
+        rxn_nodes = [nodeList[0]]
 
         # Quality control
-        assert len(phi) == len(pattern_nodes), "phi length must match pattern_nodes"
-        assert len(self.floor_masses) == len(pattern_nodes), "floor_masses length mismatch"
+        assert len(phi) == len(
+            pattern_nodes), "phi length must match pattern_nodes"
+        assert len(self.floor_masses) == len(
+            pattern_nodes
+        ), "floor_masses length mismatch"
 
         # Apply lateral load pattern scaled by mass
         for i in np.arange(len(pattern_nodes)):
             if push_dir == 1:
-                ops.load(pattern_nodes[i], phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0, 0.0, 0.0)
+                ops.load(
+                    pattern_nodes[i],
+                    phi[i] * self.floor_masses[i],
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                )
             elif push_dir == 2:
-                ops.load(pattern_nodes[i], 0.0, phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0, 0.0)
+                ops.load(
+                    pattern_nodes[i],
+                    0.0,
+                    phi[i] * self.floor_masses[i],
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                )
             elif push_dir == 3:
-                ops.load(pattern_nodes[i], 0.0, 0.0, phi[i]*self.floor_masses[i], 0.0, 0.0, 0.0)
+                ops.load(
+                    pattern_nodes[i],
+                    0.0,
+                    0.0,
+                    phi[i] * self.floor_masses[i],
+                    0.0,
+                    0.0,
+                    0.0,
+                )
 
-        # Set up the analysis objects
+        # Set up analysis objects
         ops.system(ansys_soe)
         ops.constraints(constraints_handler)
         ops.numberer(numberer)
         ops.test(test_type, init_tol, init_iter)
         ops.algorithm(algorithm_type)
 
-        # Create the list of target displacements (e.g., +1mu, -1mu, +2mu, -2mu, ...)
+        # Build target displacement list: +mu, -mu, +2mu, -2mu, ...
         cycleDispList = []
         for mu in mu_levels:
-            cycleDispList.append(ref_disp * mu)   # push positive
+            cycleDispList.append(ref_disp * mu)  # push positive
             cycleDispList.append(-ref_disp * mu)  # pull negative
         dispNoMax = len(cycleDispList)
 
         if pFlag:
-            print(f"\n------ Cyclic Pushover with ductility levels: {mu_levels} ------")
+            print(
+                f"\n------ Cyclic Pushover with ductility "
+                f"levels: {mu_levels} ------")
 
         # MinMax deformation limits — same approach as do_nrha_analysis.
         # The MinMax material kills the spring once deformation exceeds the
-        # ultimate displacement (last column of storey_disps).  We use the
+        # ultimate displacement (last column of storey_drifts).  We use the
         # same 1.5x limit so CPO and NRHA collapse detection are consistent.
-        minmax_limits   = 1.5 * np.abs(self.storey_disps[:, -1])  # (n_storeys,)
+        minmax_limits = 1.5 * np.abs(self.storey_drifts[:, -1])  # (n_storeys,)
         elementList_cpo = ops.getEleTags()
 
         # Recording data arrays
@@ -1100,15 +1687,15 @@ class modeller():
         cpo_top_disp = [ops.nodeDisp(control_node, push_dir)]
         cpo_disps = [[ops.nodeDisp(node, push_dir) for node in pattern_nodes]]
         energy_steps = [0.0]
-        minmax_failed = False   # flag: MinMax spring limit exceeded
+        minmax_failed = False  # flag: MinMax spring limit exceeded
 
         for d in range(dispNoMax):
             if minmax_failed:
                 break
 
             current_disp = ops.nodeDisp(control_node, push_dir)
-            target_disp  = cycleDispList[d]
-            excursion    = abs(target_disp - current_disp)
+            target_disp = cycleDispList[d]
+            excursion = abs(target_disp - current_disp)
 
             # Adaptive step count: if max_step is given, use enough increments
             # so no single step exceeds max_step. Always honour dispIncr as a
@@ -1121,59 +1708,74 @@ class modeller():
             dU = (target_disp - current_disp) / numIncr
 
             # Use DisplacementControl integrator
-            ops.integrator('DisplacementControl', control_node, push_dir, dU)
-            ops.analysis('Static')
+            ops.integrator("DisplacementControl", control_node, push_dir, dU)
+            ops.analysis("Static")
 
             # Loop over displacement increments
-            for l in range(numIncr):
+            for incr in range(numIncr):
                 ok = ops.analyze(1)
 
                 # Convergence Failure Handling (Extended Recovery)
                 if ok != 0:
-                    print(f'FAILED at cycle {d+1}/{dispNoMax}, increment {l}/{numIncr}: Starting complex recovery attempts...')
+                    print(
+                        f"FAILED at cycle {d+1}/{dispNoMax}, "
+                        f"increment {incr}/{numIncr}: "
+                        f"Starting recovery attempts..."
+                    )
 
                 # Try relaxing convergence tolerance
                 if ok != 0:
-                    print('FAILED: Trying relaxing convergence...')
-                    ops.test(test_type, init_tol*0.01, init_iter)
+                    print("FAILED: Trying relaxing convergence...")
+                    ops.test(test_type, init_tol * 0.01, init_iter)
                     ok = ops.analyze(1)
                     ops.test(test_type, init_tol, init_iter)
 
                 # Try relaxing convergence tolerance with more iterations
                 if ok != 0:
-                    print('FAILED: Trying relaxing convergence with more iterations...')
-                    ops.test(test_type, init_tol*0.01, init_iter*10)
+                    print(
+                        "FAILED: Trying relaxing convergence "
+                        "with more iterations...")
+                    ops.test(test_type, init_tol * 0.01, init_iter * 10)
                     ok = ops.analyze(1)
                     ops.test(test_type, init_tol, init_iter)
 
-                # Try relaxing tolerance, more iterations, and Newton with 'initialThenCurrent'
+                # Try relaxing tolerance with Newton 'initialThenCurrent'
                 if ok != 0:
-                    print('FAILED: Trying relaxing convergence with more iteration and Newton with initial then current...')
-                    ops.test(test_type, init_tol*0.01, init_iter*10)
-                    ops.algorithm('Newton', 'initialThenCurrent')
+                    print(
+                        "FAILED: Trying relaxing convergence with "
+                        "more iteration and Newton with "
+                        "initial then current..."
+                    )
+                    ops.test(test_type, init_tol * 0.01, init_iter * 10)
+                    ops.algorithm("Newton", "initialThenCurrent")
                     ok = ops.analyze(1)
                     ops.test(test_type, init_tol, init_iter)
-                    ops.algorithm(algorithm_type) # Restore original algorithm
+                    ops.algorithm(algorithm_type)
 
-                # Try relaxing tolerance, more iterations, and Newton with 'initial'
+                # Try relaxing tolerance with Newton 'initial'
                 if ok != 0:
-                    print('FAILED: Trying relaxing convergence with more iteration and Newton with initial...')
-                    ops.test(test_type, init_tol*0.01, init_iter*10)
-                    ops.algorithm('Newton', 'initial')
+                    print(
+                        "FAILED: Trying relaxing convergence with "
+                        "more iteration and Newton with initial..."
+                    )
+                    ops.test(test_type, init_tol * 0.01, init_iter * 10)
+                    ops.algorithm("Newton", "initial")
                     ok = ops.analyze(1)
                     ops.test(test_type, init_tol, init_iter)
-                    ops.algorithm(algorithm_type) # Restore original algorithm
+                    ops.algorithm(algorithm_type)  # Restore original algorithm
 
                 # Attempt a Hail Mary (FixedNumIter)
                 if ok != 0:
-                    print('FAILED: Attempting a Hail Mary...')
-                    ops.test('FixedNumIter', init_iter*10)
+                    print("FAILED: Attempting a Hail Mary...")
+                    ops.test("FixedNumIter", init_iter * 10)
                     ok = ops.analyze(1)
-                    ops.test(test_type, init_tol, init_iter) # Restore original test type
+                    ops.test(
+                        test_type, init_tol, init_iter
+                    )  # Restore original test type
 
                 # Final failure check
                 if ok != 0:
-                    print('Analysis Failed')
+                    print("Analysis Failed")
                     break
 
                 # Data Recording (only if successful)
@@ -1181,11 +1783,14 @@ class modeller():
                     curr_disp = ops.nodeDisp(control_node, push_dir)
                     cpo_top_disp.append(curr_disp)
 
-                    current_floor_disps = [ops.nodeDisp(node, push_dir) for node in pattern_nodes]
+                    current_floor_disps = [
+                        ops.nodeDisp(node, push_dir) for node in pattern_nodes
+                    ]
                     cpo_disps.append(current_floor_disps)
 
                     ops.reactions()
-                    temp = sum(ops.nodeReaction(n, push_dir) for n in rxn_nodes)
+                    temp = sum(ops.nodeReaction(n, push_dir)
+                               for n in rxn_nodes)
                     curr_rxn = -temp
                     cpo_rxn.append(curr_rxn)
 
@@ -1197,31 +1802,45 @@ class modeller():
                     else:
                         energy_steps.append(energy_steps[-1])
 
-                    # Check whether any MinMax material has been killed.
-                    # Mirror the same deformation-based check used in do_nrha_analysis:
-                    # if spring deformation >= 1.5 * ultimate storey displacement,
-                    # the MinMax material has been exceeded — stop immediately.
+                    # Check if any MinMax material limit has been
+                    # exceeded (spring deformation >= 1.5 * ultimate
+                    # storey drift) — stop analysis if so.
                     for s_idx, ele in enumerate(elementList_cpo):
                         try:
-                            deform_result = ops.eleResponse(ele, 'deformation')
+                            deform_result = ops.eleResponse(
+                                ele, "deformation")
                             if deform_result is None:
                                 if pFlag:
-                                    print(f'MinMax material killed spring at storey {s_idx + 1} '
-                                          f'— stopping CPO analysis.')
+                                    print(
+                                        f"MinMax material killed "
+                                        f"spring at storey "
+                                        f"{s_idx + 1} "
+                                        f"— stopping CPO analysis."
+                                    )
                                 minmax_failed = True
                                 break
                             spring_deform = abs(deform_result[0])
                             if spring_deform >= minmax_limits[s_idx]:
                                 if pFlag:
-                                    print(f'MinMax material failed at storey {s_idx + 1} '
-                                          f'(deform={spring_deform:.4f} >= limit={minmax_limits[s_idx]:.4f}) '
-                                          f'— stopping CPO analysis.')
+                                    print(
+                                        f"MinMax material failed at "
+                                        f"storey {s_idx + 1} "
+                                        f"(deform="
+                                        f"{spring_deform:.4f} >= "
+                                        f"limit="
+                                        f"{minmax_limits[s_idx]:.4f}"
+                                        f") — stopping CPO analysis."
+                                    )
                                 minmax_failed = True
                                 break
                         except Exception:
                             if pFlag:
-                                print(f'MinMax material killed spring at storey {s_idx + 1} '
-                                      f'(eleResponse failed) — stopping CPO analysis.')
+                                print(
+                                    f"MinMax material killed spring "
+                                    f"at storey {s_idx + 1} "
+                                    f"(eleResponse failed) "
+                                    f"— stopping CPO analysis."
+                                )
                             minmax_failed = True
                             break
 
@@ -1233,7 +1852,10 @@ class modeller():
 
             if pFlag is True:
                 curr_disp = ops.nodeDisp(control_node, push_dir)
-                print(f"Cycle target {d+1}/{dispNoMax}: Pushed node {control_node} to {curr_disp:.4f}")
+                print(
+                    f"Cycle target {d+1}/{dispNoMax}: Pushed node "
+                    f"{control_node} to {curr_disp:.4f}"
+                )
 
         # Convert lists to numpy arrays
         cpo_rxn = np.array(cpo_rxn)
@@ -1251,53 +1873,66 @@ class modeller():
         ops.wipeAnalysis()
 
         # Final output dictionary (cpo_dict)
-        cpo_dict = {'cpo_disps': cpo_disps,
-                    'cpo_rxn': cpo_rxn,
-                    'cpo_top_disp': cpo_top_disp,
-                    'cpo_energy': cpo_energy,
-                    'cpo_idr': cpo_drifts,
-                    'cpo_midr': max_interstorey_drift}
+        cpo_dict = {
+            "cpo_disps": cpo_disps,
+            "cpo_rxn": cpo_rxn,
+            "cpo_top_disp": cpo_top_disp,
+            "cpo_energy": cpo_energy,
+            "cpo_idr": cpo_drifts,
+            "cpo_midr": max_interstorey_drift,
+        }
 
         # Animation Call
         if save_animation_path:
             pl = plotter()
-            pl.animate_cpo(cpo_dict, nodeList, elementList, push_dir, save_animation_path)
+            pl.animate_cpo(
+                cpo_dict, nodeList, elementList, push_dir, save_animation_path
+            )
 
         return cpo_dict
 
-    def do_nrha_analysis(self, fnames, dt_gm, sf, t_max, dt_ansys,
-                         pFlag=True, xi=0.05, ansys_soe='BandGeneral',
-                         constraints_handler='Plain', numberer='RCM',
-                         test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50,
-                         algorithm_type='Newton', save_animation_path=None, drift_thresholds=None):
-
+    def do_nrha_analysis(
+        self, fnames, dt_gm, sf, t_max, dt_ansys,
+        pFlag=True, xi=0.05, ansys_soe='BandGeneral',
+        constraints_handler='Plain', numberer='RCM',
+        test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50,
+        algorithm_type='Newton', save_animation_path=None,
+        drift_thresholds=None
+    ):
         """
-        Perform nonlinear time-history analysis on a Multi-Degree-of-Freedom (MDOF) system.
+        Perform nonlinear time-history analysis on a
+        Multi-Degree-of-Freedom (MDOF) system.
 
-        Supports uni-directional (1 file) and bi-directional (2 files) ground motion loading.
-        Floor accelerations are recorded as absolute (total) accelerations, including at the base,
-        which is physically correct for assessing acceleration-sensitive non-structural components.
-        Hysteretic energy dissipation is computed via signed force-velocity integration (trapezoidal
-        rule), correctly capturing only dissipated energy and not elastic recovery.
+        Supports uni-directional (1 file) and bi-directional (2 files)
+        ground motion loading. Floor accelerations are recorded as
+        absolute (total) accelerations, including at the base, which
+        is physically correct for assessing acceleration-sensitive
+        non-structural components. Hysteretic energy dissipation is
+        computed via signed force-velocity integration (trapezoidal
+        rule), correctly capturing only dissipated energy and not
+        elastic recovery.
 
         Parameters
         ----------
         fnames: list
-            List of file paths to the ground motion records. One file applies X-direction loading;
-            two files apply bi-directional (X and Y) loading simultaneously.
+            List of file paths to the ground motion records. One file
+            applies X-direction loading; two files apply
+            bi-directional (X and Y) loading simultaneously.
 
         dt_gm: float
             Time-step of the ground motion records.
 
         sf: float
-            Scale factor to apply to the ground motion records. Typically equal to the
-            gravitational acceleration (9.81 m/s²) when records are in units of g.
+            Scale factor to apply to the ground motion records.
+            Typically equal to the gravitational acceleration
+            (9.81 m/s²) when records are in units of g.
 
         t_max: float
             The maximum time duration for the analysis.
 
         dt_ansys: float
-            The integration time-step for the analysis. Typically smaller than dt_gm.
+            The integration time-step for the analysis. Typically
+            smaller than dt_gm.
 
         pFlag: bool, optional, default=True
             If True, prints progress updates during the analysis.
@@ -1327,30 +1962,34 @@ class modeller():
             Nonlinear solution algorithm.
 
         save_animation_path: string, optional
-            If provided, saves the NRHA animation to this file path (e.g., 'nrha.gif').
+            If provided, saves the NRHA animation to this file path
+            (e.g., 'nrha.gif').
 
         drift_thresholds: list, optional
-            Drift thresholds used in the animation for damage-state colour changes.
+            Drift thresholds used in the animation for damage-state
+            colour changes.
 
         Returns
         -------
         control_nodes: list
-            List of all node tags in the model (base node first, then floor nodes).
+            List of all node tags in the model (base node first,
+            then floor nodes).
 
         conv_index: int
             Convergence status: 0 = success, -1 = failure.
 
         peak_drift: numpy.ndarray
-            Peak inter-storey drift ratio for each storey, shape (n_storeys, 2).
-            Column 0 = X direction, column 1 = Y direction.
+            Peak inter-storey drift ratio per storey, shape
+            (n_storeys, 2). Column 0 = X, column 1 = Y direction.
 
         peak_accel: numpy.ndarray
-            Peak absolute floor acceleration (in g) for each node (base + floors),
-            shape (n_nodes, 2). Column 0 = X direction, column 1 = Y direction.
-            Row 0 is the base (ground motion PGA); subsequent rows are upper floors.
+            Peak absolute floor acceleration (in g) per node (base
+            + floors), shape (n_nodes, 2). Column 0 = X, column 1 =
+            Y direction. Row 0 is the base (ground motion PGA).
 
         max_peak_drift: float
-            Maximum peak inter-storey drift ratio across all storeys and directions.
+            Maximum peak inter-storey drift ratio across all storeys
+            and directions.
 
         max_peak_drift_dir: string
             Direction ('X' or 'Y') of the maximum peak drift.
@@ -1359,56 +1998,59 @@ class modeller():
             Storey number (1-based) of the maximum peak drift.
 
         max_peak_accel: float
-            Maximum peak absolute floor acceleration (g) across all floors and directions.
+            Maximum peak absolute floor acceleration (g) across all
+            floors and directions.
 
         max_peak_accel_dir: string
             Direction ('X' or 'Y') of the maximum peak acceleration.
 
         max_peak_accel_loc: int
-            Floor number (0-based, 0 = base/ground) of the maximum peak acceleration.
+            Floor number (0-based, 0 = base/ground) of the maximum
+            peak acceleration.
 
         peak_disp: numpy.ndarray
-            Peak relative displacement (m) for each node, shape (n_nodes, 2).
-            Column 0 = X, column 1 = Y.
+            Peak relative displacement (m) per node, shape
+            (n_nodes, 2). Column 0 = X, column 1 = Y.
 
         hysteretic_energy_per_storey: numpy.ndarray
-            Dissipated hysteretic energy per storey (kN·m), shape (n_storeys,).
-            Computed via signed F·v trapezoidal integration to capture only
-            true energy dissipation (not elastic strain energy recovery).
+            Dissipated hysteretic energy per storey (kN·m), shape
+            (n_storeys,). Computed via signed F·v trapezoidal
+            integration to capture only true energy dissipation
+            (not elastic strain energy recovery).
 
         total_hysteretic_energy: float
-            Total dissipated hysteretic energy summed across all storeys (kN·m).
+            Total dissipated hysteretic energy summed across all
+            storeys (kN·m).
         """
 
-        # Store the MinMax deformation limits (1.5 * ultimate storey disp) per element
-        # Shape of storey_disps is (number_storeys, CapPoints); last column is ultimate displacement
-        minmax_limits = 1.0 * np.abs(self.storey_disps[:, -1])  # one limit per storey
+        # MinMax deformation limits (1.0 * ultimate storey disp) per element
+        # storey_drifts shape: (number_storeys, CapPoints); last col = ult.
+        # one limit per storey
+        minmax_limits = 1.0 * np.abs(self.storey_drifts[:, -1])
 
-       # ------------------------------------------------------------------ #
-        #  Determine loading directions from fnames                           #
-        # ------------------------------------------------------------------ #
+        #  Determine loading directions from fnames
         bidir = len(fnames) >= 2   # True -> apply both X and Y ground motions
 
         # Define control nodes
         control_nodes = ops.getNodeTags()
         n_nodes = len(control_nodes)
 
-        # ------------------------------------------------------------------ #
-        #  Apply ground motion time-series and uniform excitation patterns    #
-        # ------------------------------------------------------------------ #
+        #  Apply ground motion time-series and uniform excitation patterns
         if len(fnames) > 0:
-            ops.timeSeries('Path', 1, '-dt', dt_gm, '-filePath', fnames[0], '-factor', sf)
+            ops.timeSeries('Path', 1, '-dt', dt_gm, '-filePath',
+                           fnames[0], '-factor', sf)
             ops.pattern('UniformExcitation', 1, 1, '-accel', 1)   # X direction
         if len(fnames) > 1:
-            ops.timeSeries('Path', 2, '-dt', dt_gm, '-filePath', fnames[1], '-factor', sf)
+            ops.timeSeries('Path', 2, '-dt', dt_gm, '-filePath',
+                           fnames[1], '-factor', sf)
             ops.pattern('UniformExcitation', 2, 2, '-accel', 2)   # Y direction
         if len(fnames) > 2:
-            ops.timeSeries('Path', 3, '-dt', dt_gm, '-filePath', fnames[2], '-factor', sf)
-            ops.pattern('UniformExcitation', 3, 3, '-accel', 3)   # Z direction (rarely used)
+            ops.timeSeries('Path', 3, '-dt', dt_gm, '-filePath',
+                           fnames[2], '-factor', sf)
+            # Z direction (rarely used)
+            ops.pattern('UniformExcitation', 3, 3, '-accel', 3)
 
-        # ------------------------------------------------------------------ #
-        #  Configure analysis objects                                         #
-        # ------------------------------------------------------------------ #
+        #  Configure analysis objects
         ops.system(ansys_soe)
         ops.constraints(constraints_handler)
         ops.numberer(numberer)
@@ -1418,37 +2060,36 @@ class modeller():
         ops.analysis('Transient')
 
         # Set up analysis parameters
-        conv_index    = 0     # -1 = failure, 0 = success
-        collapse_time = None  # time [s] at which collapse/non-convergence first detected
+        conv_index = 0     # -1 = failure, 0 = success
+        # time [s] at which collapse/non-convergence first detected
+        collapse_time = None
         control_time = 0.0
         ok = 0
 
-        # ------------------------------------------------------------------ #
-        #  Build storey height array for IDR normalisation                    #
-        # ------------------------------------------------------------------ #
+        #  Build storey height array for IDR normalisation
         if n_nodes < 2:
-            top_nodes    = []
+            top_nodes = []
             bottom_nodes = []
         else:
-            top_nodes    = control_nodes[1:]
+            top_nodes = control_nodes[1:]
             bottom_nodes = control_nodes[:-1]
 
         h = []
         for i in range(len(top_nodes)):
-            topZ    = ops.nodeCoord(top_nodes[i],    3)
+            topZ = ops.nodeCoord(top_nodes[i],    3)
             bottomZ = ops.nodeCoord(bottom_nodes[i], 3)
             dist = topZ - bottomZ
             if dist == 0:
-                print("WARNING: Zero storey height detected — using 1e9 to avoid division by zero.")
+                print(
+                    "WARNING: Zero storey height detected "
+                    "— using 1e9 to avoid division by zero.")
                 h.append(1e9)
             else:
                 h.append(dist)
         h = np.array(h) if len(h) > 0 else np.array([])
 
-        # ------------------------------------------------------------------ #
-        #  Pre-allocate recording arrays                                      #
-        # ------------------------------------------------------------------ #
-        n_steps = int(np.ceil(t_max / dt_ansys)) + 1
+        # Pre-allocate recording arrays
+        n_steps = int(np.ceil(t_max / dt_ansys)) + 10
 
         # Relative displacements (X and Y separately)
         node_disps_x = np.zeros((n_steps, n_nodes))
@@ -1459,15 +2100,13 @@ class modeller():
         node_accels_y = np.zeros((n_steps, n_nodes))
 
         # Peak trackers — shape (n_nodes, 2): col 0 = X, col 1 = Y
-        peak_disp  = np.zeros((n_nodes, 2))
-        peak_accel = np.zeros((n_nodes, 2))           # absolute accelerations
+        peak_disp = np.zeros((n_nodes, 2))
+        peak_accel = np.zeros((n_nodes, 2))
 
         # Peak IDR tracker — shape (n_storeys, 2): col 0 = X, col 1 = Y
         peak_drift = np.zeros((len(top_nodes), 2))
 
-        # ------------------------------------------------------------------ #
-        #  Rayleigh damping                                                   #
-        # ------------------------------------------------------------------ #
+        # Include Rayleigh damping
         num_frequencies = len(self.omega)
 
         if num_frequencies == 1:
@@ -1475,35 +2114,32 @@ class modeller():
             alphaM = 2 * self.omega[0] * xi
             ops.rayleigh(alphaM, 0, 0, 0)
         elif num_frequencies >= 2:
-            # MDOF case: Use the first and the last available mode (up to the 3rd)
+            # MDOF case: use first and last mode (up to 3rd)
             idx_high = min(num_frequencies - 1, 2)
-            alphaM = 2 * self.omega[0] * self.omega[idx_high] * xi / (self.omega[0] + self.omega[idx_high])
+            alphaM = 2 * self.omega[0] * self.omega[idx_high] * \
+                xi / (self.omega[0] + self.omega[idx_high])
             alphaK = 2 * xi / (self.omega[0] + self.omega[idx_high])
             ops.rayleigh(alphaM, 0, alphaK, 0)
 
-        # ------------------------------------------------------------------ #
-        #  Hysteretic energy tracking                                         #
-        # Uses signed F·v integration (trapezoidal) so only genuine          #
-        # dissipation is accumulated; combined X+Y resultant for bidir.      #
-        # ------------------------------------------------------------------ #
-        element_tags  = ops.getEleTags()
-        n_elements    = len(element_tags)
+        # Hysteretic energy tracking
+        # Uses signed F·v integration (trapezoidal) so only genuine
+        # dissipation is accumulated; combined X+Y resultant for bidir.
+        element_tags = ops.getEleTags()
+        n_elements = len(element_tags)
 
         # Previous-step values for trapezoidal integration
         # For bidir, track both components: [X, Y] per element
         energy_force_prev_x = np.zeros(n_elements)
         energy_force_prev_y = np.zeros(n_elements)
-        energy_vel_prev_x   = np.zeros(n_elements)
-        energy_vel_prev_y   = np.zeros(n_elements)
+        energy_vel_prev_x = np.zeros(n_elements)
+        energy_vel_prev_y = np.zeros(n_elements)
         hysteretic_energy_per_storey = np.zeros(n_elements)
         energy_time_prev = 0.0
 
         # Progress print throttle
         print_every = max(1, int(np.ceil(n_steps / 50.0)))
 
-        # ------------------------------------------------------------------ #
-        #  Main time-stepping loop                                            #
-        # ------------------------------------------------------------------ #
+        #  Main time-stepping loop
         step = 0
         while conv_index == 0 and control_time <= t_max and ok == 0:
 
@@ -1515,44 +2151,58 @@ class modeller():
 
             # Adaptive convergence recovery
             if ok != 0:
-                print('FAILED at {:.3f}: Trying half time-step...'.format(control_time))
+                print(
+                    'FAILED at {:.3f}: Trying half '
+                    'time-step.'.format(control_time))
                 ok = ops.analyze(1, 0.5 * dt_ansys)
             if ok != 0:
-                print('FAILED at {:.3f}: Trying quarter time-step...'.format(control_time))
+                print(
+                    'FAILED at {:.3f}: Trying quarter '
+                    'time-step.'.format(control_time))
                 ok = ops.analyze(1, 0.25 * dt_ansys)
             if ok != 0:
-                print('FAILED at {:.3f}: Relaxing convergence + more iterations...'.format(control_time))
+                print(
+                    'FAILED at {:.3f}: Relaxing convergence '
+                    '+ more iterations.'.format(control_time))
                 ops.test(test_type, init_tol * 0.01, init_iter * 10)
                 ok = ops.analyze(1, 0.5 * dt_ansys)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
-                print('FAILED at {:.3f}: Newton initialThenCurrent...'.format(control_time))
+                print('FAILED at {:.3f}: Newton initialThenCurrent.'.format(
+                    control_time))
                 ops.test(test_type, init_tol * 0.01, init_iter * 10)
                 ops.algorithm('Newton', 'initialThenCurrent')
                 ok = ops.analyze(1, 0.5 * dt_ansys)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
-                print('FAILED at {:.3f}: Newton initial...'.format(control_time))
+                print('FAILED at {:.3f}: Newton initial.'.format(
+                    control_time))
                 ops.test(test_type, init_tol * 0.01, init_iter * 10)
                 ops.algorithm('Newton', 'initial')
                 ok = ops.analyze(1, 0.5 * dt_ansys)
                 ops.test(test_type, init_tol, init_iter)
                 ops.algorithm(algorithm_type)
             if ok != 0:
-                print('FAILED at {:.3f}: Hail Mary (FixedNumIter)...'.format(control_time))
+                print('FAILED at {:.3f}: Hail Mary (FixedNumIter).'.format(
+                    control_time))
                 ops.test('FixedNumIter', init_iter * 10)
                 ok = ops.analyze(1, 0.5 * dt_ansys)
                 ops.test(test_type, init_tol, init_iter)
             if ok != 0:
-                print('FAILED at {:.3f}: Exiting analysis.'.format(control_time))
-                conv_index    = -1
+                print('FAILED at {:.3f}: Exiting analysis.'.format(
+                    control_time))
+                conv_index = -1
                 collapse_time = control_time
                 break
 
-            # -------------------------------------------------------------- #
-            #  Record nodal responses                                         #
-            # -------------------------------------------------------------- #
+            # Record nodal responses
+            # Guard: if floating-point drift caused step to exceed the
+            # pre-allocated size, stop recording (trim happens after loop).
+            if step >= n_steps:
+                step += 1
+                continue
+
             for i, node in enumerate(control_nodes):
 
                 # Relative displacements (used for IDR and peak_disp)
@@ -1567,13 +2217,14 @@ class modeller():
                 if abs(disp_y) > peak_disp[i, 1]:
                     peak_disp[i, 1] = abs(disp_y)
 
-                # Absolute (total) acceleration = relative acceleration + ground acceleration.
-                # ops.nodeAccel() returns the RELATIVE acceleration under UniformExcitation.
-                # ops.getLoadFactor(patternTag) returns the current ground acceleration in
-                # model units (m/s², already scaled by sf), so adding it gives the absolute value.
+                # Absolute acceleration = relative accel + ground accel.
+                # ops.nodeAccel() returns RELATIVE acceleration.
+                # ops.getLoadFactor() returns ground accel in m/s²
+                # (already scaled by sf); sum gives absolute value.
                 ag_x = ops.getLoadFactor(1) if len(fnames) > 0 else 0.0
                 ag_y = ops.getLoadFactor(2) if len(fnames) > 1 else 0.0
-                abs_accel_x = (ops.nodeAccel(node, 1) + ag_x) / 9.81   # convert m/s² → g
+                abs_accel_x = (ops.nodeAccel(node, 1) + ag_x) / \
+                    9.81   # convert m/s² → g
                 abs_accel_y = (ops.nodeAccel(node, 2) + ag_y) / 9.81
                 node_accels_x[step, i] = abs_accel_x
                 node_accels_y[step, i] = abs_accel_y
@@ -1584,50 +2235,50 @@ class modeller():
                 if abs(abs_accel_y) > peak_accel[i, 1]:
                     peak_accel[i, 1] = abs(abs_accel_y)
 
-            # -------------------------------------------------------------- #
-            #  Inter-storey drift ratios                                      #
-            # -------------------------------------------------------------- #
+            #  Inter-storey drift ratios
             if len(top_nodes) > 0:
                 # X direction
-                dx_top    = node_disps_x[step, 1:]
+                dx_top = node_disps_x[step, 1:]
                 dx_bottom = node_disps_x[step, :-1]
-                idr_x     = np.abs(dx_top - dx_bottom) / h
-                mask_x    = idr_x > peak_drift[:, 0]
+                idr_x = np.abs(dx_top - dx_bottom) / h
+                mask_x = idr_x > peak_drift[:, 0]
                 peak_drift[mask_x, 0] = idr_x[mask_x]
 
                 # Y direction (only meaningful if bidir loading applied)
-                dy_top    = node_disps_y[step, 1:]
+                dy_top = node_disps_y[step, 1:]
                 dy_bottom = node_disps_y[step, :-1]
-                idr_y     = np.abs(dy_top - dy_bottom) / h
-                mask_y    = idr_y > peak_drift[:, 1]
+                idr_y = np.abs(dy_top - dy_bottom) / h
+                mask_y = idr_y > peak_drift[:, 1]
                 peak_drift[mask_y, 1] = idr_y[mask_y]
 
-            # -------------------------------------------------------------- #
-            #  Hysteretic energy — signed F·v trapezoidal integration        #
-            # Energy = ∫ F · v_interstory dt                                 #
-            # Positive when force and velocity are in the same direction      #
-            # (loading); negative during elastic unloading. Cumulative sum   #
-            # thus correctly represents only dissipated energy.              #
-            # For bidir: combine X and Y contributions per storey.           #
-            # -------------------------------------------------------------- #
+            # Hysteretic energy — signed F·v trapezoidal integration
+            # Energy = ∫ F · v_interstory dt
+            # Positive when force and velocity are in the same direction
+            # (loading); negative during elastic unloading.
+            # Cumulative sum thus represents only dissipated energy.
+            # For bidir: combine X and Y contributions per storey.
             energy_time_curr = control_time
             dt_energy = energy_time_curr - energy_time_prev
             if dt_energy > 0:
                 for ei, ele_tag in enumerate(element_tags):
                     ele_force_vec = ops.eleForce(ele_tag)
-                    force_curr_x  = ele_force_vec[0]   # X-direction shear
-                    force_curr_y  = ele_force_vec[1]   # Y-direction shear
+                    force_curr_x = ele_force_vec[0]   # X-direction shear
+                    force_curr_y = ele_force_vec[1]   # Y-direction shear
 
                     node_top = control_nodes[ei + 1]
                     node_bot = control_nodes[ei]
 
                     # Inter-storey velocity components
-                    vel_curr_x = ops.nodeVel(node_top, 1) - ops.nodeVel(node_bot, 1)
-                    vel_curr_y = ops.nodeVel(node_top, 2) - ops.nodeVel(node_bot, 2)
+                    vel_curr_x = ops.nodeVel(
+                        node_top, 1) - ops.nodeVel(node_bot, 1)
+                    vel_curr_y = ops.nodeVel(
+                        node_top, 2) - ops.nodeVel(node_bot, 2)
 
                     # Signed power at current and previous step (trapezoidal)
-                    power_prev = (energy_force_prev_x[ei] * energy_vel_prev_x[ei] +
-                                  energy_force_prev_y[ei] * energy_vel_prev_y[ei])
+                    power_prev = (
+                        energy_force_prev_x[ei] * energy_vel_prev_x[ei]
+                        + energy_force_prev_y[ei] * energy_vel_prev_y[ei]
+                    )
                     power_curr = (force_curr_x * vel_curr_x +
                                   force_curr_y * vel_curr_y)
                     dE = 0.5 * (power_prev + power_curr) * dt_energy
@@ -1636,61 +2287,63 @@ class modeller():
                     # Update previous-step values
                     energy_force_prev_x[ei] = force_curr_x
                     energy_force_prev_y[ei] = force_curr_y
-                    energy_vel_prev_x[ei]   = vel_curr_x
-                    energy_vel_prev_y[ei]   = vel_curr_y
+                    energy_vel_prev_x[ei] = vel_curr_x
+                    energy_vel_prev_y[ei] = vel_curr_y
 
             energy_time_prev = energy_time_curr
             step += 1
 
-            # --- MinMax spring failure check ---
-            # Use the pre-built element_tags list (n_storeys elements, same order
-            # as minmax_limits). If eleResponse returns None or raises, the spring
-            # has been killed by OpenSees — treat that as collapse immediately.
+            # MinMax spring failure check
+            # If eleResponse returns None or raises, the spring has
+            # been killed by OpenSees — treat as collapse immediately.
             for s_idx, ele in enumerate(element_tags):
                 try:
                     deform_result = ops.eleResponse(ele, 'deformation')
                     if deform_result is None:
                         if pFlag:
-                            print(f'COLLAPSE DETECTED: Spring at storey {s_idx+1} killed by MinMax '
-                                  f'at t={control_time:.3f}s.')
-                        conv_index    = -1
+                            print(
+                                f'COLLAPSE DETECTED: Spring at '
+                                f'storey {s_idx+1} killed by MinMax'
+                                f' at t={control_time:.3f}s.')
+                        conv_index = -1
                         collapse_time = control_time
                         break
                     spring_deform = abs(deform_result[0])
                     if spring_deform >= minmax_limits[s_idx]:
                         if pFlag:
-                            print(f'COLLAPSE DETECTED: Spring at storey {s_idx+1} reached MinMax limit '
-                                  f'({spring_deform:.4f} >= {minmax_limits[s_idx]:.4f}) at t={control_time:.3f}s. '
-                                  f'Capping drift and terminating.')
-                        conv_index    = -1
+                            print(
+                                f'COLLAPSE DETECTED! Spring at '
+                                f'storey {s_idx+1} reached MinMax '
+                                f'limit ({spring_deform:.4f} >= '
+                                f'{minmax_limits[s_idx]:.4f}) '
+                                f'at t={control_time:.3f}s. '
+                                f'Capping drift and terminating.')
+                        conv_index = -1
                         collapse_time = control_time
                         break
                 except Exception:
                     if pFlag:
-                        print(f'COLLAPSE DETECTED: Spring at storey {s_idx+1} unresponsive (MinMax killed) '
-                              f'at t={control_time:.3f}s.')
-                    conv_index    = -1
+                        print(
+                            f'COLLAPSE DETECTED! Spring at storey '
+                            f'{s_idx+1} unresponsive (MinMax killed)'
+                            f' at t={control_time:.3f}s.')
+                    conv_index = -1
                     collapse_time = control_time
                     break
             if conv_index == -1:
                 break
 
-
-        # ------------------------------------------------------------------ #
-        #  Trim arrays to actual number of completed steps                   #
-        # ------------------------------------------------------------------ #
-        node_disps_x  = node_disps_x[:step, :]
-        node_disps_y  = node_disps_y[:step, :]
+        #  Trim arrays to actual number of completed steps
+        node_disps_x = node_disps_x[:step, :]
+        node_disps_y = node_disps_y[:step, :]
         node_accels_x = node_accels_x[:step, :]
         node_accels_y = node_accels_y[:step, :]
 
-        # For animation compatibility keep a combined node_disps (X) and node_accels (X)
-        node_disps  = node_disps_x.copy()
+        # Keep node_disps (X) and node_accels (X) for animation
+        node_disps = node_disps_x.copy()
         node_accels = node_accels_x.copy()
 
-        # ------------------------------------------------------------------ #
-        #  Maximum drift summary                                              #
-        # ------------------------------------------------------------------ #
+        #  Maximum drift summary
         max_peak_drift = np.max(peak_drift) if peak_drift.size > 0 else 0.0
         if peak_drift.size > 0:
             ind = np.unravel_index(np.argmax(peak_drift), peak_drift.shape)
@@ -1700,10 +2353,8 @@ class modeller():
             max_peak_drift_dir = 'X'
             max_peak_drift_loc = 0
 
-        # ------------------------------------------------------------------ #
-        #  Maximum acceleration summary                                       #
-        # peak_accel already updated per-step using nodeAccel (absolute).    #
-        # ------------------------------------------------------------------ #
+        # Maximum acceleration summary
+        # peak_accel already updated per-step using nodeAccel (absolute).
         max_peak_accel = np.max(peak_accel)
         if peak_accel.size > 0:
             ind_a = np.unravel_index(np.argmax(peak_accel), peak_accel.shape)
@@ -1713,55 +2364,64 @@ class modeller():
             max_peak_accel_dir = 'X'
             max_peak_accel_loc = 0
 
-        # ------------------------------------------------------------------ #
-        #  Total hysteretic energy                                            #
-        # ------------------------------------------------------------------ #
+        #  Total hysteretic energy
         total_hysteretic_energy = float(np.sum(hysteretic_energy_per_storey))
 
-        # ------------------------------------------------------------------ #
-        #  Console feedback                                                   #
-        # ------------------------------------------------------------------ #
+        #  Console feedback
         if conv_index == -1:
             print('------ ANALYSIS FAILED --------')
         else:
             print('~~~~~~~ ANALYSIS SUCCESSFUL ~~~~~~~~~')
 
         if pFlag:
-            direction_label = 'bi-directional (X+Y)' if bidir else 'uni-directional (X)'
+            direction_label = (
+                'bi-directional (X+Y)' if bidir
+                else 'uni-directional (X)')
             print(f'Loading: {direction_label}')
-            print('Final state = {:d} (-1 for non-converged, 0 for stable)'.format(conv_index))
-            print('Maximum peak storey drift {:.4f} at storey {:d} in the {:s} direction'.format(
-                max_peak_drift, max_peak_drift_loc, max_peak_drift_dir))
-            print('Maximum peak absolute floor acceleration {:.4f} g at floor {:d} in the {:s} direction (0 = base)'.format(
-                max_peak_accel, max_peak_accel_loc, max_peak_accel_dir))
-            print('Total Hysteretic Energy: {:.6f} kN·m'.format(total_hysteretic_energy))
+            print(
+                'Final state = {:d} (-1 for non-converged, '
+                '0 for stable)'.format(conv_index))
+            print(
+                'Maximum peak storey drift {:.4f} at storey {:d} '
+                'in the {:s} direction'.format(
+                    max_peak_drift, max_peak_drift_loc,
+                    max_peak_drift_dir))
+            print(
+                'Maximum peak absolute floor acceleration {:.4f} g '
+                'at floor {:d} in the {:s} direction '
+                '(0 = base)'.format(
+                    max_peak_accel, max_peak_accel_loc,
+                    max_peak_accel_dir))
+            print('Total Hysteretic Energy: {:.6f} kN·m'.format(
+                total_hysteretic_energy))
             for ei in range(n_elements):
-                print('  Storey {:d} Hysteretic Energy: {:.6f} kN·m'.format(ei + 1, hysteretic_energy_per_storey[ei]))
+                print('  Storey {:d} Hysteretic Energy: {:.6f} kN·m'.format(
+                    ei + 1, hysteretic_energy_per_storey[ei]))
 
-        # ------------------------------------------------------------------ #
-        #  Optional animation                                                 #
-        # ------------------------------------------------------------------ #
+        #  Optional animation
         if save_animation_path is not None:
             try:
                 print("\nGenerating NRHA animation...")
-                time_array    = np.arange(step) * dt_ansys
+                time_array = np.arange(step) * dt_ansys
                 acc_input_full = np.loadtxt(fnames[0])
-                gm_time       = np.arange(len(acc_input_full)) * dt_gm
-                acc_resampled = np.interp(time_array, gm_time, acc_input_full) / 9.81
+                gm_time = np.arange(len(acc_input_full)) * dt_gm
+                acc_resampled = np.interp(
+                    time_array, gm_time, acc_input_full) / 9.81
 
-                min_len       = min(len(time_array), len(acc_resampled),
-                                    node_disps.shape[0], node_accels.shape[0])
-                time_array    = time_array[:min_len]
+                min_len = min(len(time_array), len(acc_resampled),
+                              node_disps.shape[0], node_accels.shape[0])
+                time_array = time_array[:min_len]
                 acc_resampled = acc_resampled[:min_len]
-                node_disps    = node_disps[:min_len, :]
-                node_accels   = node_accels[:min_len, :]
+                node_disps = node_disps[:min_len, :]
+                node_accels = node_accels[:min_len, :]
 
                 max_frames = 200
                 frame_step = max(1, len(time_array) // max_frames)
-                frames     = np.arange(0, len(time_array), frame_step)
+                frames = np.arange(0, len(time_array), frame_step)
 
                 pl = plotter()
-                collapse_t = collapse_time  # exact time MinMax/convergence failure was detected
+                # Exact time MinMax/convergence failure was detected
+                collapse_t = collapse_time
                 pl.animate_nrha(control_nodes=control_nodes,
                                 acc=acc_resampled[frames],
                                 dts=time_array[frames],
@@ -1775,24 +2435,37 @@ class modeller():
             except Exception as e:
                 print(f"Animation generation failed: {e}")
 
-        # ------------------------------------------------------------------ #
-        #  Return outputs                                                     #
-        # ------------------------------------------------------------------ #
+        #  Return outputs
         return (control_nodes, conv_index, peak_drift, peak_accel,
                 max_peak_drift, max_peak_drift_dir, max_peak_drift_loc,
-                max_peak_accel, max_peak_accel_dir, max_peak_accel_loc, peak_disp,
+                max_peak_accel, max_peak_accel_dir, max_peak_accel_loc,
+                peak_disp,
                 hysteretic_energy_per_storey, total_hysteretic_energy)
 
-
-    def do_incremental_dynamic_analysis(self, fnames, dt_gm, t_max, dt_ansys,
-                                        target_drift=0.05, initial_sf = 0.1, hunt_step =2.0,
-                                        max_fill_gap=0.2, max_runs =15, capping_drift = 0.10, xi=0.05, pFlag=False):
+    def do_incremental_dynamic_analysis(
+        self,
+        fnames,
+        dt_gm,
+        t_max,
+        dt_ansys,
+        target_drift=0.05,
+        initial_sf=0.1,
+        hunt_step=2.0,
+        max_fill_gap=0.2,
+        max_runs=15,
+        capping_drift=0.10,
+        xi=0.05,
+        pFlag=False
+    ):
         """
-        Performs Incremental Dynamic Analysis (IDA) using the 'Hunt, Trace and Fill' algorithm as per Vamvatsikos and Cornell (2002, 2004).
+        Performs Incremental Dynamic Analysis (IDA) using the 'Hunt,
+        Trace and Fill' algorithm as per Vamvatsikos and Cornell
+        (2002, 2004).
 
-        The algorithm first 'hunts' for the collapse capacity by increasing the scale
-        factor (SF) geometrically. Once collapse or the target drift is reached, it
-        'traces' back with smaller steps for the scaling factor and 'fills' the gaps between
+        The algorithm first 'hunts' for the collapse capacity by
+        increasing the scale factor (SF) geometrically. Once collapse
+        or the target drift is reached, it 'traces' back with smaller
+        steps for the scaling factor and 'fills' the gaps between
         successful runs to refine the IDA curve.
 
         Parameters
@@ -1807,26 +2480,31 @@ class modeller():
             The maximum time duration for each individual analysis run.
 
         dt_ansys : float
-            The integration time-step at which the structural analysis will be conducted.
+            The integration time-step at which the structural
+            analysis will be conducted.
 
         target_drift : float, optional, default=0.05
-            The drift ratio threshold considered as structural collapse (e.g., 5%).
+            The drift ratio threshold considered as structural
+            collapse (e.g., 5%).
 
         initial_sf : float, optional, default=0.1
             The starting scale factor for the first simulation run.
 
         hunt_step : float, optional, default=2.0
-            The geometric multiplier used to increase the scale factor during the 'Hunt' phase.
+            The geometric multiplier used to increase the scale
+            factor during the 'Hunt' phase.
 
         max_fill_gap : float, optional, default=0.2
-            The maximum allowable gap between scale factors. If a gap is larger, the 'Fill' phase
-            will bisect it.
+            The maximum allowable gap between scale factors. If a
+            gap is larger, the 'Fill' phase will bisect it.
 
         max_runs : int, optional, default=15
-            Maximum total number of nonlinear time-history simulations allowed.
+            Maximum total number of nonlinear time-history
+            simulations allowed.
 
         capping_drift : float, optional, default=0.10
-            The drift value assigned to failed or collapsed runs for visualization (flatlining).
+            The drift value assigned to failed or collapsed runs
+            for visualization (flatlining).
 
         xi : float, optional, default=0.05
             The damping ratio used in the analysis (default is 5%).
@@ -1834,22 +2512,27 @@ class modeller():
         Returns
         -------
         ida_data : dict
-            A dictionary where keys are scale factors and values are dictionaries containing
-            results (peak drift, acceleration, convergence state, etc.) for that run.
+            A dictionary where keys are scale factors and values
+            are dictionaries containing results (peak drift,
+            acceleration, convergence state, etc.) for that run.
 
         ordered_sfs : list
-            A list of all scale factors tested, in the order they were executed.
+            A list of all scale factors tested, in the order they
+            were executed.
 
         Note
         ----
-        The current method assumes the acceleration time-history is in m/s2. Therefore, the acceleration
-        values are multiple by a factor of g.
+        The current method assumes the acceleration time-history is
+        in m/s2. Therefore, the acceleration values are multiplied
+        by a factor of g.
 
         References
         ----------
-        [1] Vamvatsikos, D. and Cornell, C.A. (2002), Incremental dynamic analysis. Earthquake Engng. Struct. Dyn.,
+        [1] Vamvatsikos, D. and Cornell, C.A. (2002), Incremental
+            dynamic analysis. Earthquake Engng. Struct. Dyn.,
             31: 491-514. https://doi.org/10.1002/eqe.141
-        [2] Vamvatsikos D, Cornell CA. Applied Incremental Dynamic Analysis. Earthquake Spectra. 2004;20(2):523-553.
+        [2] Vamvatsikos D, Cornell CA. Applied Incremental Dynamic
+            Analysis. Earthquake Spectra. 2004;20(2):523-553.
             doi:10.1193/1.1737737
         """
 
@@ -1858,11 +2541,14 @@ class modeller():
         self.run_count = 0
 
         def run_step(sf_value):
-            """Helper function that executes a single simulation step and captures results."""
+            """Execute a single simulation step and capture results."""
             if self.run_count >= max_runs:
-                print(f"Execution Limit Reached: {max_runs} runs. Skipping SF {sf_value:.3f}")
+                print(
+                    f"Execution Limit Reached: {max_runs} runs. "
+                    f"Skipping SF {sf_value:.3f}")
                 return None, None
-            print(f" -- Run {self.run_count+1}/{max_runs} | SF: {sf_value:.3f}")
+            print(
+                f" -- Run {self.run_count+1}/{max_runs} | SF: {sf_value:.3f}")
 
             # Reset environment and rebuild model for the current iteration
             ops.wipe()
@@ -1870,17 +2556,20 @@ class modeller():
             self.do_gravity_analysis()
 
             # Execute the nonlinear time-history analysis
-            res = self.do_nrha_analysis(fnames, dt_gm, sf_value*units.g, t_max, dt_ansys, pFlag=pFlag, xi=xi)
+            res = self.do_nrha_analysis(
+                fnames, dt_gm, sf_value * units.g, t_max, dt_ansys,
+                pFlag=pFlag, xi=xi)
 
             # # Check convergence state and extract max drift
             raw_max_drift = res[4]
             conv_state = res[1]
 
-            # Check the flatline: if solver failed (state == -1) or drift exceeds target then numerical instability occurred, set the drift a high value where
-            # we are certain collapse is attained at (default = 0.10, 10% drift)
+            # Flatline check: cap drift if solver failed or drift
+            # exceeds target (default cap = 0.10, i.e., 10% drift)
             if conv_state == -1 or raw_max_drift >= target_drift:
                 final_drift = capping_drift
-                print(f"Collapse/Target Reached! Capping drift at {final_drift}")
+                print(
+                    f"Collapse/Target Reached! Capping drift at {final_drift}")
             else:
                 final_drift = raw_max_drift
 
@@ -1913,20 +2602,20 @@ class modeller():
             if state == -1 or m_drift >= target_drift:
                 print(f"Hunt terminated: Limit reached at SF = {curr_sf}")
                 break
-            curr_sf *=hunt_step
+            curr_sf *= hunt_step
 
-        # Phase 2: Let's trace and fill!
-        # Refine the curve by filling in large gaps between existing scale factors
+        # Phase 2: Trace and fill to refine the IDA curve
         while self.run_count < max_runs:
             sorted_sfs = sorted(ida_data.keys())
-            refined    = False
+            refined = False
             for i in range(len(sorted_sfs)-1):
                 if self.run_count >= max_runs:
                     break
                 sf_low, sf_high = sorted_sfs[i], sorted_sfs[i+1]
 
-                # Only fill if the high side is not already a collapse/capped run, this avoids wasting runs in the flatline region
-                if (sf_high - sf_low) > max_fill_gap and ida_data[sf_high]['max_peak_drift'] < 0.10:
+                # Only fill if not already in the flatline region
+                if (sf_high - sf_low) > max_fill_gap and \
+                        ida_data[sf_high]['max_peak_drift'] < 0.10:
                     mid_sf = (sf_low + sf_high)/2.0
                     run_step(mid_sf)
                     refined = True
