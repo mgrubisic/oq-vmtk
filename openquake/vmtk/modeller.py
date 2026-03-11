@@ -1679,7 +1679,7 @@ class modeller:
         # The MinMax material kills the spring once deformation exceeds the
         # ultimate displacement (last column of storey_drifts).  We use the
         # same 1.5x limit so CPO and NRHA collapse detection are consistent.
-        minmax_limits = 1.5 * np.abs(self.storey_drifts[:, -1])  # (n_storeys,)
+        minmax_limits = 1.0 * np.abs(self.storey_drifts[:, -1])  # (n_storeys,)
         elementList_cpo = ops.getEleTags()
 
         # Recording data arrays
@@ -2089,7 +2089,7 @@ class modeller:
         h = np.array(h) if len(h) > 0 else np.array([])
 
         # Pre-allocate recording arrays
-        n_steps = int(np.ceil(t_max / dt_ansys)) + 10
+        n_steps = int(np.ceil(t_max / dt_ansys)) + 1
 
         # Relative displacements (X and Y separately)
         node_disps_x = np.zeros((n_steps, n_nodes))
@@ -2196,12 +2196,23 @@ class modeller:
                 collapse_time = control_time
                 break
 
+            # Grow arrays if step counter reached allocated size
+            if step >= node_disps_x.shape[0]:
+                extra = max(100, node_disps_x.shape[0])
+                node_disps_x = np.concatenate(
+                    [node_disps_x,
+                     np.zeros((extra, n_nodes))], axis=0)
+                node_disps_y = np.concatenate(
+                    [node_disps_y,
+                     np.zeros((extra, n_nodes))], axis=0)
+                node_accels_x = np.concatenate(
+                    [node_accels_x,
+                     np.zeros((extra, n_nodes))], axis=0)
+                node_accels_y = np.concatenate(
+                    [node_accels_y,
+                     np.zeros((extra, n_nodes))], axis=0)
+
             # Record nodal responses
-            # Guard: if floating-point drift caused step to exceed the
-            # pre-allocated size, stop recording (trim happens after loop).
-            if step >= n_steps:
-                step += 1
-                continue
 
             for i, node in enumerate(control_nodes):
 
