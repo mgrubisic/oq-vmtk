@@ -12,7 +12,7 @@ class imcalculator:
     Attributes
     ----------
     acc : np.array
-        The acceleration time series (m/s² or g).
+        The acceleration time series in g.
     dt : float
         The time step of the accelerogram (s).
     damping : float, optional
@@ -21,29 +21,35 @@ class imcalculator:
     Methods
     -------
     __init__(acc, dt, damping=0.05)
-        Initializes the IMCalculator with acceleration time series and time step, and optional damping ratio.
-    get_spectrum(periods=np.linspace(1e-5, 4.0, 100), damping_ratio=0.05)
+        Initializes the imcalculator with acceleration time series,
+        time step, and optional damping ratio.
+    get_spectrum(periods=np.linspace(1e-5, 4.0, 500), damping_ratio=0.05)
         Computes the response spectrum using the Newmark-beta method.
     get_sa(period)
         Computes the spectral acceleration at a given period.
     get_saavg(period)
-        Computes the geometric mean of spectral accelerations over a range of periods.
+        Computes the geometric mean of spectral accelerations over a
+        range of periods.
     get_saavg_user_defined(periods_list)
-        Computes the geometric mean of spectral accelerations for a user-defined list of periods.
+        Computes the geometric mean of spectral accelerations for a
+        user-defined list of periods.
     get_velocity_displacement_history()
-        Computes velocity and displacement history with baseline drift correction.
+        Computes velocity and displacement history with zero-phase
+        high-pass filtering and baseline drift correction.
     get_amplitude_ims()
-        Computes amplitude-based intensity measures, including PGA, PGV, and PGD.
+        Computes amplitude-based intensity measures (PGA, PGV, PGD).
     get_arias_intensity()
         Computes the Arias Intensity.
     get_cav()
         Computes the Cumulative Absolute Velocity (CAV).
     get_significant_duration(start=0.05, end=0.95)
-        Computes the significant duration (time between 5% and 95% of Arias intensity).
+        Computes the significant duration (time between 5% and 95% of
+        Arias intensity).
     get_duration_ims()
-        Computes duration-based intensity measures: Arias Intensity, CAV, and 5%-95% significant duration.
+        Computes duration-based intensity measures: Arias Intensity,
+        CAV, and 5%-95% significant duration.
     get_FIV3(period, alpha, beta)
-        Computes the filtered incremental velocity (FIV3) based on a ground motion record and specified parameters.
+        Computes the filtered incremental velocity (FIV3).
 
     """
 
@@ -54,7 +60,7 @@ class imcalculator:
         Parameters
         ----------
         acc : list or np.array
-            Acceleration time series (m/s² or g)
+            Acceleration time series in g
         dt : float
             Time step of the accelerogram (s)
         damping : float, optional
@@ -228,9 +234,12 @@ class imcalculator:
         """
         acc_m_s2 = self.acc * 9.81  # Convert g to m/s² if needed
 
-        # High-pass filter to remove baseline drift
-        sos = signal.butter(4, 0.1, btype="highpass", fs=1 / self.dt, output="sos")
-        acc_filtered = signal.sosfilt(sos, acc_m_s2)
+        # Zero-phase high-pass filter to remove baseline drift without
+        # phase distortion (forward-backward pass via sosfiltfilt)
+        sos = signal.butter(
+            4, 0.1, btype="highpass", fs=1 / self.dt, output="sos"
+        )
+        acc_filtered = signal.sosfiltfilt(sos, acc_m_s2)
 
         # Integrate acceleration to get velocity
         vel = integrate.cumulative_trapezoid(acc_filtered, dx=self.dt, initial=0)
@@ -271,7 +280,10 @@ class imcalculator:
         AI : float
             Arias intensity (m/s)
         """
-        ai = np.cumsum(self.acc**2) * (np.pi / (2 * 9.81)) * self.dt
+        # acc is in g; convert to m/s² before squaring so the result
+        # has correct units (m/s).  Formula: AI = π/(2g) × ∫a²dt
+        acc_m_s2 = self.acc * 9.81
+        ai = np.cumsum(acc_m_s2**2) * (np.pi / (2 * 9.81)) * self.dt
         return ai[-1]  # Final Arias Intensity value
 
     def get_cav(self):
@@ -283,7 +295,9 @@ class imcalculator:
         CAV : float
             Cumulative absolute velocity (m/s)
         """
-        cav = np.sum(np.abs(self.acc)) * self.dt
+        # acc is in g; convert to m/s² so CAV is in m/s.
+        # Formula: CAV = ∫|a(t)| dt
+        cav = np.sum(np.abs(self.acc * 9.81)) * self.dt
         return cav
 
     def get_significant_duration(self, start=0.05, end=0.95):
@@ -403,7 +417,9 @@ class imcalculator:
         pks = pks_srt[-3:]
         trs = trs_srt[0:3]
 
-        # Compute the FIV3
-        FIV3 = np.max([np.sum(pks), np.sum(trs)])
+        # FIV3 = max of summed peak energy vs summed trough energy.
+        # Troughs are negative, so compare absolute values and return
+        # the dominant (unsigned) magnitude per Eq. (3) of the paper.
+        FIV3 = np.max([np.sum(pks), np.abs(np.sum(trs))])
 
         return FIV3, FIV, t, ugf, pks, trs
