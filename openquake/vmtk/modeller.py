@@ -7,93 +7,91 @@ from matplotlib.lines import Line2D
 from openquake.vmtk.units import units
 from openquake.vmtk.plotter import plotter
 
-
 class modeller:
     """
-    A class to model and analyze multi-degree-of-freedom (MDOF)
-    oscillators using OpenSees.
+    Model and analyse multi-degree-of-freedom (MDOF) oscillators
+    using OpenSees.
 
-    This class provides functionality to create, analyze, and visualize
-    structural models for dynamic and static analyses, including gravity
-    analysis, modal analysis, static pushover analysis, cyclic pushover
-    analysis, and nonlinear time-history analysis.
+    This class provides functionality to create, analyse, and
+    visualise structural models for dynamic and static analyses,
+    including gravity analysis, modal analysis, static pushover
+    analysis (SPO), cyclic pushover analysis (CPO), nonlinear
+    time-history analysis (NRHA), incremental dynamic analysis
+    (IDA), and earthquake-sequence NRHA.
+
+    The model uses a stick-and-mass idealisation with zero-length
+    Pinching4 hysteretic springs wrapped in a MinMax material for
+    automatic collapse detection. Floor accelerations in all NRHA
+    methods are recorded as absolute (total) accelerations (relative
+    acceleration plus ground-motion input), which is physically
+    correct for assessing acceleration-sensitive non-structural
+    components.
 
     Attributes
     ----------
     number_storeys : int
         The number of storeys in the building model.
     storey_heights : list
-        List of storey heights in meters.
+        List of storey heights in metres.
     floor_masses : list
         List of floor masses in tonnes.
-    storey_drifts : np.array
-        Array of storey displacements (size = number of storeys, CapPoints).
-    storey_forces : np.array
-        Array of storey forces (size = number of storeys, CapPoints).
+    storey_drifts : numpy.ndarray
+        Array of inter-storey displacement capacities, shape
+        ``(number_storeys, cap_points)`` where *cap_points* is 2
+        (bilinear), 3 (trilinear), or 4 (quadrilinear).
+    storey_forces : numpy.ndarray
+        Array of storey shear-force capacities with the same shape
+        as *storey_drifts*.
     degradation : bool
-        Boolean to enable or disable hysteresis degradation.
+        If ``True``, Pinching4 hysteretic degradation is enabled.
 
     Methods
     -------
-    __init__(number_storeys, storey_heights, floor_masses, storey_drifts,
-             storey_forces, degradation)
-        Initializes the modeller object and validates input parameters.
-    self.create_Pinching4_material(
-        mat1Tag,
-        mat2Tag,
-        storey_forces,
-        storey_drifts,
-        self.degradation,
-    )
-        Creates a Pinching4 material model for the MDOF oscillator.
+    create_Pinching4_material(mat1Tag, mat2Tag, storey_forces,
+            storey_drifts, degradation)
+        Creates a Pinching4 + MinMax material pair for one storey.
 
     compile_model()
-        Compiles and sets up the MDOF oscillator model in OpenSees.
+        Builds the MDOF stick model (nodes, masses, boundary
+        conditions, zero-length elements) in OpenSees.
 
-    plot_model(display_info=True)
-        Plots the 3D visualization of the OpenSees model.
+    plot_model(pFlag=True, export_path=None)
+        Plots a 2-D visualisation of the stick-and-mass model
+        (node elevations with spring symbols and backbone curves).
 
-    do_gravity_analysis(nG=100, ansys_soe='UmfPack',
-        constraints_handler='Transformation', numberer='RCM',
-        test_type='NormDispIncr', init_tol=1.0e-6, init_iter=500,
-        algorithm_type='Newton', integrator='LoadControl',
-        analysis='Static')
+    do_gravity_analysis(...)
         Performs gravity analysis on the MDOF system.
 
-    do_modal_analysis(num_modes=3, solver='-genBandArpack',
-        doRayleigh=False, pFlag=False)
-        Performs modal analysis to determine natural frequencies and
-        mode shapes.
+    do_modal_analysis(...)
+        Performs modal analysis to determine natural frequencies
+        and mode shapes.
 
-    do_spo_analysis(ref_disp, disp_scale_factor, push_dir, phi,
-        pFlag=True, num_steps=200, ansys_soe='BandGeneral',
-        constraints_handler='Transformation', numberer='RCM',
-        test_type='EnergyIncr', init_tol=1.0e-5, init_iter=1000,
-        algorithm_type='KrylovNewton', save_animation_path)
+    do_spo_analysis(ref_disp, disp_scale_factor, push_dir, phi, ...)
         Performs static pushover analysis (SPO) on the MDOF system.
 
-    do_cpo_analysis(ref_disp, mu_levels, push_dir, dispIncr,
-        pFlag=True, num_steps=200, ansys_soe='BandGeneral',
-        constraints_handler='Transformation', numberer='RCM',
-        test_type='NormDispIncr', init_tol=1.0e-5, init_iter=1000,
-        algorithm_type='KrylovNewton', safe_animation_path)
-        Performs cyclic pushover analysis (CPO) on the MDOF system.
+    do_cpo_analysis(ref_disp, mu_levels, push_dir, dispIncr, phi,
+            ..., max_step=None)
+        Performs cyclic pushover analysis (CPO) on the MDOF system
+        with MinMax stopping criteria.
 
-    do_nrha_analysis(fnames, dt_gm, sf, t_max, dt_ansys, pFlag=True,
-        xi=0.05, ansys_soe='BandGeneral',
-        constraints_handler='Plain', numberer='RCM',
-        test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50,
-        algorithm_type='Newton', save_animation_path,
-        drift_thresholds)
+    do_nrha_analysis(fnames, dt_gm, sf, t_max, dt_ansys, ...)
         Performs nonlinear time-history analysis (NRHA) on the MDOF
-        system.
+        system with absolute-acceleration recording and MinMax
+        stopping criteria.
 
     do_incremental_dynamic_analysis(fnames, dt_gm, t_max, dt_ansys,
-        target_drift=0.05, initial_sf=0.1, hunt_step=2.0,
-        max_fill_gap=0.2, max_runs=15, capping_drift=0.10,
-        xi=0.05, pFlag=False)
-        Performs incremental dynamic analysis (IDA) on the MDOF
-        system.
+            ...)
+        Performs incremental dynamic analysis (IDA) using the
+        Hunt-Trace-Fill algorithm (Vamvatsikos & Cornell, 2002).
+
+    do_nrha_analysis_sequences(fnames, time_vector, sf, ...)
+        Performs NRHA for concatenated earthquake sequences with
+        variable time-steps, automatic record-boundary detection,
+        per-sequence peak-drift and hysteretic-energy reporting,
+        absolute-acceleration recording, and MinMax stopping
+        criteria. The time vector is aligned to the OpenSees
+        ``-dt`` / ``-filePath`` convention by prepending ``t = 0``
+        when the supplied vector starts at ``dt > 0``.
 
     """
 
@@ -2635,3 +2633,915 @@ class modeller:
                 break
 
         return ida_data, ordered_sfs
+
+    def do_nrha_analysis_sequences(
+        self, fnames, time_vector, sf,
+        pFlag=True, xi=0.05, ansys_soe='BandGeneral',
+        constraints_handler='Plain', numberer='RCM',
+        test_type='NormDispIncr', init_tol=1.0e-6, init_iter=50,
+        algorithm_type='Newton', save_animation_path=None,
+        drift_thresholds=None, padding_duration=40.0,
+        quiescence_threshold=1.0e-6
+    ):
+        """
+        Perform nonlinear time-history analysis on a
+        Multi-Degree-of-Freedom (MDOF) system subjected to a
+        concatenated sequence of ground-motion records that may
+        have different time-steps and are separated by
+        zero-acceleration padding intervals.
+
+        Unlike ``do_nrha_analysis`` which takes a fixed scalar
+        ``dt_gm`` and a constant ``dt_ansys``, this method takes
+        an explicit ``time_vector`` so that records with different
+        sampling rates can be stitched together and the analysis
+        steps through each point at its native dt.
+
+        The method automatically detects individual ground-motion
+        records within the concatenated input by identifying
+        padding (quiescent) zones where the absolute acceleration
+        stays below *quiescence_threshold* for at least
+        *padding_duration* seconds. Peak responses and hysteretic
+        energies are reported both for the full sequence and for
+        each individual record.
+
+        Supports uni-directional (1 file) and bi-directional
+        (2 files) ground-motion loading. Floor accelerations are
+        recorded as absolute (total) accelerations, including at
+        the base. Hysteretic energy dissipation is computed via
+        signed force-velocity integration (trapezoidal rule),
+        correctly capturing only dissipated energy and not elastic
+        recovery.
+
+        Parameters
+        ----------
+        fnames : list
+            List of file paths to the ground-motion records. One
+            file applies X-direction loading; two files apply
+            bi-directional (X and Y) loading simultaneously. Each
+            file contains a concatenated acceleration time-history
+            (one value per time_vector entry) where individual
+            records are separated by zero-padded intervals.
+
+        time_vector : array-like
+            Monotonically increasing time values (s) corresponding
+            to each acceleration sample in the ground-motion
+            files. This may be irregularly spaced when records
+            with different dt are concatenated.
+
+        sf : float
+            Scale factor to apply to the ground-motion records.
+            Typically equal to gravitational acceleration
+            (9.81 m/s²) when records are in units of g.
+
+        pFlag : bool, optional, default=True
+            If True, prints progress updates during the analysis.
+
+        xi : float, optional, default=0.05
+            Inherent viscous damping ratio (default is 5%).
+
+        ansys_soe : str, optional, default='BandGeneral'
+            System of equations solver type.
+
+        constraints_handler : str, optional, default='Plain'
+            Method used to enforce constraint equations.
+
+        numberer : str, optional, default='RCM'
+            DOF numberer object (Reverse Cuthill-McKee by default).
+
+        test_type : str, optional, default='NormDispIncr'
+            Convergence test type.
+
+        init_tol : float, optional, default=1.0e-6
+            Convergence tolerance.
+
+        init_iter : int, optional, default=50
+            Maximum number of iterations per time step.
+
+        algorithm_type : str, optional, default='Newton'
+            Nonlinear solution algorithm.
+
+        save_animation_path : str, optional
+            If provided, saves the NRHA animation to this file
+            path (e.g., 'nrha.gif').
+
+        drift_thresholds : list, optional
+            Drift thresholds used in the animation for
+            damage-state colour changes.
+
+        padding_duration : float, optional, default=40.0
+            Minimum duration (s) of near-zero acceleration that
+            separates two consecutive ground-motion records within
+            the concatenated file. Used by the automatic sequence
+            detector.
+
+        quiescence_threshold : float, optional, default=1.0e-6
+            Absolute acceleration amplitude below which a sample
+            is considered 'silent'. Used together with
+            *padding_duration* to locate record boundaries.
+
+        Returns
+        -------
+        control_nodes : list
+            Node tags (base first, then floors).
+
+        conv_index : int
+            Convergence status: 0 = success, -1 = failure.
+
+        peak_drift : np.ndarray
+            Peak inter-storey drift ratio per storey,
+            shape (n_storeys, 2). Col 0 = X, col 1 = Y.
+            Full sequence.
+
+        peak_accel : np.ndarray
+            Peak absolute floor acceleration (g) per node
+            (base + floors), shape (n_nodes, 2). Col 0 = X,
+            col 1 = Y. Full sequence.
+
+        max_peak_drift : float
+            Maximum peak inter-storey drift ratio across all
+            storeys and directions (full sequence).
+
+        max_peak_drift_dir : str
+            Direction ('X' or 'Y') of the maximum peak drift.
+
+        max_peak_drift_loc : int
+            Storey number (1-based) of the maximum peak drift.
+
+        max_peak_accel : float
+            Maximum peak absolute floor acceleration (g).
+
+        max_peak_accel_dir : str
+            Direction ('X' or 'Y') of the maximum peak accel.
+
+        max_peak_accel_loc : int
+            Floor number (0-based, 0 = base) of the maximum
+            peak acceleration.
+
+        peak_disp : np.ndarray
+            Peak relative displacement (m) per node,
+            shape (n_nodes, 2).
+
+        hysteretic_energy_per_storey : np.ndarray
+            Dissipated hysteretic energy per storey (kN·m),
+            shape (n_storeys,). Full sequence.
+
+        total_hysteretic_energy : float
+            Total dissipated hysteretic energy (kN·m).
+            Full sequence.
+
+        hysteretic_energy_per_storey_per_sequence :
+            list of np.ndarray
+            Per-sequence dissipated hysteretic energy per
+            storey (kN·m), each of shape (n_storeys,).
+            For a two-record sequence these correspond to the
+            original G1 and G2 outputs.
+
+        total_hysteretic_energy_per_sequence : list of float
+            Per-sequence total dissipated hysteretic energy
+            (kN·m).
+
+        max_peak_drift_per_sequence : list of float
+            Per-sequence maximum peak drift ratio.
+
+        peak_drift_per_sequence : list of np.ndarray
+            Per-sequence peak inter-storey drift ratio,
+            each of shape (n_storeys, 2).
+
+        n_sequences : int
+            Number of individual ground-motion records
+            detected in the concatenated file.
+
+        sequence_boundaries : list of tuple
+            List of (t_start, t_end) pairs (in seconds)
+            defining the time window of each detected
+            ground-motion record (excluding padding).
+        """
+
+        time_vector = np.asarray(time_vector, dtype=float)
+
+        # --------------------------------------------------------
+        #  Align with the '-dt' / '-filePath' convention used by
+        #  do_nrha_analysis.
+        #
+        #  '-dt' form:  acc[i] is placed at t = i * dt.
+        #    So for n values: t = [0, dt, 2dt, ..., (n-1)*dt]
+        #
+        #  User-supplied time vectors typically start at dt:
+        #    tv = [dt, 2dt, ..., n*dt]   (n entries)
+        #
+        #  To replicate the -dt mapping with -time/-values,
+        #  we need: t = [0, dt, 2dt, ..., (n-1)*dt]
+        #  which is  [0, tv[0], tv[1], ..., tv[n-2]]
+        #  i.e. prepend 0 and drop the last time entry.
+        #  The acc array stays unchanged (n values).
+        # --------------------------------------------------------
+        acc_x_full = np.loadtxt(fnames[0])
+        n_acc = len(acc_x_full)
+        # Save the original last time value BEFORE any shift,
+        # so the loop termination matches do_nrha_analysis exactly.
+        t_max_original = float(time_vector[-1])
+        prepended = time_vector[0] > 0.0
+        if prepended:
+            time_vector = np.concatenate(
+                ([0.0], time_vector[:-1]))
+
+        n_time_pts = len(time_vector)
+        t_max = time_vector[-1]
+
+        # Verify lengths match
+        if len(acc_x_full) != n_time_pts:
+            raise ValueError(
+                f"Length of X-direction acceleration file "
+                f"({len(acc_x_full)}) does not match "
+                f"time_vector length ({n_time_pts}). "
+                f"prepended={prepended}")
+
+        # Pre-compute the dt for every analysis step from the time
+        # vector.  n_analysis_steps = n_time_pts - 1 (the intervals
+        # between consecutive time points), which matches the number
+        # of ops.analyze() calls that do_nrha_analysis makes for
+        # the same record when dt_ansys == dt_gm.
+        dt_steps = np.diff(time_vector)
+        n_analysis_steps = len(dt_steps)
+
+        # A sample is 'silent' when it is exactly zero or its
+        # absolute value is below quiescence_threshold.  The
+        # original threshold-only approach missed records whose
+        # tails decay to small-but-nonzero values (e.g. 1e-4).
+        # Using exact-zero detection for the padding zone is more
+        # robust because the padding is always written as 0.0.
+        is_silent = np.abs(acc_x_full) <= quiescence_threshold
+
+        # Locate contiguous silent blocks and record their
+        # start/end indices and durations.  A block qualifies as
+        # a padding separator when its duration is at least
+        # padding_duration (with a small tolerance to absorb
+        # floating-point drift in the time vector).
+        pad_tol = 0.5  # seconds — tolerance on padding_duration
+        silent_blocks = []  # list of (start_idx, end_idx)
+        block_start = None
+
+        for idx in range(n_time_pts):
+            if is_silent[idx]:
+                if block_start is None:
+                    block_start = idx
+            else:
+                if block_start is not None:
+                    block_end = idx - 1  # last silent sample
+                    block_dur = (time_vector[block_end]
+                                 - time_vector[block_start])
+                    if block_dur >= (padding_duration - pad_tol):
+                        silent_blocks.append(
+                            (block_start, block_end))
+                    block_start = None
+
+        # Handle a trailing silent block (zeros at the very end)
+        if block_start is not None:
+            block_end = n_time_pts - 1
+            block_dur = (time_vector[block_end]
+                         - time_vector[block_start])
+            if block_dur >= (padding_duration - pad_tol):
+                silent_blocks.append((block_start, block_end))
+
+        # Build record boundaries from the gaps between (and
+        # around) silent blocks.  Each active record spans from
+        # the first non-silent sample after the previous padding
+        # to the last non-silent sample before the next padding.
+        boundaries = []
+        rec_start_idx = 0  # start of first possible record
+
+        # Skip any leading silent block (record starts after it)
+        if (silent_blocks
+                and silent_blocks[0][0] == 0):
+            rec_start_idx = silent_blocks[0][1] + 1
+            silent_blocks = silent_blocks[1:]
+
+        # Skip any trailing silent block (not a separator)
+        if (silent_blocks
+                and silent_blocks[-1][1] == n_time_pts - 1):
+            trailing_end = silent_blocks[-1][0] - 1
+            silent_blocks = silent_blocks[:-1]
+        else:
+            trailing_end = n_time_pts - 1
+
+        if not silent_blocks:
+            # No interior padding found — single record
+            boundaries.append((
+                time_vector[rec_start_idx],
+                time_vector[trailing_end]))
+        else:
+            for sb_start, sb_end in silent_blocks:
+                # Record before this padding block
+                rec_end_idx = sb_start - 1
+                if rec_end_idx >= rec_start_idx:
+                    boundaries.append((
+                        time_vector[rec_start_idx],
+                        time_vector[rec_end_idx]))
+                # Next record starts after this padding block
+                rec_start_idx = sb_end + 1
+
+            # Record after the last padding block
+            if rec_start_idx <= trailing_end:
+                boundaries.append((
+                    time_vector[rec_start_idx],
+                    time_vector[trailing_end]))
+
+        n_sequences = len(boundaries)
+        if pFlag:
+            print(f'Detected {n_sequences} ground-motion record(s) '
+                  f'in the concatenated input.')
+            for seq_i, (ts, te) in enumerate(boundaries):
+                print(f'  Record {seq_i + 1}: '
+                      f'{ts:.2f} – {te:.2f} s')
+
+        # --------------------------------------------------------
+        #  MinMax deformation limits
+        # --------------------------------------------------------
+        minmax_limits = 1.0 * np.abs(self.storey_drifts[:, -1])
+
+        # --------------------------------------------------------
+        #  Determine loading directions
+        # --------------------------------------------------------
+        bidir = len(fnames) >= 2
+
+        # Define control nodes
+        control_nodes = ops.getNodeTags()
+        n_nodes = len(control_nodes)
+
+        # --------------------------------------------------------
+        #  Apply ground-motion time-series & uniform excitation
+        #  Using '-time' + '-values' form so that irregularly
+        #  spaced time vectors are handled correctly.
+        # --------------------------------------------------------
+        if len(fnames) > 0:
+            ops.timeSeries(
+                'Path', 1,
+                '-time', *time_vector,
+                '-values', *acc_x_full,
+                '-factor', sf)
+            ops.pattern('UniformExcitation', 1, 1, '-accel', 1)
+        if len(fnames) > 1:
+            acc_y_full = np.loadtxt(fnames[1])
+            if len(acc_y_full) != n_time_pts:
+                raise ValueError(
+                    f"Length of Y-direction acceleration file "
+                    f"({len(acc_y_full)}) does not match "
+                    f"time_vector length ({n_time_pts}).")
+            ops.timeSeries(
+                'Path', 2,
+                '-time', *time_vector,
+                '-values', *acc_y_full,
+                '-factor', sf)
+            ops.pattern('UniformExcitation', 2, 2, '-accel', 2)
+        if len(fnames) > 2:
+            acc_z_full = np.loadtxt(fnames[2])
+            if len(acc_z_full) != n_time_pts:
+                raise ValueError(
+                    f"Length of Z-direction acceleration file "
+                    f"({len(acc_z_full)}) does not match "
+                    f"time_vector length ({n_time_pts}).")
+            ops.timeSeries(
+                'Path', 3,
+                '-time', *time_vector,
+                '-values', *acc_z_full,
+                '-factor', sf)
+            ops.pattern('UniformExcitation', 3, 3, '-accel', 3)
+
+        # --------------------------------------------------------
+        #  Configure analysis objects
+        # --------------------------------------------------------
+        ops.system(ansys_soe)
+        ops.constraints(constraints_handler)
+        ops.numberer(numberer)
+        ops.test(test_type, init_tol, init_iter)
+        ops.algorithm(algorithm_type)
+        ops.integrator('Newmark', 0.5, 0.25)
+        ops.analysis('Transient')
+
+        # Analysis state
+        conv_index = 0
+        collapse_time = None
+        control_time = 0.0
+        ok = 0
+
+        # --------------------------------------------------------
+        #  Storey height array for IDR normalisation
+        # --------------------------------------------------------
+        if n_nodes < 2:
+            top_nodes = []
+            bottom_nodes = []
+        else:
+            top_nodes = control_nodes[1:]
+            bottom_nodes = control_nodes[:-1]
+
+        h = []
+        for i in range(len(top_nodes)):
+            topZ = ops.nodeCoord(top_nodes[i], 3)
+            bottomZ = ops.nodeCoord(bottom_nodes[i], 3)
+            dist = topZ - bottomZ
+            if dist == 0:
+                print(
+                    "WARNING: Zero storey height detected "
+                    "— using 1e9 to avoid division by zero.")
+                h.append(1e9)
+            else:
+                h.append(dist)
+        h = np.array(h) if len(h) > 0 else np.array([])
+
+        # --------------------------------------------------------
+        #  Pre-allocate recording arrays
+        #  Allocate n_time_pts + 2 rows to accommodate the extra
+        #  step(s) that the while control_time <= t_max_loop
+        #  termination may run beyond the time vector range
+        #  (matching do_nrha_analysis's behaviour).
+        # --------------------------------------------------------
+        n_storeys = len(top_nodes)
+        n_alloc = n_time_pts + 2
+
+        # Relative displacements (X and Y separately)
+        node_disps_x = np.zeros((n_alloc, n_nodes))
+        node_disps_y = np.zeros((n_alloc, n_nodes))
+
+        # Absolute (total) accelerations in g
+        node_accels_x = np.zeros((n_alloc, n_nodes))
+        node_accels_y = np.zeros((n_alloc, n_nodes))
+
+        # Peak trackers — shape (n_nodes, 2): col 0 = X, col 1 = Y
+        peak_disp = np.zeros((n_nodes, 2))
+        peak_accel = np.zeros((n_nodes, 2))
+
+        # Peak IDR — shape (n_storeys, 2)
+        peak_drift = np.zeros((n_storeys, 2))
+
+        # Per-sequence peak drift trackers
+        peak_drift_per_seq = [
+            np.zeros((n_storeys, 2)) for _ in range(n_sequences)
+        ]
+
+        # --------------------------------------------------------
+        #  Rayleigh damping
+        # --------------------------------------------------------
+        num_frequencies = len(self.omega)
+        if num_frequencies == 1:
+            alphaM = 2 * self.omega[0] * xi
+            ops.rayleigh(alphaM, 0, 0, 0)
+        elif num_frequencies >= 2:
+            idx_high = min(num_frequencies - 1, 2)
+            alphaM = (2 * self.omega[0] * self.omega[idx_high]
+                      * xi
+                      / (self.omega[0] + self.omega[idx_high]))
+            alphaK = (2 * xi
+                      / (self.omega[0] + self.omega[idx_high]))
+            ops.rayleigh(alphaM, 0, alphaK, 0)
+
+        # --------------------------------------------------------
+        #  Hysteretic energy tracking (signed F·v trapezoidal)
+        # --------------------------------------------------------
+        element_tags = ops.getEleTags()
+        n_elements = len(element_tags)
+
+        energy_force_prev_x = np.zeros(n_elements)
+        energy_force_prev_y = np.zeros(n_elements)
+        energy_vel_prev_x = np.zeros(n_elements)
+        energy_vel_prev_y = np.zeros(n_elements)
+        hysteretic_energy_per_storey = np.zeros(n_elements)
+        energy_time_prev = 0.0
+
+        # Per-sequence energy accumulators
+        hysteretic_energy_per_storey_per_seq = [
+            np.zeros(n_elements) for _ in range(n_sequences)
+        ]
+
+        # Progress print throttle
+        print_every = max(1, int(np.ceil(n_analysis_steps / 50.0)))
+
+        # --------------------------------------------------------
+        #  Helper: determine which sequence index a time belongs to
+        # --------------------------------------------------------
+        def _get_sequence_index(t):
+            """Return the 0-based sequence index for time *t*,
+            or -1 if *t* falls in a padding zone."""
+            for si, (ts, te) in enumerate(boundaries):
+                if ts <= t <= te:
+                    return si
+            return -1
+
+        # --------------------------------------------------------
+        #  Main time-stepping loop
+        #  Uses the same termination condition as do_nrha_analysis
+        #  (control_time <= t_max) so that both methods execute
+        #  exactly the same number of analysis steps.  The dt for
+        #  each step comes from dt_steps while within the time
+        #  vector range; beyond that, the last dt is reused (this
+        #  covers the extra free-vibration step(s) that
+        #  do_nrha_analysis performs when t_max > time_vector[-1]).
+        # --------------------------------------------------------
+        # Use the original (un-shifted) t_max so the loop runs
+        # the same duration as do_nrha_analysis.
+        t_max_loop = t_max_original
+
+        step = 0
+        while (conv_index == 0
+               and control_time <= t_max_loop
+               and ok == 0):
+
+            if step < n_analysis_steps:
+                dt_current = dt_steps[step]
+            else:
+                dt_current = dt_steps[-1]  # reuse last dt
+
+            ok = ops.analyze(1, dt_current)
+            control_time = ops.getTime()
+
+            if pFlag and (step % print_every == 0
+                          or control_time >= t_max_loop):
+                print(f'Step {step + 1}: '
+                      f'Completed {control_time:.3f} of '
+                      f'{t_max_loop:.3f} seconds')
+
+            # ---- Adaptive convergence recovery ----
+            if ok != 0:
+                print('FAILED at {:.3f}: Trying half '
+                      'time-step.'.format(control_time))
+                ok = ops.analyze(1, 0.5 * dt_current)
+            if ok != 0:
+                print('FAILED at {:.3f}: Trying quarter '
+                      'time-step.'.format(control_time))
+                ok = ops.analyze(1, 0.25 * dt_current)
+            if ok != 0:
+                print('FAILED at {:.3f}: Relaxing convergence '
+                      '+ more iterations.'.format(control_time))
+                ops.test(test_type, init_tol * 0.01,
+                         init_iter * 10)
+                ok = ops.analyze(1, 0.5 * dt_current)
+                ops.test(test_type, init_tol, init_iter)
+            if ok != 0:
+                print('FAILED at {:.3f}: Newton '
+                      'initialThenCurrent.'.format(control_time))
+                ops.test(test_type, init_tol * 0.01,
+                         init_iter * 10)
+                ops.algorithm('Newton', 'initialThenCurrent')
+                ok = ops.analyze(1, 0.5 * dt_current)
+                ops.test(test_type, init_tol, init_iter)
+                ops.algorithm(algorithm_type)
+            if ok != 0:
+                print('FAILED at {:.3f}: Newton '
+                      'initial.'.format(control_time))
+                ops.test(test_type, init_tol * 0.01,
+                         init_iter * 10)
+                ops.algorithm('Newton', 'initial')
+                ok = ops.analyze(1, 0.5 * dt_current)
+                ops.test(test_type, init_tol, init_iter)
+                ops.algorithm(algorithm_type)
+            if ok != 0:
+                print('FAILED at {:.3f}: Hail Mary '
+                      '(FixedNumIter).'.format(control_time))
+                ops.test('FixedNumIter', init_iter * 10)
+                ok = ops.analyze(1, 0.5 * dt_current)
+                ops.test(test_type, init_tol, init_iter)
+            if ok != 0:
+                print('FAILED at {:.3f}: Exiting '
+                      'analysis.'.format(control_time))
+                conv_index = -1
+                collapse_time = control_time
+                break
+
+            # ---- Record nodal responses ----
+            for i, node in enumerate(control_nodes):
+                disp_x = ops.nodeDisp(node, 1)
+                disp_y = ops.nodeDisp(node, 2)
+                node_disps_x[step, i] = disp_x
+                node_disps_y[step, i] = disp_y
+
+                if abs(disp_x) > peak_disp[i, 0]:
+                    peak_disp[i, 0] = abs(disp_x)
+                if abs(disp_y) > peak_disp[i, 1]:
+                    peak_disp[i, 1] = abs(disp_y)
+
+                ag_x = (ops.getLoadFactor(1)
+                        if len(fnames) > 0 else 0.0)
+                ag_y = (ops.getLoadFactor(2)
+                        if len(fnames) > 1 else 0.0)
+                abs_accel_x = (
+                    (ops.nodeAccel(node, 1) + ag_x) / 9.81)
+                abs_accel_y = (
+                    (ops.nodeAccel(node, 2) + ag_y) / 9.81)
+                node_accels_x[step, i] = abs_accel_x
+                node_accels_y[step, i] = abs_accel_y
+
+                if abs(abs_accel_x) > peak_accel[i, 0]:
+                    peak_accel[i, 0] = abs(abs_accel_x)
+                if abs(abs_accel_y) > peak_accel[i, 1]:
+                    peak_accel[i, 1] = abs(abs_accel_y)
+
+            # ---- Inter-storey drift ratios ----
+            seq_idx = _get_sequence_index(control_time)
+
+            if n_storeys > 0:
+                dx_top = node_disps_x[step, 1:]
+                dx_bot = node_disps_x[step, :-1]
+                idr_x = np.abs(dx_top - dx_bot) / h
+                mask_x = idr_x > peak_drift[:, 0]
+                peak_drift[mask_x, 0] = idr_x[mask_x]
+
+                dy_top = node_disps_y[step, 1:]
+                dy_bot = node_disps_y[step, :-1]
+                idr_y = np.abs(dy_top - dy_bot) / h
+                mask_y = idr_y > peak_drift[:, 1]
+                peak_drift[mask_y, 1] = idr_y[mask_y]
+
+                # Per-sequence peak drift update
+                if seq_idx >= 0:
+                    pd_seq = peak_drift_per_seq[seq_idx]
+                    mask_sx = idr_x > pd_seq[:, 0]
+                    pd_seq[mask_sx, 0] = idr_x[mask_sx]
+                    mask_sy = idr_y > pd_seq[:, 1]
+                    pd_seq[mask_sy, 1] = idr_y[mask_sy]
+
+            # ---- Hysteretic energy (signed F·v trapezoidal) ----
+            # Same sign convention as do_nrha_analysis: use
+            # eleForce[0] directly (node-I force) so that both
+            # methods produce identical energy values.
+            energy_time_curr = control_time
+            dt_energy = energy_time_curr - energy_time_prev
+            if dt_energy > 0:
+                for ei, ele_tag in enumerate(element_tags):
+                    ele_force_vec = ops.eleForce(ele_tag)
+                    force_curr_x = ele_force_vec[0]
+                    force_curr_y = ele_force_vec[1]
+
+                    node_top = control_nodes[ei + 1]
+                    node_bot = control_nodes[ei]
+
+                    vel_curr_x = (ops.nodeVel(node_top, 1)
+                                  - ops.nodeVel(node_bot, 1))
+                    vel_curr_y = (ops.nodeVel(node_top, 2)
+                                  - ops.nodeVel(node_bot, 2))
+
+                    power_prev = (
+                        energy_force_prev_x[ei]
+                        * energy_vel_prev_x[ei]
+                        + energy_force_prev_y[ei]
+                        * energy_vel_prev_y[ei]
+                    )
+                    power_curr = (force_curr_x * vel_curr_x
+                                  + force_curr_y * vel_curr_y)
+                    dE = 0.5 * (power_prev + power_curr) * dt_energy
+                    hysteretic_energy_per_storey[ei] += dE
+
+                    # Accumulate into the active sequence
+                    if seq_idx >= 0:
+                        hysteretic_energy_per_storey_per_seq[
+                            seq_idx][ei] += dE
+
+                    # Update previous-step values
+                    energy_force_prev_x[ei] = force_curr_x
+                    energy_force_prev_y[ei] = force_curr_y
+                    energy_vel_prev_x[ei] = vel_curr_x
+                    energy_vel_prev_y[ei] = vel_curr_y
+
+            energy_time_prev = energy_time_curr
+            step += 1
+
+            # ---- MinMax spring failure check ----
+            for s_idx, ele in enumerate(element_tags):
+                try:
+                    deform_result = ops.eleResponse(
+                        ele, 'deformation')
+                    if deform_result is None:
+                        if pFlag:
+                            print(
+                                f'COLLAPSE DETECTED: Spring at '
+                                f'storey {s_idx + 1} killed by '
+                                f'MinMax at '
+                                f't={control_time:.3f}s.')
+                        conv_index = -1
+                        collapse_time = control_time
+                        break
+                    spring_deform = abs(deform_result[0])
+                    if spring_deform >= minmax_limits[s_idx]:
+                        if pFlag:
+                            print(
+                                f'COLLAPSE DETECTED! Spring at '
+                                f'storey {s_idx + 1} reached '
+                                f'MinMax limit '
+                                f'({spring_deform:.4f} >= '
+                                f'{minmax_limits[s_idx]:.4f}) '
+                                f'at t={control_time:.3f}s. '
+                                f'Capping drift and terminating.')
+                        conv_index = -1
+                        collapse_time = control_time
+                        break
+                except Exception:
+                    if pFlag:
+                        print(
+                            f'COLLAPSE DETECTED! Spring at '
+                            f'storey {s_idx + 1} unresponsive '
+                            f'(MinMax killed) at '
+                            f't={control_time:.3f}s.')
+                    conv_index = -1
+                    collapse_time = control_time
+                    break
+            if conv_index == -1:
+                break
+
+        # --------------------------------------------------------
+        #  Trim arrays to actual number of completed steps
+        # --------------------------------------------------------
+        node_disps_x = node_disps_x[:step, :]
+        node_disps_y = node_disps_y[:step, :]
+        node_accels_x = node_accels_x[:step, :]
+        node_accels_y = node_accels_y[:step, :]
+
+        node_disps = node_disps_x.copy()
+        node_accels = node_accels_x.copy()
+
+        # --------------------------------------------------------
+        #  Maximum drift summary (full sequence)
+        # --------------------------------------------------------
+        max_peak_drift = (np.max(peak_drift)
+                          if peak_drift.size > 0 else 0.0)
+        if peak_drift.size > 0:
+            ind = np.unravel_index(
+                np.argmax(peak_drift), peak_drift.shape)
+            max_peak_drift_dir = 'X' if ind[1] == 0 else 'Y'
+            max_peak_drift_loc = ind[0] + 1
+        else:
+            max_peak_drift_dir = 'X'
+            max_peak_drift_loc = 0
+
+        # Per-sequence max drift
+        max_peak_drift_per_seq = []
+        for pd_seq in peak_drift_per_seq:
+            max_peak_drift_per_seq.append(
+                float(np.max(pd_seq)) if pd_seq.size > 0
+                else 0.0
+            )
+
+        # --------------------------------------------------------
+        #  Maximum acceleration summary
+        # --------------------------------------------------------
+        max_peak_accel = np.max(peak_accel)
+        if peak_accel.size > 0:
+            ind_a = np.unravel_index(
+                np.argmax(peak_accel), peak_accel.shape)
+            max_peak_accel_dir = 'X' if ind_a[1] == 0 else 'Y'
+            max_peak_accel_loc = ind_a[0]
+        else:
+            max_peak_accel_dir = 'X'
+            max_peak_accel_loc = 0
+
+        # --------------------------------------------------------
+        #  Total hysteretic energy
+        # --------------------------------------------------------
+        total_hysteretic_energy = float(
+            np.sum(hysteretic_energy_per_storey))
+
+        total_hysteretic_energy_per_seq = [
+            float(np.sum(e))
+            for e in hysteretic_energy_per_storey_per_seq
+        ]
+
+        # --------------------------------------------------------
+        #  Console feedback
+        # --------------------------------------------------------
+        if conv_index == -1:
+            print('------ ANALYSIS FAILED --------')
+        else:
+            print('~~~~~~~ ANALYSIS SUCCESSFUL ~~~~~~~~~')
+
+        if pFlag:
+            direction_label = (
+                'bi-directional (X+Y)' if bidir
+                else 'uni-directional (X)')
+            print(f'Loading: {direction_label}')
+            print(
+                'Final state = {:d} (-1 for non-converged, '
+                '0 for stable)'.format(conv_index))
+            print(
+                'Maximum peak storey drift {:.4f} at storey {:d} '
+                'in the {:s} direction'.format(
+                    max_peak_drift, max_peak_drift_loc,
+                    max_peak_drift_dir))
+            print(
+                'Maximum peak absolute floor acceleration '
+                '{:.4f} g at floor {:d} in the {:s} direction '
+                '(0 = base)'.format(
+                    max_peak_accel, max_peak_accel_loc,
+                    max_peak_accel_dir))
+            print('Total Hysteretic Energy: {:.6f} kN·m'.format(
+                total_hysteretic_energy))
+            for ei in range(n_elements):
+                print(
+                    '  Storey {:d} Hysteretic Energy: '
+                    '{:.6f} kN·m'.format(
+                        ei + 1,
+                        hysteretic_energy_per_storey[ei]))
+            # Per-sequence summary
+            for si in range(n_sequences):
+                ts, te = boundaries[si]
+                print(
+                    f'\n  --- Record {si + 1} '
+                    f'({ts:.2f}–{te:.2f} s) ---')
+                print(
+                    f'  Max peak drift: '
+                    f'{max_peak_drift_per_seq[si]:.4f}')
+                print(
+                    f'  Total hysteretic energy: '
+                    f'{total_hysteretic_energy_per_seq[si]:.6f}'
+                    f' kN·m')
+                for ei in range(n_elements):
+                    print(
+                        f'    Storey {ei + 1}: '
+                        f'{hysteretic_energy_per_storey_per_seq[si][ei]:.6f}'
+                        f' kN·m')
+
+        # --------------------------------------------------------
+        #  Optional animation
+        # --------------------------------------------------------
+        if save_animation_path is not None:
+            try:
+                print("\nGenerating NRHA animation...")
+                time_array = time_vector[:step]
+                acc_resampled = acc_x_full[:step] / 9.81
+
+                min_len = min(
+                    len(time_array), len(acc_resampled),
+                    node_disps.shape[0], node_accels.shape[0])
+                time_array = time_array[:min_len]
+                acc_resampled = acc_resampled[:min_len]
+                node_disps = node_disps[:min_len, :]
+                node_accels = node_accels[:min_len, :]
+
+                max_frames = 200
+                frame_step = max(1, len(time_array) // max_frames)
+                frames = np.arange(
+                    0, len(time_array), frame_step)
+
+                pl = plotter()
+                collapse_t = collapse_time
+                pl.animate_nrha(
+                    control_nodes=control_nodes,
+                    acc=acc_resampled[frames],
+                    dts=time_array[frames],
+                    nrha_disps=node_disps[frames, :],
+                    nrha_accels=node_accels[frames, :],
+                    drift_thresholds=drift_thresholds,
+                    export_path=save_animation_path,
+                    collapse_time=collapse_t,
+                    true_peak_drift=peak_drift[:, 0],
+                    true_peak_accel=peak_accel[:, 0])
+            except Exception as e:
+                print(f"Animation generation failed: {e}")
+
+        # --------------------------------------------------------
+        #  Return outputs
+        # --------------------------------------------------------
+        #
+        # The return tuple preserves positional compatibility with
+        # the original modeller_withenergycalc.py output:
+        #
+        #   Index  Name
+        #   -----  ----
+        #    0     control_nodes
+        #    1     conv_index
+        #    2     peak_drift                        (n_storeys, 2)
+        #    3     peak_accel                        (n_nodes, 2)
+        #    4     max_peak_drift                    float
+        #    5     max_peak_drift_dir                str
+        #    6     max_peak_drift_loc                int (1-based)
+        #    7     max_peak_accel                    float
+        #    8     max_peak_accel_dir                str
+        #    9     max_peak_accel_loc                int (0-based)
+        #   10     peak_disp                         (n_nodes, 2)
+        #   11     hysteretic_energy_per_storey      (n_elements,)
+        #   12     total_hysteretic_energy            float
+        #   13     hysteretic_energy_per_storey_per_sequence
+        #                                list of (n_elements,) arrays
+        #   14     total_hysteretic_energy_per_sequence
+        #                                            list of float
+        #   15     max_peak_drift_per_sequence        list of float
+        #   16     peak_drift_per_sequence
+        #                                list of (n_storeys, 2) arrays
+        #   17     n_sequences                        int
+        #   18     sequence_boundaries    list of (t_start, t_end)
+        #
+        return (control_nodes,
+                conv_index,
+                peak_drift,
+                peak_accel,
+                max_peak_drift,
+                max_peak_drift_dir,
+                max_peak_drift_loc,
+                max_peak_accel,
+                max_peak_accel_dir,
+                max_peak_accel_loc,
+                peak_disp,
+                hysteretic_energy_per_storey,
+                total_hysteretic_energy,
+                hysteretic_energy_per_storey_per_seq,
+                total_hysteretic_energy_per_seq,
+                max_peak_drift_per_seq,
+                peak_drift_per_seq,
+                n_sequences,
+                boundaries)
