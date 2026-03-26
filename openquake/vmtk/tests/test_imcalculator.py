@@ -2,9 +2,9 @@ import os
 import unittest
 import numpy as np
 
-from openquake.vmtk.im_calculator import IMCalculator
+from openquake.vmtk.imcalculator import imcalculator
 
-class TestIMCalculator(unittest.TestCase):
+class Testimcalculator(unittest.TestCase):
 
     # Test values
     pga_test = 0.54557
@@ -25,15 +25,15 @@ class TestIMCalculator(unittest.TestCase):
 
     def setUp(self):
         """
-        Set up the IMCalculator instance for each test.
+        Set up the imcalculator instance for each test.
         """
         # Load acceleration data and dt from the file
         cd = os.path.dirname(__file__)
         acc_test = np.loadtxt(os.path.join(cd, 'test_data', 'acceleration.txt'))
         dt_test = 0.005
 
-        # Create the IMCalculator object
-        self.calculator = IMCalculator(acc_test, dt_test)
+        # Create the imcalculator object
+        self.calculator = imcalculator(acc_test, dt_test)
 
     def test_get_sa(self):
         sa03 = self.calculator.get_sa(0.3)
