@@ -13,9 +13,9 @@ NUMBER_STOREYS = 2
 STOREY_HEIGHTS = [2.80, 2.80]
 FLOOR_MASSES = [0.5979496788391293, 0.448462259129347]
 STOREY_DRIFTS = np.array([[0.00052664, 0.00421318, 0.02096557, 0.03771796],
-                          [0.00028185, 0.00225482, 0.01122043, 0.02018604]])
+                           [0.00028185, 0.00225482, 0.01122043, 0.02018604]])
 STOREY_FORCES = np.array([[0.11496146, 0.22992293, 0.13795376, 0.1393333],
-                          [0.06152551, 0.12305102, 0.07383061, 0.07456892]]) * 9.81
+                           [0.06152551, 0.12305102, 0.07383061, 0.07456892]]) * 9.81
 DEGRADATION = True
 
 
@@ -59,7 +59,7 @@ class TestModellerInit(unittest.TestCase):
         make_modeller(
             storey_drifts=np.array(
                 [[0.001, 0.005, 0.02], [0.001, 0.005, 0.02]]),
-            storey_forces=np.array([[10.0, 15.0, 8.0],    [10.0, 15.0, 8.0]]),
+            storey_forces=np.array([[10.0, 15.0, 8.0], [10.0, 15.0, 8.0]]),
         )
 
     def test_single_storey_accepted(self):
@@ -193,7 +193,7 @@ class TestModellerInit(unittest.TestCase):
             make_modeller(storey_forces=bad)
 
     def test_storey_forces_softening_allowed(self):
-        """Forces may decrease after peak (post-peak softening is physically valid)."""
+        """Forces may decrease after peak (post-peak softening is valid)."""
         make_modeller(
             storey_drifts=np.array([[0.001, 0.005, 0.02, 0.04],
                                     [0.001, 0.005, 0.02, 0.04]]),
@@ -225,10 +225,12 @@ class TestModellerMethods(unittest.TestCase):
         self.model.compile_model()
 
         cd = os.path.dirname(__file__)
-        self.fnames = [os.path.join(cd, 'test_data', 'acceleration.txt')]
+        acc = np.loadtxt(os.path.join(cd, "test_data", "acceleration.txt"))
+        self.fnames = [os.path.join(cd, "test_data", "acceleration.txt")]
         self.dt_gm = 0.005
         self.t_max = 30.0
-        self.temp_folder = os.path.join(cd, 'test_data', 'temp')
+        self.time_vector = np.arange(len(acc)) * self.dt_gm
+        self.temp_folder = os.path.join(cd, "test_data", "temp")
         os.makedirs(self.temp_folder, exist_ok=True)
 
     def tearDown(self):
@@ -250,25 +252,114 @@ class TestModellerMethods(unittest.TestCase):
         self.assertAlmostEqual(phi[0], self.PHI[0], places=4)
 
     def test_spo_analysis(self):
-        self.model.do_spo_analysis(0.01, 5, 1, self.PHI, pflag=False)
+        self.model.do_spo_analysis(0.01, 5, 1, self.PHI, pFlag=False)
 
     def test_cpo_analysis(self):
         self.model.do_cpo_analysis(
-            0.01, [1, 5, 10], 1, 2, self.PHI, pflag=False)
+            0.01, [1, 5, 10], 1, 2, self.PHI, pFlag=False)
 
-    def test_nrha_analysis(self):
+    def test_nrha_analysis_returns_13_values(self):
         self.model.do_modal_analysis(num_modes=3)
-        self.model.do_nrha_analysis(
+        result = self.model.do_nrha_analysis(
             self.fnames,
             self.dt_gm,
             sf=9.81,
             t_max=self.t_max,
             dt_ansys=0.001,
             save_animation_path=self.temp_folder,
-            pflag=False,
+            pFlag=False,
             xi=0.05,
         )
+        self.assertEqual(len(result), 13)
+
+    def test_nrha_analysis_conv_index(self):
+        self.model.do_modal_analysis(num_modes=3)
+        result = self.model.do_nrha_analysis(
+            self.fnames,
+            self.dt_gm,
+            sf=9.81,
+            t_max=self.t_max,
+            dt_ansys=0.001,
+            pFlag=False,
+            xi=0.05,
+        )
+        _, conv_index, *_ = result
+        self.assertIn(conv_index, (0, 1))
+
+    def test_nrha_analysis_peak_drift_shape(self):
+        self.model.do_modal_analysis(num_modes=3)
+        result = self.model.do_nrha_analysis(
+            self.fnames,
+            self.dt_gm,
+            sf=9.81,
+            t_max=self.t_max,
+            dt_ansys=0.001,
+            pFlag=False,
+            xi=0.05,
+        )
+        _, _, peak_drift, *_ = result
+        # peak_drift shape: (n_storeys, n_directions)
+        self.assertEqual(peak_drift.shape[0], NUMBER_STOREYS)
+
+    def test_incremental_dynamic_analysis_returns(self):
+        self.model.do_modal_analysis(num_modes=3)
+        ida_data, ordered_sfs = self.model.do_incremental_dynamic_analysis(
+            self.fnames,
+            self.dt_gm,
+            t_max=self.t_max,
+            dt_ansys=0.001,
+            initial_sf=0.1,
+            hunt_step=2.0,
+            max_runs=2,
+            pFlag=False,
+        )
+        self.assertIsInstance(ida_data, dict)
+        self.assertIsInstance(ordered_sfs, list)
+        self.assertGreater(len(ordered_sfs), 0)
+
+    def test_incremental_dynamic_analysis_data_keys(self):
+        self.model.do_modal_analysis(num_modes=3)
+        ida_data, ordered_sfs = self.model.do_incremental_dynamic_analysis(
+            self.fnames,
+            self.dt_gm,
+            t_max=self.t_max,
+            dt_ansys=0.001,
+            initial_sf=0.1,
+            hunt_step=2.0,
+            max_runs=2,
+            pFlag=False,
+        )
+        # Each scale factor key should map to a result dict
+        for sf in ordered_sfs:
+            self.assertIn(sf, ida_data)
+            self.assertIsInstance(ida_data[sf], dict)
+
+    def test_nrha_analysis_sequences_returns_19_values(self):
+        self.model.do_modal_analysis(num_modes=3)
+        result = self.model.do_nrha_analysis_sequences(
+            self.fnames,
+            self.time_vector,
+            sf=9.81,
+            pFlag=False,
+            xi=0.05,
+        )
+        self.assertEqual(len(result), 19)
+
+    def test_nrha_analysis_sequences_n_sequences(self):
+        self.model.do_modal_analysis(num_modes=3)
+        result = self.model.do_nrha_analysis_sequences(
+            self.fnames,
+            self.time_vector,
+            sf=9.81,
+            pFlag=False,
+            xi=0.05,
+        )
+        n_sequences = result[17]
+        boundaries = result[18]
+        self.assertIsInstance(n_sequences, int)
+        self.assertGreater(n_sequences, 0)
+        self.assertEqual(len(boundaries), n_sequences)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
