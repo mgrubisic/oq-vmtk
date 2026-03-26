@@ -4,7 +4,8 @@ import numpy as np
 
 from openquake.vmtk.imcalculator import imcalculator
 
-class Testimcalculator(unittest.TestCase):
+
+class TestImCalculator(unittest.TestCase):
 
     # Test values
     pga_test = 0.54557
@@ -21,18 +22,17 @@ class Testimcalculator(unittest.TestCase):
     ai_test = 0.02069
     cav_test = 1.02289
     t595_test = 7.695
-    FIV3_test = 0.073900
+    fiv3_test = 0.073900
 
     def setUp(self):
         """
         Set up the imcalculator instance for each test.
         """
-        # Load acceleration data and dt from the file
         cd = os.path.dirname(__file__)
-        acc_test = np.loadtxt(os.path.join(cd, 'test_data', 'acceleration.txt'))
+        acc_test = np.loadtxt(
+            os.path.join(cd, "test_data", "acceleration.txt")
+        )
         dt_test = 0.005
-
-        # Create the imcalculator object
         self.calculator = imcalculator(acc_test, dt_test)
 
     def test_get_sa(self):
@@ -52,7 +52,9 @@ class Testimcalculator(unittest.TestCase):
         self.assertAlmostEqual(sa_avg10, self.avgsa10_test, places=4)
 
     def test_get_saavg_user_defined(self):
-        sa_avg_user = self.calculator.get_saavg_user_defined(self.periods_list)
+        sa_avg_user = self.calculator.get_saavg_user_defined(
+            self.periods_list
+        )
         self.assertAlmostEqual(sa_avg_user, self.user_avgsa_test, places=4)
 
     def test_get_amplitude_ims(self):
@@ -73,9 +75,18 @@ class Testimcalculator(unittest.TestCase):
         t595 = self.calculator.get_significant_duration()
         self.assertAlmostEqual(t595, self.t595_test, places=3)
 
-    def test_get_FIV3(self):
-        FIV3, _, _, _, _, _ = self.calculator.get_FIV3(period=0.3, alpha=1.0, beta=0.7)
-        self.assertAlmostEqual(FIV3, self.FIV3_test, places=3)
+    def test_get_duration_ims(self):
+        ai, cav, t595 = self.calculator.get_duration_ims()
+        self.assertAlmostEqual(ai, self.ai_test, places=3)
+        self.assertAlmostEqual(cav, self.cav_test, places=3)
+        self.assertAlmostEqual(t595, self.t595_test, places=3)
 
-if __name__ == '__main__':
+    def test_get_fiv3(self):
+        fiv3, _, _, _, _, _ = self.calculator.get_FIV3(
+            period=0.3, alpha=1.0, beta=0.7
+        )
+        self.assertAlmostEqual(fiv3, self.fiv3_test, places=3)
+
+
+if __name__ == "__main__":
     unittest.main()
