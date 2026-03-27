@@ -9,13 +9,13 @@ from unittest.mock import MagicMock, patch
 sys.modules.setdefault('openseespy', MagicMock())
 sys.modules.setdefault('openseespy.opensees', MagicMock())
 
-import matplotlib
-matplotlib.use('Agg')  # noqa: E402 — must precede pyplot import
+import matplotlib  # noqa: E402
+matplotlib.use('Agg')
 
-import matplotlib.pyplot as plt
-import numpy as np
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 
-from openquake.vmtk.plotter import plotter
+from openquake.vmtk.plotter import plotter  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

@@ -155,7 +155,7 @@ class TestSLFGeneratorPipeline(unittest.TestCase):
         self.assertEqual(len(total), self.model.realizations)
 
     def test_estimate_accuracy_returns_two_floats(self):
-        y    = np.linspace(0, 1, 100)
+        y = np.linspace(0, 1, 100)
         yhat = y + 0.01
         em, ec = self.model.estimate_accuracy(y, yhat)
         self.assertIsInstance(float(em), float)

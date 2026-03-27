@@ -1,7 +1,5 @@
-import os
 import re
 import pickle
-import numpy as np
 
 
 def import_from_pkl(path):
@@ -30,7 +28,7 @@ def export_to_pkl(path, var):
     Input
     -----
     :param path:           string                Path to the pickle file
-    :param var:          variable                Variable to store 
+    :param var:          variable                Variable to store
     ------
     Output
     ------

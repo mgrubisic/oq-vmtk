@@ -7,6 +7,7 @@ from matplotlib.lines import Line2D
 from openquake.vmtk.units import units
 from openquake.vmtk.plotter import plotter
 
+
 class modeller:
     """
     Model and analyse multi-degree-of-freedom (MDOF) oscillators
@@ -1716,7 +1717,7 @@ class modeller:
                 # Convergence Failure Handling (Extended Recovery)
                 if ok != 0:
                     print(
-                        f"FAILED at cycle {d+1}/{dispNoMax}, "
+                        f"FAILED at cycle {d + 1}/{dispNoMax}, "
                         f"increment {incr}/{numIncr}: "
                         f"Starting recovery attempts..."
                     )
@@ -1851,7 +1852,7 @@ class modeller:
             if pFlag is True:
                 curr_disp = ops.nodeDisp(control_node, push_dir)
                 print(
-                    f"Cycle target {d+1}/{dispNoMax}: Pushed node "
+                    f"Cycle target {d + 1}/{dispNoMax}: Pushed node "
                     f"{control_node} to {curr_disp:.4f}"
                 )
 
@@ -2074,7 +2075,7 @@ class modeller:
 
         h = []
         for i in range(len(top_nodes)):
-            topZ = ops.nodeCoord(top_nodes[i],    3)
+            topZ = ops.nodeCoord(top_nodes[i], 3)
             bottomZ = ops.nodeCoord(bottom_nodes[i], 3)
             dist = topZ - bottomZ
             if dist == 0:
@@ -2312,7 +2313,7 @@ class modeller:
                         if pFlag:
                             print(
                                 f'COLLAPSE DETECTED: Spring at '
-                                f'storey {s_idx+1} killed by MinMax'
+                                f'storey {s_idx + 1} killed by MinMax'
                                 f' at t={control_time:.3f}s.')
                         conv_index = -1
                         collapse_time = control_time
@@ -2322,7 +2323,7 @@ class modeller:
                         if pFlag:
                             print(
                                 f'COLLAPSE DETECTED! Spring at '
-                                f'storey {s_idx+1} reached MinMax '
+                                f'storey {s_idx + 1} reached MinMax '
                                 f'limit ({spring_deform:.4f} >= '
                                 f'{minmax_limits[s_idx]:.4f}) '
                                 f'at t={control_time:.3f}s. '
@@ -2334,7 +2335,7 @@ class modeller:
                     if pFlag:
                         print(
                             f'COLLAPSE DETECTED! Spring at storey '
-                            f'{s_idx+1} unresponsive (MinMax killed)'
+                            f'{s_idx + 1} unresponsive (MinMax killed)'
                             f' at t={control_time:.3f}s.')
                     conv_index = -1
                     collapse_time = control_time
@@ -2556,8 +2557,8 @@ class modeller:
                     f"Execution Limit Reached: {max_runs} runs. "
                     f"Skipping SF {sf_value:.3f}")
                 return None, None
-            print(
-                f" -- Run {self.run_count+1}/{max_runs} | SF: {sf_value:.3f}")
+            print(f" -- Run {self.run_count +
+                             1}/{max_runs} | SF: {sf_value:.3f}")
 
             # Reset environment and rebuild model for the current iteration
             ops.wipe()
@@ -2586,19 +2587,19 @@ class modeller:
             ordered_sfs.append(sf_value)
 
             # Store results in the main data dictionary
-            ida_data[sf_value] = {'control_nodes':      res[0],
-                                  'conv_index':         conv_state,
-                                  'peak_drift':         res[2],
-                                  'peak_accel':         res[3],
-                                  'max_peak_drift':     final_drift,
+            ida_data[sf_value] = {'control_nodes': res[0],
+                                  'conv_index': conv_state,
+                                  'peak_drift': res[2],
+                                  'peak_accel': res[3],
+                                  'max_peak_drift': final_drift,
                                   'max_peak_drift_dir': res[5],
                                   'max_peak_drift_loc': res[6],
-                                  'max_peak_accel':     res[7],
+                                  'max_peak_accel': res[7],
                                   'max_peak_accel_dir': res[8],
                                   'max_peak_accel_loc': res[9],
-                                  'peak_disp':          res[10],
+                                  'peak_disp': res[10],
                                   'hysteretic_energy_per_storey': res[11],
-                                  'total_hysteretic_energy':      res[12]}
+                                  'total_hysteretic_energy': res[12]}
             return final_drift, conv_state
 
         # Phase 1: Let's go hunting for collapse!
@@ -2617,15 +2618,15 @@ class modeller:
         while self.run_count < max_runs:
             sorted_sfs = sorted(ida_data.keys())
             refined = False
-            for i in range(len(sorted_sfs)-1):
+            for i in range(len(sorted_sfs) - 1):
                 if self.run_count >= max_runs:
                     break
-                sf_low, sf_high = sorted_sfs[i], sorted_sfs[i+1]
+                sf_low, sf_high = sorted_sfs[i], sorted_sfs[i + 1]
 
                 # Only fill if not already in the flatline region
                 if (sf_high - sf_low) > max_fill_gap and \
                         ida_data[sf_high]['max_peak_drift'] < 0.10:
-                    mid_sf = (sf_low + sf_high)/2.0
+                    mid_sf = (sf_low + sf_high) / 2.0
                     run_step(mid_sf)
                     refined = True
 
@@ -2836,7 +2837,6 @@ class modeller:
         #  The acc array stays unchanged (n values).
         # --------------------------------------------------------
         acc_x_full = np.loadtxt(fnames[0])
-        n_acc = len(acc_x_full)
         # Save the original last time value BEFORE any shift,
         # so the loop termination matches do_nrha_analysis exactly.
         t_max_original = float(time_vector[-1])
@@ -2846,7 +2846,6 @@ class modeller:
                 ([0.0], time_vector[:-1]))
 
         n_time_pts = len(time_vector)
-        t_max = time_vector[-1]
 
         # Verify lengths match
         if len(acc_x_full) != n_time_pts:
