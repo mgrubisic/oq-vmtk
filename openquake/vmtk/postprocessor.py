@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 from statsmodels.miscmodels.ordinal_model import OrderedModel
 
 
-class postprocessor():
+class postprocessor:
 
     """
     Class for post-processing results of nonlinear time-history analysis,
@@ -26,13 +26,14 @@ class postprocessor():
     -------
     calculate_lognormal_fragility(
         theta, sigma_record2record, sigma_build2build=0.30,
+        sigma_ds=0.30,
         intensities=np.round(np.geomspace(0.05, 10.0, 50), 3))
         Computes the probability of exceeding a damage state using a
         lognormal cumulative distribution function (CDF).
 
     calculate_rotated_fragility(
-        theta, percentile, sigma_record2record,
-        sigma_build2build=0.30,
+        percentile, theta, sigma_record2record,
+        sigma_build2build=0.30, sigma_ds=0.30,
         intensities=np.round(np.geomspace(0.05, 10.0, 50), 3))
         Calculates a rotated fragility function based on a lognormal
         CDF, adjusting the median intensity to align with a specified
@@ -53,7 +54,7 @@ class postprocessor():
 
     do_modified_cloud_analysis(
         imls, edps, damage_thresholds, lower_limit, censored_limit,
-        sigma_build2build=0.3,
+        sigma_build2build=0.3, sigma_ds=0.3,
         intensities=np.geomspace(0.05, 10, 50), n_bootstrap=200,
         random_seed=None, fragility_rotation=False,
         rotation_percentile=0.10, fragility_method='lognormal')
@@ -69,16 +70,12 @@ class postprocessor():
         Perform maximum likelihood estimation (MLE) for fragility curve
         fitting following a multiple stripe analysis.
 
-    calculate_sigma_loss(loss)
-        Calculate the uncertainty in the loss estimates based on the
-        method proposed in Silva (2019).
-
-    get_vulnerability_function(
-        poes, consequence_model,
-        intensities=np.round(np.geomspace(0.05, 10.0, 50), 3),
-        uncertainty=True)
-        Calculate the vulnerability function given the probabilities of
-        exceedance and a consequence model.
+    calculate_vulnerability_function(
+        poes, consequence_model, cov_consequence=None,
+        uncertainty=True, method=None,
+        intensities=np.round(np.geomspace(0.05, 10.0, 50), 3))
+        Compute a vulnerability function by convolving fragility
+        functions with a consequence (damage-to-loss) model.
 
     calculate_average_annual_damage_probability(
         fragility_array, hazard_array, return_period=1,
