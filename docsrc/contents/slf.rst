@@ -1,7 +1,7 @@
 Storey-Loss Function Generation Module
 ######################################
 
-The ``slf_generator`` module provides a class ``slf_generator`` to generate Storey Loss Functions
+The ``slfgenerator`` module provides a class ``slfgenerator`` to generate Storey Loss Functions
 (SLFs) based on fragility, consequence, and quantity data. SLFs establish a direct relationship
 between the expected loss at a specific storey and the engineering demand parameter.
 This class employs a probabilistic approach, utilizing Monte Carlo simulations to model damage,
@@ -11,7 +11,7 @@ user-defined inventory of damageable components.
 Classes
 -------
 
-.. class:: slf_generator()
+.. class:: slfgenerator()
 
    A class for generating Storey Loss Functions (SLFs) using fragility, consequence, and quantity data. It applies a probabilistic approach to quantify the loss and its distribution across various storeys of a building under seismic loading.
 
@@ -197,13 +197,13 @@ Example Usage
 
 .. code-block:: python
 
-    from slf_generator import slf_generator
+    from slfgenerator import slfgenerator
 
     # Example component data
     component_data = pd.read_csv('inventory.csv')
 
     # Initialize SLF Generator
-    model = slf_generator(component_data=component_data,
+    model = slfgenerator(component_data=component_data,
                           edp="psd",
                           typology=["structural"],
                           edp_range=[0.0, 0.5],
