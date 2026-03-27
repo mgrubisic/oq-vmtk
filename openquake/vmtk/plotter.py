@@ -1,20 +1,21 @@
+import math
 import os
+
+import matplotlib.animation as animation
+import matplotlib.colors as mcolors
+import matplotlib.gridspec as gridspec
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from scipy import stats
-import matplotlib.pyplot as plt
 import openseespy.opensees as ops
-from matplotlib.lines import Line2D
-import matplotlib.patches as mpatches
-import matplotlib.colors as mcolors
-from scipy.stats import norm, lognorm
-import matplotlib.gridspec as gridspec
-from scipy.interpolate import interp1d
-import matplotlib.animation as animation
-from matplotlib.ticker import AutoMinorLocator
 from matplotlib.animation import FuncAnimation
-from scipy.interpolate import CubicSpline
+from matplotlib.ticker import AutoMinorLocator
+from scipy import stats
+from scipy.interpolate import CubicSpline, interp1d
+from scipy.stats import norm
+
 
 class plotter:
     """
@@ -251,21 +252,18 @@ class plotter:
             Corresponding floor elevation values, also expanded to match ``x``.
             Each storey boundary elevation is repeated twice.
         """
-        x = []; y = []
-        for i in range(len(control_nodes)-1):
-            y.extend((float(control_nodes[i]),float(control_nodes[i+1])))
-            x.extend((peak_drift_list[i],peak_drift_list[i]))
-        y.append(float(control_nodes[i+1]))
+        x = []
+        y = []
+        for i in range(len(control_nodes) - 1):
+            y.extend((float(control_nodes[i]), float(control_nodes[i + 1])))
+            x.extend((peak_drift_list[i], peak_drift_list[i]))
+        y.append(float(control_nodes[i + 1]))
         x.append(0.0)
 
         return x, y
 
+    # PLOT MODAL ANALYSIS OUTPUT
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                      PLOT MODAL ANALYSIS OUTPUT                                             #
-    #                                                                                                             #
-    ###############################################################################################################
     def plot_modes(self,
                    node_list,
                    mode_shape_vectors,
@@ -306,22 +304,19 @@ class plotter:
         -------
         None
         """
-        import math
-        from scipy.interpolate import interp1d
-
-        COL_BASE  = '#B71C1C'
-        COL_NODE  = '#1565C0'
+        COL_BASE = '#B71C1C'
+        COL_NODE = '#1565C0'
         COL_UNDEF = '#90A4AE'
-        COL_ANN   = '#37474F'
-        COL_GRID  = '#EBEBEB'
-        COL_X     = '#1565C0'
-        COL_Y     = '#2E7D32'
-        BG        = 'white'
+        COL_ANN = '#37474F'
+        COL_GRID = '#EBEBEB'
+        COL_X = '#1565C0'
+        COL_Y = '#2E7D32'
+        BG = 'white'
 
-        node_z    = np.array([ops.nodeCoord(tag, 3) for tag in node_list])
-        n_nodes   = len(node_list)
+        node_z = np.array([ops.nodeCoord(tag, 3) for tag in node_list])
+        n_nodes = len(node_list)
         num_modes = len(T)
-        unique_z  = np.unique(node_z)
+        unique_z = np.unique(node_z)
         z_min, z_max = unique_z[0], unique_z[-1]
 
         def _fix_sign(phi):
@@ -339,15 +334,15 @@ class plotter:
         gs = gridspec.GridSpec(nrows, ncols * 2, figure=fig,
                                hspace=0.50, wspace=0.35,
                                left=0.07, right=0.97,
-                               top=0.88,  bottom=0.08)
+                               top=0.88, bottom=0.08)
 
-        interp_kind = ('cubic'     if len(unique_z) >= 4 else
+        interp_kind = ('cubic' if len(unique_z) >= 4 else
                        'quadratic' if len(unique_z) == 3 else 'linear')
         z_sm = np.linspace(z_min, z_max, 300)
 
         for idx in range(ncols * nrows):
-            row  = idx // ncols
-            col  = idx  % ncols
+            row = idx // ncols
+            col = idx % ncols
             gc_x = col * 2
             gc_y = col * 2 + 1
 
@@ -357,14 +352,14 @@ class plotter:
                     ax.set_visible(False)
                 continue
 
-            phi    = norms[idx]
-            ux     = phi[:, 0]
-            uy     = phi[:, 1]
-            ux_sm  = interp1d(unique_z, ux, kind=interp_kind)(z_sm)
-            uy_sm  = interp1d(unique_z, uy, kind=interp_kind)(z_sm)
+            phi = norms[idx]
+            ux = phi[:, 0]
+            uy = phi[:, 1]
+            ux_sm = interp1d(unique_z, ux, kind=interp_kind)(z_sm)
+            uy_sm = interp1d(unique_z, uy, kind=interp_kind)(z_sm)
             xlim_x = max(np.max(np.abs(ux)) * 1.55, 0.12)
             xlim_y = max(np.max(np.abs(uy)) * 1.55, 0.12)
-            dom    = 'X' if np.max(np.abs(ux)) >= np.max(np.abs(uy)) else 'Y'
+            dom = 'X' if np.max(np.abs(ux)) >= np.max(np.abs(uy)) else 'Y'
             t_base = (f'Mode {idx+1} [{dom}-dir]  \u2014  '
                       f'$T_{{{idx+1}}} = {T[idx]:.3f}$ s')
 
@@ -378,8 +373,9 @@ class plotter:
                         zorder=3, solid_capstyle='round')
                 ann_off = xlim * 0.05
                 for i in range(n_nodes):
-                    z_i = node_z[i]; d_i = disps[i]
-                    nc  = COL_BASE if i == 0 else col_node
+                    z_i = node_z[i]
+                    d_i = disps[i]
+                    nc = COL_BASE if i == 0 else col_node
                     ax.scatter(d_i, z_i,
                                marker='s' if i == 0 else 'o',
                                s=55 if i == 0 else 40,
@@ -420,11 +416,8 @@ class plotter:
             plt.show()
         plt.close(fig)
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                   ANIMATE STATIC PUSHOVER ANALYSES                                          #
-    #                                                                                                             #
-    ###############################################################################################################
+    # ANIMATE STATIC PUSHOVER ANALYSES
+
     def animate_spo(self,
                     spo_top_disp,
                     spo_rxn,
@@ -463,15 +456,15 @@ class plotter:
         dpi : int, optional
             Export resolution. Default 100.
         """
-        spo_rxn   = np.asarray(spo_rxn)
-        spo_midr  = np.asarray(spo_midr)
+        spo_rxn = np.asarray(spo_rxn)
+        spo_midr = np.asarray(spo_midr)
         spo_disps = np.asarray(spo_disps)
-        phi_arr   = np.asarray(phi, dtype=float)
-        phi_norm  = phi_arr / phi_arr.max()
+        phi_arr = np.asarray(phi, dtype=float)
+        phi_norm = phi_arr / phi_arr.max()
 
-        total_steps   = len(spo_top_disp)
+        total_steps = len(spo_top_disp)
         frame_indices = np.arange(0, total_steps, frame_step)
-        num_frames    = len(frame_indices)
+        num_frames = len(frame_indices)
         deform_factor = 1
 
         NodeCoordListX_und = [ops.nodeCoord(tag, 1) for tag in nodeList]
@@ -487,9 +480,9 @@ class plotter:
         vert_und = NodeCoordListZ_und
 
         max_disp_ever = np.max(np.abs(spo_disps))
-        half_x        = max(max_disp_ever * 1.5, 0.01)
-        arrow_scale   = (half_x * 0.40) / spo_rxn.max()
-        model_xlim    = (
+        half_x = max(max_disp_ever * 1.5, 0.01)
+        arrow_scale = (half_x * 0.40) / spo_rxn.max()
+        model_xlim = (
             -(half_x * 0.25 + spo_rxn.max() * arrow_scale * 1.1),
             half_x * 1.25
         )
@@ -507,11 +500,11 @@ class plotter:
         _FS = 11  # uniform fontsize for all SPO animation text
 
         fig = plt.figure(figsize=self.figsize_anim)
-        gs  = gridspec.GridSpec(2, 2, figure=fig,
-                                width_ratios=[1.1, 1],
-                                left=0.07, right=0.97,
-                                top=0.95,  bottom=0.08,
-                                hspace=0.45, wspace=0.35)
+        gs = gridspec.GridSpec(2, 2, figure=fig,
+                               width_ratios=[1.1, 1],
+                               left=0.07, right=0.97,
+                               top=0.95, bottom=0.08,
+                               hspace=0.45, wspace=0.35)
         ax_model = fig.add_subplot(gs[:, 0])
         ax_curve = fig.add_subplot(gs[0, 1])
         ax_drift = fig.add_subplot(gs[1, 1])
@@ -521,7 +514,7 @@ class plotter:
                          marker='o', s=40, color='gray', alpha=0.5, zorder=3)
         for ii, jj in ele_pairs:
             ax_model.plot([horiz_und[ii], horiz_und[jj]],
-                          [vert_und[ii],  vert_und[jj]],
+                          [vert_und[ii], vert_und[jj]],
                           color='gray', ls='--', lw=1.0, alpha=0.5, zorder=2)
         ax_model.set_xlabel(x_label_model, fontsize=_FS)
         ax_model.set_ylabel('Elevation [m]', fontsize=_FS)
@@ -574,10 +567,10 @@ class plotter:
                 arrow_len = phi_norm[i] * current_shear * arrow_scale
                 ax_model.annotate(
                     '',
-                    xy     =(xdi,             zdi),
-                    xytext =(xdi - arrow_len, zdi),
+                    xy=(xdi, zdi),
+                    xytext=(xdi - arrow_len, zdi),
                     arrowprops=dict(arrowstyle='->', color='#E65100',
-                                   lw=1.5, mutation_scale=10),
+                                    lw=1.5, mutation_scale=10),
                     zorder=6
                 )
 
@@ -586,7 +579,7 @@ class plotter:
                 fontsize=_FS, fontweight='bold'
             )
             curve_anim.set_data(spo_top_disp[:frame + 1], spo_rxn[:frame + 1])
-            drift_anim.set_data(spo_midr[:frame + 1],     spo_rxn[:frame + 1])
+            drift_anim.set_data(spo_midr[:frame + 1], spo_rxn[:frame + 1])
             return curve_anim, drift_anim
 
         ani = animation.FuncAnimation(fig, update, frames=num_frames,
@@ -642,22 +635,20 @@ class plotter:
         """
         # Data Extraction and Processing
         cpo_top_disp = cpo_dict['cpo_top_disp']
-        cpo_rxn      = cpo_dict['cpo_rxn']
-        cpo_disps    = cpo_dict['cpo_disps']
-        cpo_drifts   = cpo_dict['cpo_idr']
+        cpo_rxn = cpo_dict['cpo_rxn']
+        cpo_disps = cpo_dict['cpo_disps']
+        cpo_drifts = cpo_dict['cpo_idr']
 
-        deform_factor    = 1.0
-        total_steps      = len(cpo_top_disp)
-        max_frames_cpo   = 150
-        frame_step_cpo   = max(1, total_steps // max_frames_cpo)
+        deform_factor = 1.0
+        total_steps = len(cpo_top_disp)
+        max_frames_cpo = 150
+        frame_step_cpo = max(1, total_steps // max_frames_cpo)
         frame_indices_cpo = np.arange(0, total_steps, frame_step_cpo)
         if frame_indices_cpo[-1] != total_steps - 1:
             frame_indices_cpo = np.append(frame_indices_cpo, total_steps - 1)
-        num_frames = len(frame_indices_cpo)
-
         # Find the drift (with sign) of the floor with the maximum absolute
         # drift at each step.
-        max_drift_indices       = np.argmax(np.abs(cpo_drifts), axis=1)
+        max_drift_indices = np.argmax(np.abs(cpo_drifts), axis=1)
         governing_drift_history = cpo_drifts[np.arange(total_steps), max_drift_indices]
 
         # Max absolute drift for setting limits
@@ -668,12 +659,12 @@ class plotter:
         # Energy is always accumulated (absolute value of increment) so the
         # curve is monotonically increasing.
         cpo_top_disp_arr = np.asarray(cpo_top_disp)
-        cpo_rxn_arr      = np.asarray(cpo_rxn)
-        du      = np.diff(cpo_top_disp_arr)
-        f_avg   = 0.5 * (cpo_rxn_arr[:-1] + cpo_rxn_arr[1:])
-        dE      = np.abs(f_avg * du)          # always positive increment
+        cpo_rxn_arr = np.asarray(cpo_rxn)
+        du = np.diff(cpo_top_disp_arr)
+        f_avg = 0.5 * (cpo_rxn_arr[:-1] + cpo_rxn_arr[1:])
+        dE = np.abs(f_avg * du)          # always positive increment
         cumul_energy = np.concatenate(([0.0], np.cumsum(dE)))  # length = num_frames
-        max_energy   = cumul_energy[-1] * 1.1
+        max_energy = cumul_energy[-1] * 1.1
 
         # Get undeformed coordinates once
         NodeCoordListX_und = [ops.nodeCoord(tag, 1) for tag in nodeList]
@@ -682,20 +673,20 @@ class plotter:
 
         if push_dir == 1:
             plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
-            x_label_model   = 'X-Direction [m]'
-            y_label_model   = 'Z-Direction [m]'
+            x_label_model = 'X-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
         elif push_dir == 2:
             plot_coords_und = (NodeCoordListY_und, NodeCoordListZ_und)
-            x_label_model   = 'Y-Direction [m]'
-            y_label_model   = 'Z-Direction [m]'
+            x_label_model = 'Y-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
         elif push_dir == 3:
             plot_coords_und = (NodeCoordListZ_und, NodeCoordListX_und)
-            x_label_model   = 'Z-Direction [m]'
-            y_label_model   = 'X-Direction [m]'
+            x_label_model = 'Z-Direction [m]'
+            y_label_model = 'X-Direction [m]'
         else:
             plot_coords_und = (NodeCoordListX_und, NodeCoordListZ_und)
-            x_label_model   = 'X-Direction [m]'
-            y_label_model   = 'Z-Direction [m]'
+            x_label_model = 'X-Direction [m]'
+            y_label_model = 'Z-Direction [m]'
 
         max_abs_coord_x = np.max(np.abs(plot_coords_und[0]))
         max_abs_coord_y = np.max(np.abs(plot_coords_und[1]))
@@ -708,17 +699,17 @@ class plotter:
 
         # Initialize the Figure and Subplots
         fig = plt.figure(figsize=self.figsize_anim)
-        gs  = gridspec.GridSpec(3, 2, figure=fig,
-                                left=0.07, right=0.97,
-                                top=0.95,  bottom=0.08,
-                                hspace=0.55, wspace=0.35)
-        ax_model  = fig.add_subplot(gs[:, 0])   # full-height left panel
-        ax_curve  = fig.add_subplot(gs[0, 1])
-        ax_drift  = fig.add_subplot(gs[1, 1])
+        gs = gridspec.GridSpec(3, 2, figure=fig,
+                               left=0.07, right=0.97,
+                               top=0.95, bottom=0.08,
+                               hspace=0.55, wspace=0.35)
+        ax_model = fig.add_subplot(gs[:, 0])   # full-height left panel
+        ax_curve = fig.add_subplot(gs[0, 1])
+        ax_drift = fig.add_subplot(gs[1, 1])
         ax_energy = fig.add_subplot(gs[2, 1])
 
         # Store count of static artists for cleanup in update()
-        num_static_lines       = len(elementList)
+        num_static_lines = len(elementList)
         num_static_collections = 1
 
         # Static (undeformed) background
@@ -741,7 +732,10 @@ class plotter:
 
         ax_model.set_xlabel(x_label_model, fontsize=_FS)
         ax_model.set_ylabel(y_label_model, fontsize=_FS)
-        ax_model.set_title('Deformed Model Shape (Cyclic Pushover)', fontsize=_FS, fontweight='bold')
+        ax_model.set_title(
+            'Deformed Model Shape (Cyclic Pushover)',
+            fontsize=_FS,
+            fontweight='bold')
         ax_model.set_xlim(model_x_lim)
         ax_model.set_ylim(model_y_lim)
         ax_model.grid(True)
@@ -792,8 +786,6 @@ class plotter:
         ax_energy.tick_params(labelsize=_FS)
 
         def update(frame):
-            nonlocal num_static_lines, num_static_collections
-
             # Remove deformed artists from previous frame
             while len(ax_model.lines) > num_static_lines:
                 ax_model.lines[-1].remove()
@@ -802,7 +794,7 @@ class plotter:
 
             # Deformed coordinates
             current_disps_floor = cpo_disps[frame]
-            full_node_disps     = np.insert(current_disps_floor, 0, 0, axis=0)
+            full_node_disps = np.insert(current_disps_floor, 0, 0, axis=0)
 
             if push_dir == 1:
                 X_def = [plot_coords_und[0][i] + full_node_disps[i] * deform_factor
@@ -837,7 +829,10 @@ class plotter:
                 y_def = [plot_coords_def[1][i], plot_coords_def[1][j]]
                 ax_model.plot(x_def, y_def, color='blue', linewidth=1.5)
 
-            ax_model.set_title(f'Step: {frame}/{total_steps - 1} (Scale: {deform_factor}x)', fontsize=_FS, fontweight='bold')
+            ax_model.set_title(
+                f'Step: {frame}/{total_steps - 1} (Scale: {deform_factor}x)',
+                fontsize=_FS,
+                fontweight='bold')
 
             curve_anim.set_data(cpo_top_disp[:frame + 1], cpo_rxn[:frame + 1])
             drift_anim.set_data(governing_drift_history[:frame + 1],
@@ -869,10 +864,8 @@ class plotter:
 
         plt.close(fig)
 
-    #                                                                                                             #
-    #                                   ANIMATE NONLINEAR TIME-HISTORY ANALYSES                                   #
-    #                                                                                                             #
-    ###############################################################################################################
+    # ANIMATE NONLINEAR TIME-HISTORY ANALYSES
+
     def animate_nrha(self,
                      control_nodes,
                      acc,
@@ -933,28 +926,28 @@ class plotter:
         -------
         ani : FuncAnimation
         """
-        acc  = np.asarray(acc)
-        dts  = np.asarray(dts)
-        nrha_disps  = np.asarray(nrha_disps)
+        acc = np.asarray(acc)
+        dts = np.asarray(dts)
+        nrha_disps = np.asarray(nrha_disps)
         nrha_accels = np.asarray(nrha_accels)
 
         # Subsample for speed
         frame_indices = np.arange(0, len(dts), frame_step)
-        num_frames    = len(frame_indices)
+        num_frames = len(frame_indices)
 
         # Storey geometry
         node_z_coords = np.array([ops.nodeCoord(n, 3) for n in control_nodes])
-        sorted_idx    = np.argsort(node_z_coords)
+        sorted_idx = np.argsort(node_z_coords)
         control_nodes = np.array(control_nodes)[sorted_idx]
         node_z_coords = node_z_coords[sorted_idx]
         storey_heights = np.diff(node_z_coords)
-        n_storeys      = len(storey_heights)
+        n_storeys = len(storey_heights)
 
         if np.any(storey_heights <= 1e-6):
             print("Warning: Zero or near-zero storey height detected")
 
         # Pre-compute axis limits from full data for stable axes
-        max_abs_disp  = np.max(np.abs(nrha_disps))  if nrha_disps.size  else 0.01
+        max_abs_disp = np.max(np.abs(nrha_disps)) if nrha_disps.size else 0.01
         max_abs_accel = np.max(np.abs(nrha_accels / 9.81)) if nrha_accels.size else 1.0
 
         # Pre-compute storey drifts for ALL frames to get drift xlim.
@@ -975,25 +968,26 @@ class plotter:
 
         # Figure — 4 rows, height ratios give more space to profiles, less to GM
         fig = plt.figure(figsize=self.figsize_anim, constrained_layout=True)
-        gs  = gridspec.GridSpec(4, 1, height_ratios=[1, 1, 1, 0.7], figure=fig)
+        gs = gridspec.GridSpec(4, 1, height_ratios=[1, 1, 1, 0.7], figure=fig)
 
-        ax_disp  = fig.add_subplot(gs[0])   # displacement profile
+        ax_disp = fig.add_subplot(gs[0])   # displacement profile
         ax_drift = fig.add_subplot(gs[1])   # storey drift profile
         ax_accel = fig.add_subplot(gs[2])   # acceleration profile
-        ax_gm    = fig.add_subplot(gs[3])   # ground motion
+        ax_gm = fig.add_subplot(gs[3])   # ground motion
 
         # ── Static background elements ────────────────────────────────────────
         # Undeformed centreline
-        ax_disp.plot(np.zeros_like(node_z_coords),  node_z_coords,
+        ax_disp.plot(np.zeros_like(node_z_coords), node_z_coords,
                      color='gray', lw=1.0, alpha=0.6)
         ax_accel.plot(np.zeros_like(node_z_coords), node_z_coords,
                       color='gray', lw=1.0, alpha=0.6)
         # Drift zero-line (staircase x=0)
         x_zero, y_zero = [], []
         for s in range(n_storeys):
-            y_zero.extend([node_z_coords[s], node_z_coords[s+1]])
+            y_zero.extend([node_z_coords[s], node_z_coords[s + 1]])
             x_zero.extend([0.0, 0.0])
-        y_zero.append(node_z_coords[-1]); x_zero.append(0.0)
+        y_zero.append(node_z_coords[-1])
+        x_zero.append(0.0)
         ax_drift.plot(x_zero, y_zero, color='gray', lw=1.0, alpha=0.6)
 
         # Ground motion ghost
@@ -1015,7 +1009,7 @@ class plotter:
         # Per-storey: each storey independently tracks its worst-ever state so
         # colours never regress (a storey that turned red stays red).
         damage_colors = ['#1E88E5', '#43A047', '#FDD835', '#FB8C00', '#E53935']
-        n_ds          = len(damage_colors)
+        n_ds = len(damage_colors)
         # Worst damage state reached so far, per storey (for drift staircase
         # and disp/accel segments) — shape (n_storeys,)
         storey_damage_state = np.zeros(n_storeys, dtype=int)
@@ -1023,26 +1017,28 @@ class plotter:
         max_damage_state = 0
 
         # Seed peak annotations from true full-resolution values
-        max_drift_val = float(np.max(true_peak_drift) * 100.0) if true_peak_drift is not None else 0.0
-        max_accel_val = float(np.max(true_peak_accel))         if true_peak_accel is not None else 0.0
+        max_drift_val = float(
+            np.max(true_peak_drift) *
+            100.0) if true_peak_drift is not None else 0.0
+        max_accel_val = float(np.max(true_peak_accel)) if true_peak_accel is not None else 0.0
 
         # ── Animated lines — one segment per storey/interval ─────────────────
         # drift staircase: one vertical Line2D per storey + one horizontal
         # connector per inter-storey junction (coloured like the storey below).
         # Base connector: horizontal from 0 → drift[0] at z[0] (ground level).
-        drift_lines      = [ax_drift.plot([], [], color=damage_colors[0], lw=2.5)[0]
-                            for _ in range(n_storeys)]          # verticals
-        drift_h_lines    = [ax_drift.plot([], [], color=damage_colors[0], lw=2.5)[0]
-                            for _ in range(n_storeys)]          # horizontals at top of each storey
+        drift_lines = [ax_drift.plot([], [], color=damage_colors[0], lw=2.5)[0]
+                       for _ in range(n_storeys)]          # verticals
+        drift_h_lines = [ax_drift.plot([], [], color=damage_colors[0], lw=2.5)[0]
+                         for _ in range(n_storeys)]          # horizontals at top of each storey
         drift_base_line, = ax_drift.plot([], [], color=damage_colors[0], lw=2.5)  # base horizontal
         # displacement profile: one segment per storey interval + node markers
-        disp_lines   = [ax_disp.plot([], [], 'o-', color=damage_colors[0],
-                                     lw=2.0, ms=5)[0]
-                        for _ in range(n_storeys)]
+        disp_lines = [ax_disp.plot([], [], 'o-', color=damage_colors[0],
+                                   lw=2.0, ms=5)[0]
+                      for _ in range(n_storeys)]
         # acceleration profile: one segment per storey interval + node markers
-        accel_lines  = [ax_accel.plot([], [], 'o-', color=damage_colors[0],
-                                      lw=2.0, ms=5)[0]
-                        for _ in range(n_storeys)]
+        accel_lines = [ax_accel.plot([], [], 'o-', color=damage_colors[0],
+                                     lw=2.0, ms=5)[0]
+                       for _ in range(n_storeys)]
         # ground motion trace — single line, coloured by worst global state
         line_gm_trace, = ax_gm.plot([], [], color=damage_colors[0], lw=1.6)
 
@@ -1094,15 +1090,14 @@ class plotter:
             thr_colors = damage_colors[1:]
             for ti, thr in enumerate(drift_thresholds):
                 ax_drift.axvline(thr * 100.0,
-                                 color=thr_colors[min(ti, len(thr_colors)-1)],
+                                 color=thr_colors[min(ti, len(thr_colors) - 1)],
                                  lw=0.8, ls='--', alpha=0.7)
 
-
         def update(anim_frame):
-            nonlocal storey_damage_state, max_damage_state, max_drift_val, max_accel_val
+            nonlocal max_damage_state, max_drift_val, max_accel_val
             frame = int(frame_indices[anim_frame])
 
-            disp_values  = nrha_disps[frame, :]
+            disp_values = nrha_disps[frame, :]
             accel_values = nrha_accels[frame, :]   # already in g
 
             # ── Per-storey drift [%] ──────────────────────────────────────────
@@ -1134,7 +1129,7 @@ class plotter:
                 # Vertical: constant x = drift[s], from z[s] to z[s+1]
                 drift_lines[s].set_data(
                     [storey_drifts_pct[s], storey_drifts_pct[s]],
-                    [node_z_coords[s],     node_z_coords[s + 1]]
+                    [node_z_coords[s], node_z_coords[s + 1]]
                 )
                 drift_lines[s].set_color(c)
                 # Horizontal at top of storey s: from drift[s] to drift[s+1]
@@ -1155,8 +1150,8 @@ class plotter:
             for s in range(n_storeys):
                 c = damage_colors[min(storey_damage_state[s], n_ds - 1)]
                 disp_lines[s].set_data(
-                    [disp_values[s],       disp_values[s + 1]],
-                    [node_z_coords[s],     node_z_coords[s + 1]]
+                    [disp_values[s], disp_values[s + 1]],
+                    [node_z_coords[s], node_z_coords[s + 1]]
                 )
                 disp_lines[s].set_color(c)
 
@@ -1164,8 +1159,8 @@ class plotter:
             for s in range(n_storeys):
                 c = damage_colors[min(storey_damage_state[s], n_ds - 1)]
                 accel_lines[s].set_data(
-                    [accel_values[s],      accel_values[s + 1]],
-                    [node_z_coords[s],     node_z_coords[s + 1]]
+                    [accel_values[s], accel_values[s + 1]],
+                    [node_z_coords[s], node_z_coords[s + 1]]
                 )
                 accel_lines[s].set_color(c)
 
@@ -1216,10 +1211,9 @@ class plotter:
                              peak_drift_list,
                              peak_accel_list,
                              control_nodes,
-                             title = None,
-                             pFlag = True,
-                             export_path = None):
-
+                             title=None,
+                             pFlag=True,
+                             export_path=None):
         """
         Generate demand profile plots for peak storey drifts and peak floor accelerations.
 
@@ -1264,8 +1258,14 @@ class plotter:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=self.figsize, constrained_layout=True)
 
         # Apply standard styles to subplots
-        self._set_plot_style(ax1, xlabel=r'Peak Storey Drift, $\theta_{max}$ [%]', ylabel='Floor No.')
-        self._set_plot_style(ax2, xlabel=r'Peak Floor Acceleration, $a_{max}$ [g]', ylabel='Floor No.')
+        self._set_plot_style(
+            ax1,
+            xlabel=r'Peak Storey Drift, $\theta_{max}$ [%]',
+            ylabel='Floor No.')
+        self._set_plot_style(
+            ax2,
+            xlabel=r'Peak Floor Acceleration, $a_{max}$ [g]',
+            ylabel='Floor No.')
 
         nst = len(control_nodes) - 1
         for i in range(len(peak_drift_list)):
@@ -1309,11 +1309,8 @@ class plotter:
         else:
             plt.close()
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                   PLOT MODIFIED CLOUD ANALYSES OUTPUTS                                      #
-    #                                                                                                             #
-    ###############################################################################################################
+    # PLOT MODIFIED CLOUD ANALYSES OUTPUTS
+
     def plot_mca_analysis(self,
                           cloud_dict,
                           imt_label,
@@ -1321,174 +1318,172 @@ class plotter:
                           title=None,
                           pFlag=True,
                           export_path=None):
-            """
-            Visualizes the Modified Cloud Analysis (MCA) regression including bootstrapping.
-            This plot accounts for collapse cases using logistic regression, showing the
-            'softening' effect on the median and percentile structural response.
+        """
+        Visualizes the Modified Cloud Analysis (MCA) regression including bootstrapping.
+        This plot accounts for collapse cases using logistic regression, showing the
+        'softening' effect on the median and percentile structural response.
 
-            The figure uses ``self.figsize`` with ``constrained_layout`` and is
-            saved without ``bbox_inches='tight'`` so that every output image has
-            identical, deterministic pixel dimensions.
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
 
-            Parameters
-            ----------
-            cloud_dict : dict
-                The processed results dictionary returned by `do_cloud_analysis`.
+        Parameters
+        ----------
+        cloud_dict : dict
+            The processed results dictionary returned by `do_cloud_analysis`.
 
-            This method plots cloud data, damage thresholds, a fitted regression line,
-            and upper and lower censoring limits. The data is presented in logarithmic
-            scale for both axes.
+        This method plots cloud data, damage thresholds, a fitted regression line,
+        and upper and lower censoring limits. The data is presented in logarithmic
+        scale for both axes.
 
-            Parameters:
-            ----------
-            cloud_dict : dict
-                A dictionary containing the data for the cloud analysis. The dictionary
-                should have the following keys (direct output from do_cloud_analysis method)
+        Parameters:
+        ----------
+        cloud_dict : dict
+            A dictionary containing the data for the cloud analysis. The dictionary
+            should have the following keys (direct output from do_cloud_analysis method)
 
-            imt_label : str
-                Intensity Measure Label for the Y-axis (e.g., 'PGA [g]').
+        imt_label : str
+            Intensity Measure Label for the Y-axis (e.g., 'PGA [g]').
 
-            edp_label : str
-                Engineering Demand Parameter Label for the X-axis (e.g., 'PSD [-]').
+        edp_label : str
+            Engineering Demand Parameter Label for the X-axis (e.g., 'PSD [-]').
 
-            title : str, optional, default=None
-                A custom title for the figure. If not provided, a default title
-                incorporating the Intensity Measure (IM) label is used.
+        title : str, optional, default=None
+            A custom title for the figure. If not provided, a default title
+            incorporating the Intensity Measure (IM) label is used.
 
-            pFlag : bool, optional, default=True
-                If True, the plot is processed (saved/shown).
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
 
-            export_path : str, optional
-                Full path including filename to save the plot. Creates directories if missing.
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
 
-            Returns:
-            --------
-            None
-                This function saves the plot to a file in the specified output directory.
+        Returns:
+        --------
+        None
+            This function saves the plot to a file in the specified output directory.
 
-            """
+        """
 
-            # Setup Data
-            inputs = cloud_dict['cloud inputs']
-            reg    = cloud_dict['regression']
-            frag   = cloud_dict['fragility']
-            boot   = cloud_dict['bootstraps']
-            raw    = cloud_dict['raw_data']
-            c_limit = inputs['upper_limit']
+        # Setup Data
+        inputs = cloud_dict['cloud inputs']
+        reg = cloud_dict['regression']
+        boot = cloud_dict['bootstraps']
+        raw = cloud_dict['raw_data']
+        c_limit = inputs['upper_limit']
 
-            # Define Dynamic Range
-            all_ims = inputs['imls']
-            x_min, x_max = all_ims.min() * 0.8, all_ims.max() * 1.2
-            im_vector = np.geomspace(x_min, x_max, 100)
+        # Define Dynamic Range
+        all_ims = inputs['imls']
+        x_min, x_max = all_ims.min() * 0.8, all_ims.max() * 1.2
+        im_vector = np.geomspace(x_min, x_max, 100)
 
-            # Helper Functions for MCA logic
-            # Predicted EDP from Cloud: a * IM^b
-            f_edp_nc = lambda a, im, b: a * (im**b)
-            # Predicted Prob. of Collapse from Logistic: 1 / (1 + exp(-(a0 + a1*lnIM)))
-            f_p_coll = lambda a0, a1, im: 1 / (1 + np.exp(-(a0 + a1 * np.log(im))))
-            # MCA median: EDP_nc * exp(sigma * norm_inv(0.5 / (1 - P_collapse)))
-            f_mca    = lambda edp, sig, p_c, percentile: edp * np.exp(sig * norm.ppf(percentile / (1 - p_c)))
+        # Helper Functions for MCA logic
+        # Predicted EDP from Cloud: a * IM^b
+        def f_edp_nc(a, im, b): return a * (im**b)
+        # Predicted Prob. of Collapse from Logistic: 1 / (1 + exp(-(a0 + a1*lnIM)))
+        def f_p_coll(a0, a1, im): return 1 / (1 + np.exp(-(a0 + a1 * np.log(im))))
+        # MCA median: EDP_nc * exp(sigma * norm_inv(0.5 / (1 - P_collapse)))
 
-            # Initialise Plot
-            fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
+        def f_mca(edp, sig, p_c, percentile): return edp * \
+            np.exp(sig * norm.ppf(percentile / (1 - p_c)))
 
-            # Apply consistent Class Styling
-            default_title = f"MCA: {imt_label} vs {edp_label}"
-            self._set_plot_style(ax,
-                                title=title if title else default_title,
-                                xlabel= imt_label,
-                                ylabel= edp_label)
+        # Initialise Plot
+        fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
-            # Plot Bootstrap Samples (Background Cloud)
-            n_boot = len(boot['a'])
-            for i in range(n_boot):
-                p_c_b = f_p_coll(boot['alpha0'][i], boot['alpha1'][i], im_vector)
-                # Filter p_c_b to avoid NaNs in norm.ppf (must be < 0.5 for median calculation)
-                mask = p_c_b < 0.49
-                edp_b = f_edp_nc(boot['a'][i], im_vector[mask], boot['b1'][i])
-                mca_b = f_mca(edp_b, boot['sigma_rr'][i], p_c_b[mask], 0.50)
+        # Apply consistent Class Styling
+        default_title = f"MCA: {imt_label} vs {edp_label}"
+        self._set_plot_style(ax,
+                             title=title if title else default_title,
+                             xlabel=imt_label,
+                             ylabel=edp_label)
 
-                ax.plot(im_vector[mask], mca_b, color='silver', alpha=0.1, lw=0.5, zorder=1)
+        # Plot Bootstrap Samples (Background Cloud)
+        n_boot = len(boot['a'])
+        for i in range(n_boot):
+            p_c_b = f_p_coll(boot['alpha0'][i], boot['alpha1'][i], im_vector)
+            # Filter p_c_b to avoid NaNs in norm.ppf (must be < 0.5 for median calculation)
+            mask = p_c_b < 0.49
+            edp_b = f_edp_nc(boot['a'][i], im_vector[mask], boot['b1'][i])
+            mca_b = f_mca(edp_b, boot['sigma_rr'][i], p_c_b[mask], 0.50)
 
-            # Plot Mean MCA Regression and Confidence Intervals
-            # We use the averaged coefficients stored in 'regression' and 'bootstraps'
-            a_m, b_m = np.exp(reg['b0']), reg['b1'] # b0 was stored as log(a)
-            sig_m = reg['sigma']
-            a0_m, a1_m = boot['alpha0'].mean(), boot['alpha1'].mean()
+            ax.plot(im_vector[mask], mca_b, color='silver', alpha=0.1, lw=0.5, zorder=1)
 
-            p_c_m = f_p_coll(a0_m, a1_m, im_vector)
-            # Calculate for percentiles where P(Collapse) hasn't taken over
-            mask_m = p_c_m < 0.45
-            edp_m = f_edp_nc(a_m, im_vector[mask_m], b_m)
+        # Plot Mean MCA Regression and Confidence Intervals
+        # We use the averaged coefficients stored in 'regression' and 'bootstraps'
+        a_m, b_m = np.exp(reg['b0']), reg['b1']  # b0 was stored as log(a)
+        sig_m = reg['sigma']
+        a0_m, a1_m = boot['alpha0'].mean(), boot['alpha1'].mean()
 
-            mca_median = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.50)
-            mca_16     = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.16)
-            mca_84     = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.84)
+        p_c_m = f_p_coll(a0_m, a1_m, im_vector)
+        # Calculate for percentiles where P(Collapse) hasn't taken over
+        mask_m = p_c_m < 0.45
+        edp_m = f_edp_nc(a_m, im_vector[mask_m], b_m)
 
-            ax.plot(im_vector[mask_m], mca_median, color=self.colors['gem'][1],
-                    lw=self.line_widths['thick'], label='Robust MCA Median', zorder=4)
-            ax.plot(im_vector[mask_m], mca_16, color=self.colors['gem'][1],
-                    lw=1, ls='--', label=r'16/84% Percentiles', zorder=4)
-            ax.plot(im_vector[mask_m], mca_84, color=self.colors['gem'][1],
-                    lw=1, ls='--', zorder=4)
+        mca_median = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.50)
+        mca_16 = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.16)
+        mca_84 = f_mca(edp_m, sig_m, p_c_m[mask_m], 0.84)
 
-            # Plot Raw Data
-            ax.scatter(raw['im_nc'], raw['edp_nc'], color=self.colors['gem'][2],
-                       s=self.marker_sizes['medium'], alpha=0.6, label='Non-collapse Data', zorder=3)
-            ax.scatter(raw['im_c'], [c_limit]*len(raw['im_c']), color='darkred',
-                       marker='x', s=self.marker_sizes['medium'], label='Collapse Data', zorder=3)
+        ax.plot(im_vector[mask_m], mca_median, color=self.colors['gem'][1],
+                lw=self.line_widths['thick'], label='Robust MCA Median', zorder=4)
+        ax.plot(im_vector[mask_m], mca_16, color=self.colors['gem'][1],
+                lw=1, ls='--', label=r'16/84% Percentiles', zorder=4)
+        ax.plot(im_vector[mask_m], mca_84, color=self.colors['gem'][1],
+                lw=1, ls='--', zorder=4)
 
-            # Formatting & Limits
-            ax.axhline(c_limit, color='red', ls=':', lw=1.5, label='Collapse Threshold')
-            ax.set_xscale('log')
-            ax.set_yscale('log')
-            ax.set_xlim([x_min, x_max])
-            ax.set_ylim([inputs['edps'].min() * 0.5, c_limit * 1.5])
+        # Plot Raw Data
+        ax.scatter(raw['im_nc'], raw['edp_nc'], color=self.colors['gem'][2],
+                   s=self.marker_sizes['medium'], alpha=0.6, label='Non-collapse Data', zorder=3)
+        ax.scatter(raw['im_c'], [c_limit] * len(raw['im_c']), color='darkred',
+                   marker='x', s=self.marker_sizes['medium'], label='Collapse Data', zorder=3)
 
-            # Text Stats Box
-            # a is exp(b0), b is b1, beta is sigma
-            a_mean_val = np.exp(reg['b0'])
-            b_mean_val = reg['b1']
-            beta_val   = reg['sigma']
+        # Formatting & Limits
+        ax.axhline(c_limit, color='red', ls=':', lw=1.5, label='Collapse Threshold')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlim([x_min, x_max])
+        ax.set_ylim([inputs['edps'].min() * 0.5, c_limit * 1.5])
 
-            # alpha means from bootstrap arrays
-            a0_m = boot['alpha0'].mean()
-            a1_m = boot['alpha1'].mean()
+        # Text Stats Box
+        # a is exp(b0), b is b1, beta is sigma
+        a_mean_val = np.exp(reg['b0'])
+        b_mean_val = reg['b1']
+        beta_val = reg['sigma']
 
-            stats_text = (
-                f"Classical Cloud Regression Params:\n"
-                f"a-coefficient: {a_mean_val:.2E}\n"
-                f"b-coefficient: {b_mean_val:.2f}\n"
-                f"beta: {beta_val:.2f}\n"
-                f"Logistic Regression Params:\n"
-                f"$\\alpha_0$: {a0_m:.2f}\n"
-                f"$\\alpha_1$: {a1_m:.2f}"
-            )
+        # alpha means from bootstrap arrays
+        a0_m = boot['alpha0'].mean()
+        a1_m = boot['alpha1'].mean()
 
-            ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=9,
-                    verticalalignment='top', bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+        stats_text = (
+            f"Classical Cloud Regression Params:\n"
+            f"a-coefficient: {a_mean_val:.2E}\n"
+            f"b-coefficient: {b_mean_val:.2f}\n"
+            f"beta: {beta_val:.2f}\n"
+            f"Logistic Regression Params:\n"
+            f"$\\alpha_0$: {a0_m:.2f}\n"
+            f"$\\alpha_1$: {a1_m:.2f}"
+        )
 
-            ax.legend(loc='lower right', fontsize=self.font_sizes['legend'])
+        ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=9,
+                verticalalignment='top', bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
 
-            # Save or Show
-            if pFlag:
-                if export_path:
-                    directory = os.path.dirname(export_path)
-                    if directory and not os.path.exists(directory):
-                        os.makedirs(directory, exist_ok=True)
-                    plt.savefig(export_path, dpi=self.resolution)
-                    plt.show()
-                    plt.close(fig)
-                else:
-                    plt.show()
-            else:
+        ax.legend(loc='lower right', fontsize=self.font_sizes['legend'])
+
+        # Save or Show
+        if pFlag:
+            if export_path:
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution)
+                plt.show()
                 plt.close(fig)
+            else:
+                plt.show()
+        else:
+            plt.close(fig)
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                   PLOT INCREMENTAL DYNAMIC ANALYSES OUTPUTS                                 #
-    #                                                                                                             #
-    ###############################################################################################################
+    # PLOT INCREMENTAL DYNAMIC ANALYSES OUTPUTS
+
     def plot_ida_analysis(self,
                           ida_dict,
                           imt_label,
@@ -1496,9 +1491,8 @@ class plotter:
                           xlims,
                           ylims,
                           title=None,
-                          pFlag = True,
-                          export_path = None):
-
+                          pFlag=True,
+                          export_path=None):
         """
         Visualizes the Incremental Dynamic Analysis (IDA) suite and statistical summary.
 
@@ -1553,7 +1547,7 @@ class plotter:
         fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
         inputs = ida_dict['ida_inputs']
-        stats  = ida_dict['stats']
+        stats = ida_dict['stats']
 
         # 1. Plot Individual Cubic Spline IDA Curves
         for i, curve in enumerate(inputs['raw_curves']):
@@ -1590,9 +1584,27 @@ class plotter:
                 x_fine = np.linspace(np.min(x[mask]), np.max(x[mask]), 300)
                 ax.plot(x_fine, cs_stat(x_fine), color=color, ls=ls, lw=lw, label=label, zorder=3)
 
-        plot_stat_line(fitted_edps, stats['p16_im'], 'green', '--', self.line_widths['medium'], '$16^{th}$ Percentile')
-        plot_stat_line(fitted_edps, stats['median_im'], 'blue', '-', self.line_widths['thick'], '$50^{th}$ Percentile (Median)')
-        plot_stat_line(fitted_edps, stats['p84_im'], 'red', '--', self.line_widths['medium'], '$84^{th}$ Percentile')
+        plot_stat_line(
+            fitted_edps,
+            stats['p16_im'],
+            'green',
+            '--',
+            self.line_widths['medium'],
+            '$16^{th}$ Percentile')
+        plot_stat_line(
+            fitted_edps,
+            stats['median_im'],
+            'blue',
+            '-',
+            self.line_widths['thick'],
+            '$50^{th}$ Percentile (Median)')
+        plot_stat_line(
+            fitted_edps,
+            stats['p84_im'],
+            'red',
+            '--',
+            self.line_widths['medium'],
+            '$84^{th}$ Percentile')
 
         # 3. Damage Thresholds and Styling
         ds_colors = self.colors['fragility']
@@ -1621,11 +1633,8 @@ class plotter:
         else:
             plt.close(fig)
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                   PLOT MULTIPLE STRIPE ANALYSES OUTPUTS                                     #
-    #                                                                                                             #
-    ###############################################################################################################
+    # PLOT MULTIPLE STRIPE ANALYSES OUTPUTS
+
     def plot_msa_analysis(self,
                           stripe_imls,
                           stripe_edps,
@@ -1670,15 +1679,15 @@ class plotter:
             Full file path to save the figure.
         """
         # ── Data preparation ─────────────────────────────────────────────────
-        stripe_edps  = np.asarray(stripe_edps, dtype=float) * 100.0   # → %
-        stripe_imls  = np.asarray(stripe_imls, dtype=float)
+        stripe_edps = np.asarray(stripe_edps, dtype=float) * 100.0   # → %
+        stripe_imls = np.asarray(stripe_imls, dtype=float)
         num_gmrs, num_stripes = stripe_edps.shape
-        unique_imls  = stripe_imls[0, :]                               # 1-D IM levels
+        unique_imls = stripe_imls[0, :]                               # 1-D IM levels
 
         # Colour map: low IM = cool blue, high IM = warm red
-        cmap   = plt.cm.RdYlBu_r
-        norm   = mcolors.Normalize(vmin=unique_imls.min(), vmax=unique_imls.max())
-        sm     = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        cmap = plt.cm.RdYlBu_r
+        norm = mcolors.Normalize(vmin=unique_imls.min(), vmax=unique_imls.max())
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
 
         # Inter-stripe spacing for PDF height scaling
@@ -1692,7 +1701,7 @@ class plotter:
 
         # ── Per-stripe rendering ──────────────────────────────────────────────
         for j in range(num_stripes):
-            im_level   = unique_imls[j]
+            im_level = unique_imls[j]
             edp_values = stripe_edps[:, j]
             stripe_col = cmap(norm(im_level))
 
@@ -1707,15 +1716,15 @@ class plotter:
             if len(valid) < 2:
                 continue
 
-            log_v    = np.log(valid)
-            mu_ln    = log_v.mean()
+            log_v = np.log(valid)
+            mu_ln = log_v.mean()
             sigma_ln = max(log_v.std(ddof=1), 1e-6)
             median_v = np.exp(mu_ln)
-            p16_v    = np.exp(mu_ln - sigma_ln)
-            p84_v    = np.exp(mu_ln + sigma_ln)
+            p16_v = np.exp(mu_ln - sigma_ln)
+            p84_v = np.exp(mu_ln + sigma_ln)
 
-            x_lo  = max(xlims[0] * 0.5, valid.min() * 0.3, 0.001)
-            x_hi  = min(xlims[1] * 1.5, valid.max() * 2.0)
+            x_lo = max(xlims[0] * 0.5, valid.min() * 0.3, 0.001)
+            x_hi = min(xlims[1] * 1.5, valid.max() * 2.0)
             x_pdf = np.linspace(x_lo, x_hi, 500)
             pdf_v = stats.lognorm.pdf(x_pdf, s=sigma_ln, scale=np.exp(mu_ln))
             pdf_s = (pdf_v / pdf_v.max()) * stripe_gap * 0.85
@@ -1761,7 +1770,9 @@ class plotter:
         seen, h_out, l_out = set(), [], []
         for h, l in zip(*ax.get_legend_handles_labels()):
             if l and l not in seen:
-                seen.add(l); h_out.append(h); l_out.append(l)
+                seen.add(l)
+                h_out.append(h)
+                l_out.append(l)
         if h_out:
             ax.legend(h_out, l_out, loc='upper right',
                       fontsize=self.font_sizes['legend'],
@@ -1780,11 +1791,8 @@ class plotter:
         else:
             plt.close(fig)
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                              PLOT MODIFIED CLOUD ANALYSES FRAGILITY OUTPUTS                                 #
-    #                                                                                                             #
-    ###############################################################################################################
+    # PLOT MODIFIED CLOUD ANALYSES FRAGILITY OUTPUTS
+
     def plot_fragility_from_mca(self,
                                 cloud_dict,
                                 imt_label,
@@ -1852,7 +1860,6 @@ class plotter:
         # Setup Data from cloud_dict
         frag = cloud_dict['fragility']
         boot = cloud_dict['bootstraps']
-        reg = cloud_dict['regression']
 
         intensities = frag['intensities']
         poes_mean = frag['poes']  # Mapped from 'poes' in your dict
@@ -1860,10 +1867,7 @@ class plotter:
         medians = frag['medians']
         betas = frag['betas_total']
 
-        # Extract mean params for the legend labels
-        # a is exp(b0), b is b1
-        a_mean = np.exp(reg['b0'])
-        b_mean = reg['b1']
+        # Extract mean logistic params for the legend labels
         # Logistic mean params
         alpha0_mean = boot['alpha0'].mean()
         alpha1_mean = boot['alpha1'].mean()
@@ -1880,7 +1884,8 @@ class plotter:
         if plot_bootstrap and len(boot_poes) > 0:
             for i in range(len(boot_poes)):
                 for ds in range(n_ds):
-                    color = 'black' if ds == n_ds - 1 else self.colors['fragility'][ds % len(self.colors['fragility'])]
+                    color = 'black' if ds == n_ds - \
+                        1 else self.colors['fragility'][ds % len(self.colors['fragility'])]
                     ax.plot(intensities, boot_poes[i][:, ds],
                             color=color, alpha=0.05, lw=0.5, zorder=1)
 
@@ -1915,7 +1920,12 @@ class plotter:
 
         default_title = "Fragility Functions from Modified Cloud Analysis"
         ax.set_title(title if title else default_title, fontsize=self.font_sizes['title'])
-        ax.legend(loc='lower right', fontsize=self.font_sizes['legend'], frameon=True, framealpha=0.9, edgecolor='black')
+        ax.legend(
+            loc='lower right',
+            fontsize=self.font_sizes['legend'],
+            frameon=True,
+            framealpha=0.9,
+            edgecolor='black')
 
         # 6. Save or Show
         if pFlag:
@@ -1931,20 +1941,16 @@ class plotter:
         else:
             plt.close(fig)
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                              PLOT INCREMENTAL DYNAMIC ANALYSES FRAGILITY OUTPUTS                            #
-    #                                                                                                             #
-    ###############################################################################################################
+    # PLOT INCREMENTAL DYNAMIC ANALYSES FRAGILITY OUTPUTS
+
     def plot_fragility_from_ida(self,
                                 ida_dict,
                                 imt_label,
                                 xlims,
                                 ylims,
-                                title = None,
-                                pFlag = True,
-                                export_path = None):
-
+                                title=None,
+                                pFlag=True,
+                                export_path=None):
         """
         Generate a fragility analysis plot showing the probability of exceedance (PoE)
         for multiple damage states derived from IDA results.
@@ -1996,12 +2002,11 @@ class plotter:
         """
 
         # Setup Data
-        frag_data   = ida_dict['fragility']
-        inputs      = ida_dict['ida_inputs']
+        frag_data = ida_dict['fragility']
         intensities = frag_data['intensities']
-        poes        = frag_data['poes']        # 2D array [n_intensities x n_thresholds]
-        medians     = frag_data['medians']
-        betas       = frag_data['betas_total']
+        poes = frag_data['poes']        # 2D array [n_intensities x n_thresholds]
+        medians = frag_data['medians']
+        betas = frag_data['betas_total']
 
         # Initialize Plot
         fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
@@ -2048,12 +2053,8 @@ class plotter:
                 # Close the plot to free memory after saving if not showing
                 plt.close()
 
+    # PLOT MULTIPLE STRIPE ANALYSES FRAGILITY OUTPUTS
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                              PLOT MULTIPLE STRIPE ANALYSES FRAGILITY OUTPUTS                                #
-    #                                                                                                             #
-    ###############################################################################################################
     def plot_fragility_from_msa(self,
                                 msa_dict,
                                 imt_label,
@@ -2110,7 +2111,7 @@ class plotter:
 
         # Empirical data (The actual fractions from the stripes)
         stripe_levels = meta.get('stripe_levels', [])
-        observed_fractions = meta.get('observed_fractions', []) # List of arrays per DS
+        observed_fractions = meta.get('observed_fractions', [])  # List of arrays per DS
 
         # 2. Initialise Plot
         fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
@@ -2167,12 +2168,8 @@ class plotter:
                 # Close the plot to free memory after saving if not showing
                 plt.close()
 
+    # PLOT STOREY LOSS FUNCTION GENERATOR OUTPUT
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                              PLOT STOREY LOSS FUNCTION GENERATOR OUTPUT                                     #
-    #                                                                                                             #
-    ###############################################################################################################
     def plot_slf_model(self,
                        out,
                        cache,
@@ -2180,10 +2177,9 @@ class plotter:
                        loss_label,
                        xlims,
                        ylims,
-                       title = None,
-                       pFlag = True,
+                       title=None,
+                       pFlag=True,
                        export_path=None):
-
         """
         Generate a plot to visualize the Storey Loss Function (SLF) model output.
 
@@ -2246,17 +2242,35 @@ class plotter:
         keys_list = list(cache.keys())
         for i, current_key in enumerate(keys_list):
             rlz = len(cache[current_key]['total_loss_storey'])
-            total_loss_storey_array = np.array([cache[current_key]['total_loss_storey'][i] for i in range(rlz)])
+            total_loss_storey_array = np.array(
+                [cache[current_key]['total_loss_storey'][i] for i in range(rlz)])
 
             fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
             self._set_plot_style(ax, xlabel=edp_label, ylabel='Storey Loss')
 
             for i in range(rlz):
-                ax.scatter(out[current_key]['edp_range'], total_loss_storey_array[i, :], color=self.colors['gem'][3], s=self.marker_sizes['small'], alpha=0.5)
+                ax.scatter(out[current_key]['edp_range'], total_loss_storey_array[i, :],
+                           color=self.colors['gem'][3], s=self.marker_sizes['small'], alpha=0.5)
 
-            ax.fill_between(out[current_key]['edp_range'], cache[current_key]['empirical_16th'], cache[current_key]['empirical_84th'], color='gray', alpha=0.3, label=r'16$^{\text{th}}$-84$^{\text{th}}$ Percentile')
-            ax.plot(out[current_key]['edp_range'], cache[current_key]['empirical_median'], lw=self.line_widths['medium'], color='blue', label='Simulations - Median')
-            ax.plot(out[current_key]['edp_range'], out[current_key]['slf'], color='black', lw=self.line_widths['medium'], label='SLF - Fitted')
+            ax.fill_between(
+                out[current_key]['edp_range'],
+                cache[current_key]['empirical_16th'],
+                cache[current_key]['empirical_84th'],
+                color='gray',
+                alpha=0.3,
+                label=r'16$^{\text{th}}$-84$^{\text{th}}$ Percentile')
+            ax.plot(
+                out[current_key]['edp_range'],
+                cache[current_key]['empirical_median'],
+                lw=self.line_widths['medium'],
+                color='blue',
+                label='Simulations - Median')
+            ax.plot(
+                out[current_key]['edp_range'],
+                out[current_key]['slf'],
+                color='black',
+                lw=self.line_widths['medium'],
+                label='SLF - Fitted')
 
             ax.legend(fontsize=self.font_sizes['legend'])
 
@@ -2282,11 +2296,8 @@ class plotter:
         else:
             plt.close()
 
-    ###############################################################################################################
-    #                                                                                                             #
-    #                                           PLOT VULNERABILITY FUNCTIONS                                      #
-    #                                                                                                             #
-    ###############################################################################################################
+    # PLOT VULNERABILITY FUNCTIONS
+
     def plot_vulnerability_function(self,
                                     intensities,
                                     loss,
@@ -2296,135 +2307,135 @@ class plotter:
                                     title=None,
                                     pFlag=True,
                                     export_path=None):
-            """
-            Generate a vulnerability analysis plot featuring Beta distributions and a mean loss curve.
+        """
+        Generate a vulnerability analysis plot featuring Beta distributions and a mean loss curve.
 
-            This method visualizes the uncertainty in loss ratios across different seismic intensities.
-            It simulates Beta distributions based on mean loss and CoV, rendering them as
-            truncated violin plots (strictly bounded 0-1) to represent the physical limits
-            of structural damage.
+        This method visualizes the uncertainty in loss ratios across different seismic intensities.
+        It simulates Beta distributions based on mean loss and CoV, rendering them as
+        truncated violin plots (strictly bounded 0-1) to represent the physical limits
+        of structural damage.
 
-            The figure uses ``self.figsize`` with ``constrained_layout`` and is
-            saved without ``bbox_inches='tight'`` so that every output image has
-            identical, deterministic pixel dimensions.
+        The figure uses ``self.figsize`` with ``constrained_layout`` and is
+        saved without ``bbox_inches='tight'`` so that every output image has
+        identical, deterministic pixel dimensions.
 
-            Parameters
-            ----------
-            intensities : list of float
-                Intensity Measure (IM) levels (e.g., PGA, Sa) analyzed.
+        Parameters
+        ----------
+        intensities : list of float
+            Intensity Measure (IM) levels (e.g., PGA, Sa) analyzed.
 
-            loss : list of float
-                Mean loss ratios (0.0 to 1.0) corresponding to each intensity.
+        loss : list of float
+            Mean loss ratios (0.0 to 1.0) corresponding to each intensity.
 
-            cov : list of float
-                Coefficient of Variation for loss at each intensity.
+        cov : list of float
+            Coefficient of Variation for loss at each intensity.
 
-            imt_label : str
-                Label for the X-axis (e.g., 'PGA [g]').
+        imt_label : str
+            Label for the X-axis (e.g., 'PGA [g]').
 
-            loss_label : str
-                Label for the primary Y-axis loss curve (e.g., 'Mean Damage Ratio').
+        loss_label : str
+            Label for the primary Y-axis loss curve (e.g., 'Mean Damage Ratio').
 
-            title : str, optional
-                Custom plot title.
+        title : str, optional
+            Custom plot title.
 
-            pFlag : bool, optional, default=True
-                If True, the plot is processed (saved/shown).
+        pFlag : bool, optional, default=True
+            If True, the plot is processed (saved/shown).
 
-            export_path : str, optional
-                Full path including filename to save the plot. Creates directories if missing.
+        export_path : str, optional
+            Full path including filename to save the plot. Creates directories if missing.
 
-            Returns
-            -------
-            None
-            """
-            # Simulating Beta distributions for each intensity measure
-            simulated_data = []
-            intensity_labels = []
+        Returns
+        -------
+        None
+        """
+        # Simulating Beta distributions for each intensity measure
+        simulated_data = []
+        intensity_labels = []
 
-            for j, mean_loss in enumerate(loss):
-                # Beta distribution requires mean in (0, 1)
-                mu = np.clip(mean_loss, 0.0001, 0.9999)
-                variance = (cov[j] * mu) ** 2
+        for j, mean_loss in enumerate(loss):
+            # Beta distribution requires mean in (0, 1)
+            mu = np.clip(mean_loss, 0.0001, 0.9999)
+            variance = (cov[j] * mu) ** 2
 
-                # Constraint: Variance must be < mu * (1 - mu)
-                limit = mu * (1 - mu)
-                if variance >= limit:
-                    variance = limit * 0.99  # Cap variance to allow distribution fitting
+            # Constraint: Variance must be < mu * (1 - mu)
+            limit = mu * (1 - mu)
+            if variance >= limit:
+                variance = limit * 0.99  # Cap variance to allow distribution fitting
 
-                alpha = mu * (mu * (1 - mu) / variance - 1)
-                beta_param = (1 - mu) * (mu * (1 - mu) / variance - 1)
+            alpha = mu * (mu * (1 - mu) / variance - 1)
+            beta_param = (1 - mu) * (mu * (1 - mu) / variance - 1)
 
-                # Generate samples and clip to ensure physical bounds
-                data = np.random.beta(alpha, beta_param, 10000)
-                simulated_data.append(data)
-                intensity_labels.extend([intensities[j]] * len(data))
+            # Generate samples and clip to ensure physical bounds
+            data = np.random.beta(alpha, beta_param, 10000)
+            simulated_data.append(data)
+            intensity_labels.extend([intensities[j]] * len(data))
 
-            # We name the column 'Loss_Val' for consistent reference in Seaborn
-            df_sns = pd.DataFrame({'Intensity Measure': intensity_labels,
-                                   'Loss_Val': np.concatenate(simulated_data)})
+        # We name the column 'Loss_Val' for consistent reference in Seaborn
+        df_sns = pd.DataFrame({'Intensity Measure': intensity_labels,
+                               'Loss_Val': np.concatenate(simulated_data)})
 
-            # Initialise Plot
-            fig, ax1 = plt.subplots(figsize=self.figsize, constrained_layout=True)
+        # Initialise Plot
+        fig, ax1 = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
-            # Set plot style
-            default_title = f"Vulnerability Function: {imt_label}"
-            self._set_plot_style(ax1,
-                                 title=title if title else default_title,
-                                 xlabel=imt_label,
-                                 ylabel=loss_label)
+        # Set plot style
+        default_title = f"Vulnerability Function: {imt_label}"
+        self._set_plot_style(ax1,
+                             title=title if title else default_title,
+                             xlabel=imt_label,
+                             ylabel=loss_label)
 
-            # Violin plot for Beta distributions
-            # We use 'Loss_Val' to match the DataFrame column
-            violin = sns.violinplot(x='Intensity Measure', y='Loss_Val', data=df_sns,
-                                    density_norm='width', bw_method=0.2,
-                                    cut=0,
-                                    inner=None,
-                                    ax=ax1,
-                                    zorder=1,
-                                    color='skyblue')
+        # Violin plot for Beta distributions
+        # We use 'Loss_Val' to match the DataFrame column
+        sns.violinplot(x='Intensity Measure', y='Loss_Val', data=df_sns,
+                                density_norm='width', bw_method=0.2,
+                                cut=0,
+                                inner=None,
+                                ax=ax1,
+                                zorder=1,
+                                color='skyblue')
 
-            # Overlay a strip plot for sample density
-            sns.stripplot(x='Intensity Measure', y='Loss_Val', data=df_sns, color='black',
-                          size=1,
-                          alpha=0.2,
-                          ax=ax1,
-                          zorder=2)
+        # Overlay a strip plot for sample density
+        sns.stripplot(x='Intensity Measure', y='Loss_Val', data=df_sns, color='black',
+                      size=1,
+                      alpha=0.2,
+                      ax=ax1,
+                      zorder=2)
 
-            # Style the primary axis (Distributions)
-            ax1.set_ylim(0, 1.0)
-            ax1.yaxis.label.set_color('blue')
-            ax1.tick_params(axis='y', labelcolor='blue')
+        # Style the primary axis (Distributions)
+        ax1.set_ylim(0, 1.0)
+        ax1.yaxis.label.set_color('blue')
+        ax1.tick_params(axis='y', labelcolor='blue')
 
-            # Secondary Axis for the Mean Loss Curve
-            ax2 = ax1.twinx()
-            ax2.plot(range(len(intensities)), loss, marker='s', ls='-', color='red',
-                     lw=self.line_widths['medium'], label="Mean Loss Ratio", zorder=5)
+        # Secondary Axis for the Mean Loss Curve
+        ax2 = ax1.twinx()
+        ax2.plot(range(len(intensities)), loss, marker='s', ls='-', color='red',
+                 lw=self.line_widths['medium'], label="Mean Loss Ratio", zorder=5)
 
-            # Style the secondary axis (Loss Curve)
-            ax2.set_ylabel(loss_label, color='red', rotation=270, labelpad=20,
-                           fontsize=self.font_sizes['labels'], fontname=self.font_name)
-            ax2.tick_params(axis='y', labelcolor='red', labelsize=self.font_sizes['ticks'])
-            ax2.set_ylim(0, 1.0)
+        # Style the secondary axis (Loss Curve)
+        ax2.set_ylabel(loss_label, color='red', rotation=270, labelpad=20,
+                       fontsize=self.font_sizes['labels'], fontname=self.font_name)
+        ax2.tick_params(axis='y', labelcolor='red', labelsize=self.font_sizes['ticks'])
+        ax2.set_ylim(0, 1.0)
 
-            # Sync X-axis ticks with intensity values
-            ax1.set_xticks(range(len(intensities)))
-            ax1.set_xticklabels([f"{x:.3f}" for x in intensities], rotation=45, ha='right', fontsize=8)
+        # Sync X-axis ticks with intensity values
+        ax1.set_xticks(range(len(intensities)))
+        ax1.set_xticklabels([f"{x:.3f}" for x in intensities], rotation=45, ha='right', fontsize=8)
 
-            # Combined Legend
-            beta_patch = mpatches.Patch(color='skyblue', label="Beta Distribution (Uncertainty)")
-            ax1.legend(handles=[beta_patch], loc='upper left', fontsize=self.font_sizes['legend'])
-            ax2.legend(loc='upper left', bbox_to_anchor=(0, 0.93), fontsize=self.font_sizes['legend'])
+        # Combined Legend
+        beta_patch = mpatches.Patch(color='skyblue', label="Beta Distribution (Uncertainty)")
+        ax1.legend(handles=[beta_patch], loc='upper left', fontsize=self.font_sizes['legend'])
+        ax2.legend(loc='upper left', bbox_to_anchor=(0, 0.93), fontsize=self.font_sizes['legend'])
 
-            # Save or show
-            if pFlag:
-                if export_path:
-                    directory = os.path.dirname(export_path)
-                    if directory and not os.path.exists(directory):
-                        os.makedirs(directory, exist_ok=True)
-                    plt.savefig(export_path, dpi=self.resolution)
-                    plt.show()
-                else:
-                    plt.show()
+        # Save or show
+        if pFlag:
+            if export_path:
+                directory = os.path.dirname(export_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                plt.savefig(export_path, dpi=self.resolution)
+                plt.show()
             else:
-                plt.close()
+                plt.show()
+        else:
+            plt.close()
