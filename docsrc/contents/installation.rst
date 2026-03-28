@@ -38,23 +38,21 @@ Activate the virtual environment:
 
 ### 3. Install Dependencies
 
-Install the required packages listed in `requirements.txt`.
+Install the appropriate requirements file based on your operating system and Python version.
 
-**For Windows Users:** Install the appropriate requirements file based on your Python version:
+**For Windows Users:**
 
 .. code-block:: bash
 
-   pip install -r requirements-py310-win64.txt  # Python 3.10
    pip install -r requirements-py311-win64.txt  # Python 3.11
    pip install -r requirements-py312-win64.txt  # Python 3.12
 
-**For Linux Users:** Install the appropriate requirements file based on your Python version:
+**For Linux Users:**
 
 .. code-block:: bash
 
-   pip install -r requirements-py310-linux64.txt  # Python 3.10
-   pip install -r requirements-py311-linux64.txt  # Python 3.11
-   pip install -r requirements-py312-linux64.txt  # Python 3.12
+   pip install -r requirements-py311-linux.txt  # Python 3.11
+   pip install -r requirements-py312-linux.txt  # Python 3.12
 
 **Note:** To check your current Python version, run the following command:
 

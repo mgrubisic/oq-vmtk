@@ -1013,6 +1013,8 @@ class postprocessor:
                     'b1': b_s.mean(),
                     'b0': np.log(a_s.mean()),
                     'sigma': sig_s.mean(),
+                    'alpha0': al0_s.mean(),
+                    'alpha1': al1_s.mean(),
                     'fitted_x': np.log(intensities),
                     'fitted_y': (np.log(a_s.mean())
                                  + b_s.mean() * np.log(intensities))},
