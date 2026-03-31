@@ -445,6 +445,7 @@ class modeller:
         the model for dynamic analysis.
 
         The process involves:
+
         1. Initializing the OpenSees model.
         2. Creating base and floor nodes.
         3. Assigning masses and degrees of freedom.
@@ -1260,19 +1261,15 @@ class modeller:
 
         Returns
         -------
-        spo_dict: dict
-            A dictionary containing the SPO results with keys:
-            'spo_disps': array - Displacements at each floor level
-                (TimeSteps x Floors).
-            'spo_rxn': array - Base shear at the base (TimeSteps).
-            'spo_disps_spring': array - Displacements in storey
-                zero-length elements (TimeSteps x Springs).
-            'spo_forces_spring': array - Shear forces in storey
-                zero-length elements (TimeSteps x Springs).
-            'spo_idr': array - Interstorey drift ratio history for
-                each storey (TimeSteps x Storeys).
-            'spo_midr': array - Max interstorey drift ratio history
-                (max IDR across all storeys at each step, TimeSteps).
+        spo_dict : dict
+            A dictionary containing the SPO results with the following keys:
+
+            - ``'spo_disps'``: array, shape (TimeSteps × Floors) — floor displacements.
+            - ``'spo_rxn'``: array, shape (TimeSteps,) — base shear at each step.
+            - ``'spo_disps_spring'``: array, shape (TimeSteps × Springs) — spring displacements.
+            - ``'spo_forces_spring'``: array, shape (TimeSteps × Springs) — spring shear forces.
+            - ``'spo_idr'``: array, shape (TimeSteps × Storeys) — interstorey drift ratio history.
+            - ``'spo_midr'``: array, shape (TimeSteps,) — maximum IDR across all storeys.
         """
 
         # Set up linear time series and plain load pattern

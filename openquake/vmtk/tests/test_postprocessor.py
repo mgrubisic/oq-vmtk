@@ -228,7 +228,7 @@ class TestOrdinalFragility(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# do_modified_cloud_analysis
+# process_mca_results
 # ---------------------------------------------------------------------------
 class TestModifiedCloudAnalysis(unittest.TestCase):
     """
@@ -252,7 +252,7 @@ class TestModifiedCloudAnalysis(unittest.TestCase):
         self.censored_limit = 1.5 * cap[-1, 0]
 
     def _run(self, method='lognormal', **kw):
-        return self.pp.do_modified_cloud_analysis(
+        return self.pp.process_mca_results(
             self.imls, self.edps, self.thresholds,
             self.lower_limit, self.censored_limit,
             sigma_build2build=0.30,
@@ -364,7 +364,7 @@ class TestModifiedCloudAnalysis(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# do_multiple_stripe_analysis
+# process_msa_results
 # ---------------------------------------------------------------------------
 class TestMultipleStripeAnalysis(unittest.TestCase):
 
@@ -383,7 +383,7 @@ class TestMultipleStripeAnalysis(unittest.TestCase):
         self.ims = np.round(np.geomspace(0.05, 5.0, 40), 3)
 
     def _run(self, **kw):
-        return self.pp.do_multiple_stripe_analysis(
+        return self.pp.process_msa_results(
             self.imls, self.edps, self.thresholds,
             intensities=self.ims, **kw)
 

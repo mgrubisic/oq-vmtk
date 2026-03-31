@@ -52,23 +52,23 @@ class postprocessor:
         Fits an ordinal (cumulative) probit model to estimate fragility
         curves for different damage states.
 
-    do_modified_cloud_analysis(
+    process_mca_results(
         imls, edps, damage_thresholds, lower_limit, censored_limit,
         sigma_build2build=0.3, sigma_ds=0.3,
         intensities=np.geomspace(0.05, 10, 50), n_bootstrap=200,
         random_seed=None, fragility_rotation=False,
         rotation_percentile=0.10, fragility_method='lognormal')
-        Perform a modified cloud analysis (i.e., accounting for collapse
-        and non-collapse cases) to assess fragility functions for a set
-        of engineering demand parameters (EDPs) and intensity measure
-        levels (IMLs).
+        Postprocess Modified Cloud Analysis (MCA) results: fits the
+        probabilistic seismic demand model and derives fragility functions
+        from pre-computed NLTHA outputs.
 
-    do_multiple_stripe_analysis(
+    process_msa_results(
         imls, edps, damage_thresholds, sigma_build2build=0.3,
         intensities=np.round(np.geomspace(0.05, 10.0, 50), 3),
         fragility_rotation=False, rotation_percentile=0.10)
-        Perform maximum likelihood estimation (MLE) for fragility curve
-        fitting following a multiple stripe analysis.
+        Postprocess Multiple Stripe Analysis (MSA) results: maximum
+        likelihood estimation for fragility curve fitting from
+        pre-computed NLTHA stripe outputs.
 
     calculate_vulnerability_function(
         poes, consequence_model, cov_consequence=None,
@@ -188,7 +188,6 @@ class postprocessor:
         exceedance probabilities for a range of intensity measure
         levels, as defined by the lognormal distribution.
 
-        ----------
         Parameters
         ----------
         percentile : float
@@ -221,7 +220,6 @@ class postprocessor:
             seismic intensity levels (e.g., spectral acceleration). The
             default is a geometric space ranging from 0.05 to 10.0.
 
-        -------
         Returns
         -------
         theta_prime : float
@@ -239,7 +237,6 @@ class postprocessor:
             the lognormal CDF evaluated at the given intensities with
             the rotated median and combined uncertainty.
 
-        ----------
         References
         ----------
         1) Porter, K. (2017), "When Addressing Epistemic Uncertainty in
@@ -274,8 +271,8 @@ class postprocessor:
         Computes non-parametric fragility functions using Generalized
         Linear Models (GLM) with either a Logit or Probit link function.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         imls : array-like
             Intensity Measure Levels (IMLs) corresponding to each
             observation.
@@ -295,17 +292,18 @@ class postprocessor:
         fragility_method : str, optional
             Specifies the GLM model to be used for fragility function
             fitting. Options:
-            - 'logit' (default): Uses a logistic regression model.
-            - 'probit': Uses a probit regression model.
 
-        Returns:
-        --------
+            - ``'logit'`` (default): Uses a logistic regression model.
+            - ``'probit'``: Uses a probit regression model.
+
+        Returns
+        -------
         poes : ndarray
             A 2D array where each column represents the probability of
             exceeding a specific damage state at each intensity level.
 
-        References:
-        ------
+        References
+        ----------
         1) Charvet, I., Ioannou, I., Rossetto, T., Suppasri, A., and
         Imamura, F.: Empirical fragility assessment of buildings
         affected by the 2011 Great East Japan tsunami using improved
@@ -476,7 +474,7 @@ class postprocessor:
 
         return poes.values
 
-    def do_modified_cloud_analysis(self,
+    def process_mca_results(self,
                                    imls,
                                    edps,
                                    damage_thresholds,
@@ -551,84 +549,14 @@ class postprocessor:
         Returns
         -------
         cloud_dict : dict
-            A nested dictionary with the following top-level keys:
-
-            **'cloud inputs'** : dict
-                Raw inputs passed to the analysis.
-
-                - ``'imls'`` : array — intensity measure levels.
-                - ``'edps'`` : array — engineering demand parameters.
-                - ``'lower_limit'`` : float or None — lower EDP
-                  censoring limit (non-collapse floor).
-                - ``'upper_limit'`` : float or None — upper EDP
-                  censoring limit (collapse threshold).
-                - ``'damage_thresholds'`` : list — EDP values that
-                  define each damage state boundary.
-
-            **'fragility'** : dict
-                Fitted fragility function parameters and PoEs.
-
-                - ``'fragility_method'`` : str — method used
-                  (e.g. 'lognormal', 'logit', 'ordinal').
-                - ``'intensities'`` : array — IM levels at which
-                  PoEs are evaluated.
-                - ``'poes'`` : ndarray, shape (n_IM, n_DS [+1]) —
-                  probabilities of exceedance per damage state.
-                  The lognormal method appends a collapse column.
-                - ``'medians'`` : list, length n_DS — median IM
-                  (theta) for each damage state.
-                - ``'sigma_record2record'`` : float or list —
-                  record-to-record dispersion per damage state.
-                - ``'sigma_build2build'`` : float or array —
-                  building-to-building modelling uncertainty.
-                - ``'sigma_ds'`` : float or array — uncertainty
-                  in the damage-state threshold definition.
-                - ``'betas_total'`` : list, length n_DS — combined
-                  total logarithmic standard deviation per DS,
-                  computed as sqrt(rr^2 + b2b^2 + ds^2).
-
-            **'regression'** : dict
-                Log-log OLS regression summary
-                (None for non-lognormal methods).
-
-                - ``'b1'`` : float — slope of log(EDP) vs log(IM).
-                - ``'b0'`` : float — log-space intercept (log(a)).
-                - ``'sigma'`` : float — residual standard deviation
-                  of the regression in log space.
-                - ``'fitted_x'`` : array — log(intensities) used
-                  for the regression fit line.
-                - ``'fitted_y'`` : array — predicted log(EDP)
-                  values along the fitted regression line.
-
-            **'bootstraps'** : dict
-                Per-iteration bootstrap results
-                (lognormal method only).
-
-                - ``'b1'`` : array, shape (n_bootstrap,) — slope
-                  samples from the linear regression.
-                - ``'a'`` : array, shape (n_bootstrap,) — intercept
-                  samples (exp(b0)) from the linear regression.
-                - ``'sigma_rr'`` : array, shape (n_bootstrap,) —
-                  record-to-record sigma samples.
-                - ``'alpha0'`` : array, shape (n_bootstrap,) —
-                  intercept samples from the logistic regression
-                  (collapse model).
-                - ``'alpha1'`` : array, shape (n_bootstrap,) —
-                  slope samples from the logistic regression.
-                - ``'poes_all'`` : array, shape
-                  (n_bootstrap, n_IM, n_DS+1) — full PoE matrix
-                  from every bootstrap iteration.
-
-            **'raw_data'** : dict
-                Separated collapse and non-collapse observations
-                (lognormal method only).
-
-                - ``'im_nc'`` : array — IM values for non-collapse
-                  records used in the regression plot.
-                - ``'edp_nc'`` : array — EDP values for non-collapse
-                  records.
-                - ``'im_c'`` : array — IM values for records that
-                  exceeded the collapse (censoring) limit.
+            A nested dictionary with keys: ``'cloud inputs'`` (imls, edps,
+            lower_limit, upper_limit, damage_thresholds); ``'fragility'``
+            (fragility_method, intensities, poes, medians,
+            sigma_record2record, sigma_build2build, sigma_ds, betas_total);
+            ``'regression'`` (b1, b0, sigma, fitted_x, fitted_y — lognormal
+            only); ``'bootstraps'`` (b1, a, sigma_rr, alpha0, alpha1,
+            poes_all of shape n_bootstrap x n_IM x n_DS+1 — lognormal only);
+            ``'raw_data'`` (im_nc, edp_nc, im_c — lognormal only).
 
         Notes
         -----
@@ -1038,7 +966,7 @@ class postprocessor:
     # ---------------------------------------------------------------
     # POSTPROCESS MULTIPLE STRIPE ANALYSIS RESULTS
     # ---------------------------------------------------------------
-    def do_multiple_stripe_analysis(self,
+    def process_msa_results(self,
                                     imls,
                                     edps,
                                     damage_thresholds,
@@ -1060,8 +988,8 @@ class postprocessor:
         determining the probability of exceedance for various damage
         states based on the provided data.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         imls : list or array
             A list or array of intensity measure levels (IMLs)
             representing the seismic intensity levels used for sampling
@@ -1105,8 +1033,8 @@ class postprocessor:
             fragility function will be rotated. A value of 0.10
             corresponds to rotating the curve to the 10th percentile.
 
-        Returns:
-        --------
+        Returns
+        -------
         msa_dict : dict
             A nested dictionary with the following top-level keys:
 
@@ -1153,8 +1081,8 @@ class postprocessor:
                   ground-motion records exceeding each damage
                   threshold at each stripe level.
 
-        Notes:
-        ------
+        Notes
+        -----
         This method fits the fragility curve using MLE, which minimizes
         the difference between observed and predicted exceedance
         probabilities. The option for fragility curve rotation allows for
@@ -1282,7 +1210,7 @@ class postprocessor:
     # ---------------------------------------------------------------
     # POSTPROCESS INCREMENTAL DYNAMIC ANALYSIS RESULTS
     # ---------------------------------------------------------------
-    def do_incremental_dynamic_analysis(self,
+    def process_ida_results(self,
                                         ansys_dict,
                                         im_matrix,
                                         damage_thresholds,
@@ -1310,13 +1238,13 @@ class postprocessor:
         Parameters
         ----------
         ansys_dict : dict
-            A dictionary containing the structural response data. Must
-            include:
-            - 'max_peak_drift_list' or 'max_peak_accel_list': A list
-              where each entry is a dictionary mapping Scale Factors
-              (SF) to the resulting peak drift or acceleration values.
-            - 'sf_matrix': A 2D numpy array (n_records x max_runs)
-              containing the scale factors used for each analysis run.
+            A dictionary containing the structural response data with keys:
+
+            - ``'max_peak_drift_list'`` or ``'max_peak_accel_list'``: a list
+              where each entry maps Scale Factors (SF) to peak drift or
+              acceleration values.
+            - ``'sf_matrix'``: a 2D numpy array (n_records × max_runs)
+              of scale factors used for each analysis run.
 
         im_matrix : numpy.ndarray
             A 2D array of intensity measure levels corresponding to the
@@ -1844,8 +1772,8 @@ class postprocessor:
         levels, accounting for the return period and a maximum return
         period threshold.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         fragility_array : 2D array
             A 2D array where the first column contains intensity measure
             levels, and the second column contains the corresponding
@@ -1869,8 +1797,8 @@ class postprocessor:
             only intensity levels with exceedance rates above this
             threshold.
 
-        Returns:
-        --------
+        Returns
+        -------
         average_annual_damage_probability : float
             The average annual damage state probability, calculated by
             integrating the product of the fragility function and the
@@ -1928,8 +1856,8 @@ class postprocessor:
         intensity measure levels, accounting for the return period and
         a maximum return period threshold.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         vulnerability_array : 2D array
             A 2D array where the first column contains intensity measure
             levels, and the second column contains the corresponding
@@ -1953,8 +1881,8 @@ class postprocessor:
             only intensity levels with exceedance rates above this
             threshold.
 
-        Returns:
-        --------
+        Returns
+        -------
         average_annual_loss_ratio : float
             The average annual loss ratio, calculated by integrating
             the product of the vulnerability function and the hazard

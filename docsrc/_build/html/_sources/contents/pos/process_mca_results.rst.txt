@@ -1,0 +1,75 @@
+Modified Cloud Analysis Postprocessing
+======================================
+
+.. automethod:: openquake.vmtk.postprocessor.postprocessor.process_mca_results
+
+.. admonition:: Theoretical Background
+
+
+   The Modified Cloud Analysis (MCA) extends the classical cloud analysis approach
+   (Jalayer et al., 2015) by explicitly accounting for structural collapse through a
+   dual-regression procedure.
+
+   **Step 1 — Log-log regression (non-collapse records)**
+
+   For records that do not cause collapse (EDP < *censored_limit*), the engineering
+   demand parameter is related to the intensity measure through a linear model in
+   log-log space:
+
+   .. math::
+
+      \ln(\text{EDP}) = \ln(a) + b \cdot \ln(\text{IM}) + \varepsilon,
+      \quad \varepsilon \sim \mathcal{N}(0,\, \beta_{\text{r2r}}^2)
+
+   where :math:`a` and :math:`b` are regression coefficients and
+   :math:`\beta_{\text{r2r}}` is the record-to-record dispersion.
+   The median EDP given IM is:
+
+   .. math::
+
+      \widehat{\text{EDP}} \mid \text{IM} = a \cdot \text{IM}^{\,b}
+
+   **Step 2 — Logistic regression (collapse probability)**
+
+   Records exceeding *censored_limit* are classified as collapse. The probability of
+   collapse conditioned on IM is estimated via logistic regression:
+
+   .. math::
+
+      P(C \mid \text{IM}) = \frac{1}{1 + \exp\!\bigl[-(\alpha_0 + \alpha_1\,\ln \text{IM})\bigr]}
+
+   **Step 3 — Lognormal conditional fragility**
+
+   For each damage state :math:`i` with threshold :math:`\delta_i`, the conditional
+   (non-collapse) fragility is modelled as a lognormal CDF:
+
+   .. math::
+
+      P(\text{DS} \geq ds_i \mid \text{NC}, \text{IM}) =
+      \Phi\!\left(\frac{\ln(\text{IM}/\theta_i)}{\beta_{\text{total}}}\right)
+
+   where :math:`\theta_i` is the median IM capacity and the total dispersion combines
+   three sources of uncertainty:
+
+   .. math::
+
+      \beta_{\text{total}} = \sqrt{\beta_{\text{r2r}}^2 + \beta_{\text{b2b}}^2 + \beta_{\text{DS}}^2}
+
+   with :math:`\beta_{\text{r2r}}` the record-to-record variability,
+   :math:`\beta_{\text{b2b}}` the building-to-building variability, and
+   :math:`\beta_{\text{DS}}` the uncertainty in the damage-state threshold.
+
+   **Step 4 — Total fragility**
+
+   The total probability of exceeding each damage state is obtained by combining the
+   non-collapse fragility with the collapse probability via the total probability theorem:
+
+   .. math::
+
+      P(\text{DS} \geq ds_i \mid \text{IM}) =
+      P(\text{DS} \geq ds_i \mid \text{NC}, \text{IM}) \cdot P(\text{NC} \mid \text{IM})
+      + P(C \mid \text{IM})
+
+   where :math:`P(\text{NC} \mid \text{IM}) = 1 - P(C \mid \text{IM})`.
+
+

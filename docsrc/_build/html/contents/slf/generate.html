@@ -1,0 +1,202 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>8.2. SLF Generation &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=92fd9be5" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=749cc255" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="9. Visualisation" href="../plo.html" />
+    <link rel="prev" title="8.1. Initialisation" href="init.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            OpenQuake Vulnerability Modellers Toolkit Suite
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">1. Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">2. Change Log</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../imc.html">3. Intensity Measure Calculation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ims.html">4. Intensity Measure Selection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cal.html">5. Model Calibration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../mod.html">6. Model Building and Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pos.html">7. Postprocessing</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../slf.html">8. Storey Loss Function Generation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="init.html">8.1. Initialisation</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">8.2. SLF Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#openquake.vmtk.slf_generator.slf_generator.generate"><code class="docutils literal notranslate"><span class="pre">slf_generator.generate()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../slf.html#references">8.3. References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../plo.html">9. Visualisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples.html">10. Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">OpenQuake Vulnerability Modellers Toolkit Suite</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../slf.html"><span class="section-number">8. </span>Storey Loss Function Generation</a></li>
+      <li class="breadcrumb-item active"><span class="section-number">8.2. </span>SLF Generation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/contents/slf/generate.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="slf-generation">
+<h1><span class="section-number">8.2. </span>SLF Generation<a class="headerlink" href="#slf-generation" title="Link to this heading"></a></h1>
+<dl class="py method">
+<dt class="sig sig-object py" id="openquake.vmtk.slf_generator.slf_generator.generate">
+<span class="sig-prename descclassname"><span class="pre">slf_generator.</span></span><span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/openquake/vmtk/slf_generator.html#slf_generator.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#openquake.vmtk.slf_generator.slf_generator.generate" title="Link to this definition"></a></dt>
+<dd><p>Generate Storey Loss Functions (SLFs) for each performance group.</p>
+<p>This method computes the Storey Loss Functions (SLFs) for different performance groups
+based on fragility functions, Monte Carlo simulations for damage state sampling,
+regression analysis, and empirical statistics. The results are stored for each group and
+returned along with a cache of relevant data for future use.</p>
+<p>The process involves:
+- Obtaining component fragility and consequence functions.
+- Performing Monte Carlo simulations for sampling damage states.
+- Validating damage state dependencies.
+- Calculating costs for each component group.
+- Performing regression analysis to fit loss functions.
+- Transforming the results into the required SLF format.
+- Computing empirical statistics (median, 16th percentile, 84th percentile) for each group.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p>A tuple containing:
+- <cite>out</cite> (Dict[slf_model]): A dictionary where the key is the group identifier (as a</p>
+<blockquote>
+<div><p>string) and the value is the Storey Loss Function (SLF) for that group, including
+the fitted loss functions and their associated errors.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p><cite>cache</cite> (Dict): A dictionary storing intermediate data such as component data,
+fragility functions, total losses, repair costs, damage states, and the results of
+the regression analysis for each group.</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<div class="admonition-theoretical-background admonition">
+<p class="admonition-title">Theoretical Background</p>
+<p>A Storey Loss Function (SLF) links the expected repair loss at a given storey to the
+Engineering Demand Parameter (EDP) at that storey (Ramirez &amp; Miranda, 2009;
+Shahnazaryan et al., 2021).</p>
+<p><strong>Component loss model</strong></p>
+<p>For each damageable component <span class="math notranslate nohighlight">\(c\)</span> in performance group <span class="math notranslate nohighlight">\(g\)</span>, the repair
+cost <span class="math notranslate nohighlight">\(\ell_c\)</span> is a random variable that depends on the damage state
+<span class="math notranslate nohighlight">\(DS_c\)</span>. Given the EDP level <span class="math notranslate nohighlight">\(x\)</span>, the expected cost contribution is:</p>
+<div class="math notranslate nohighlight">
+\[E[\ell_c \mid x] = \sum_{i=1}^{n_{DS}}
+  \mu_{c,i} \cdot P(DS_c = i \mid x)\]</div>
+<p>where <span class="math notranslate nohighlight">\(\mu_{c,i}\)</span> is the mean repair cost for damage state <span class="math notranslate nohighlight">\(i\)</span> and
+<span class="math notranslate nohighlight">\(P(DS_c = i \mid x)\)</span> is derived from the component fragility functions via:</p>
+<div class="math notranslate nohighlight">
+\[P(DS_c = i \mid x) =
+  P(DS_c \geq i \mid x) - P(DS_c \geq i+1 \mid x)\]</div>
+<p><strong>Monte Carlo sampling</strong></p>
+<p>Damage states are sampled via Monte Carlo simulation across a user-defined EDP range.
+For <span class="math notranslate nohighlight">\(N\)</span> realisations, each realisation draws a damage state for every component
+at every EDP level. Component costs are summed within each performance group to obtain
+the total group loss per realisation.</p>
+<p><strong>Regression and SLF fitting</strong></p>
+<p>The empirical loss-EDP cloud (from all Monte Carlo realisations) is fitted by
+regression to one of several functional forms (Weibull, Papadopoulos, Generalised
+Pareto, or Lognormal). The fitted curve is the SLF for the group:</p>
+<div class="math notranslate nohighlight">
+\[\hat{\ell}_g(x) = f_{\boldsymbol{\theta}}(x)\]</div>
+<p>where <span class="math notranslate nohighlight">\(\boldsymbol{\theta}\)</span> are the regression parameters estimated by
+minimising the sum of squared residuals between the empirical median loss and the
+fitted curve.</p>
+<p>Empirical statistics (median, 16th and 84th percentiles) across realisations are
+also retained in the cache for uncertainty characterisation.</p>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="init.html" class="btn btn-neutral float-left" title="8.1. Initialisation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../plo.html" class="btn btn-neutral float-right" title="9. Visualisation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024-2025, GEM Risk.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

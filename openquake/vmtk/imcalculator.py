@@ -70,12 +70,11 @@ class imcalculator:
         Computes the significant duration (time between specified
         fractions of Arias intensity).
 
-    get_duration_ims()
-        Computes duration-based intensity measures: Arias Intensity,
-        CAV, and 5%-95% significant duration.
-
     get_FIV3(period, alpha, beta)
         Computes the filtered incremental velocity (FIV3).
+
+    get_rotdxx(acc2, percentile, periods, damping_ratio)
+        Computes the RotDxx orientation-independent spectral acceleration.
 
     """
 
@@ -527,34 +526,6 @@ class imcalculator:
 
         return t_end - t_start
 
-    def get_duration_ims(self):
-        """
-        Computes duration-based intensity measures.
-
-        Returns the Arias Intensity, Cumulative Absolute Velocity,
-        and 5%-95% significant duration in a single call.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        ai : float
-            Arias Intensity (m/s).
-
-        cav : float
-            Cumulative Absolute Velocity (m/s).
-
-        t_595 : float
-            5%-95% significant duration (s).
-
-        """
-        ai = self.get_arias_intensity()
-        cav = self.get_cav()
-        t_595 = self.get_significant_duration()
-        return ai, cav, t_595
-
     def get_FIV3(self, period, alpha, beta):
         """
         Computes the filtered incremental velocity (FIV3) intensity
@@ -672,3 +643,167 @@ class imcalculator:
         FIV3 = np.max([np.sum(pks), np.abs(np.sum(trs))])
 
         return FIV3, FIV, t, ugf, pks, trs
+
+    def get_rotdxx(
+        self,
+        acc2,
+        percentile=50,
+        periods=np.linspace(1e-5, 4.0, 500),
+        damping_ratio=0.05,
+    ):
+        """
+        Computes the RotDxx orientation-independent spectral
+        acceleration from two horizontal ground-motion components.
+
+        RotDxx is the *xx*-th percentile of the single-component
+        spectral acceleration computed over 180 equally spaced
+        rotation angles (0° to 179°). The rotated acceleration at
+        angle θ is:
+
+            a_rot(t, θ) = a₁(t) · cos θ + a₂(t) · sin θ
+
+        where a₁ and a₂ are the two orthogonal horizontal
+        components. Because the system is linear, the displacement
+        response to a_rot is:
+
+            u(t, θ) = cos θ · u₁(t) + sin θ · u₂(t)
+
+        where u₁ and u₂ are the SDOF displacement responses to a₁
+        and a₂ respectively. This allows the Newmark-β integration
+        to be performed only twice (once per component) rather than
+        180 times.
+
+        Parameters
+        ----------
+        acc2 : array_like
+            Second horizontal acceleration component. Must be the
+            same length as ``self.acc`` and supplied in the same
+            unit as the first component (the unit used when
+            constructing the :class:`imcalculator` instance).
+
+        percentile : float, optional
+            Percentile in [0, 100] across rotation angles used to
+            define RotDxx. Use 50 for RotD50 (median) or 100 for
+            RotD100 (maximum). Default is 50.
+
+        periods : numpy.ndarray, optional
+            Array of periods at which to compute RotDxx (s).
+            Default is 500 points linearly spaced from 1e-5 to
+            4.0 s.
+
+        damping_ratio : float, optional
+            Damping ratio for the SDOF oscillator. Default is
+            0.05 (5%).
+
+        Returns
+        -------
+        periods : numpy.ndarray
+            Periods of the RotDxx spectrum (s).
+
+        rotdxx : numpy.ndarray
+            RotDxx spectral acceleration (g) at each period.
+
+        Notes
+        -----
+        Common choices are RotD50 (``percentile=50``), which is
+        used as the reference IM in ASCE 7-22 ground-motion
+        selection, and RotD100 (``percentile=100``), the
+        orientation-independent maximum.
+
+        When the second component is zero, RotD100 equals the
+        single-component SA and RotD50 equals SA · √2/2 (the
+        median of abs(cos θ) over 180 uniformly spaced angles).
+
+        References
+        ----------
+        Boore, D.M. (2010). "Orientation-independent, nongeometric-
+        mean measures of seismic intensity from two horizontal
+        components of motion." *Bulletin of the Seismological
+        Society of America*, 100(4), 1830–1835.
+        DOI: 10.1785/0120090400.
+
+        """
+        # Newmark-beta integration constants (constant average
+        # acceleration — unconditionally stable)
+        gamma_nb = 0.5
+        beta_nb = 0.25
+        ms = 1.0  # Unit mass (kg)
+        dt = self.dt
+
+        # Convert acc2 to g (matching the internal storage of acc1)
+        acc2 = np.array(acc2, dtype=float)
+        if self.unit in ("m/s2", "m/s^2"):
+            acc2_g = acc2 / _G
+        else:
+            acc2_g = acc2
+
+        # Precompute SDOF system properties (vectorised over periods)
+        periods = np.asarray(periods, dtype=float)
+        omega = 2 * np.pi / periods          # (n_periods,)
+        k = ms * omega**2                    # Stiffness (N/m)
+        c = 2 * damping_ratio * ms * omega   # Damping coefficient
+
+        k_bar = (
+            k
+            + (gamma_nb / (beta_nb * dt)) * c
+            + ms / (beta_nb * dt**2)
+        )
+        A = ms / (beta_nb * dt) + (gamma_nb / beta_nb) * c
+        B = ms / (2 * beta_nb) + dt * c * (gamma_nb / (2 * beta_nb) - 1)
+
+        def _newmark_u(acc_g):
+            """Return displacement history (n_periods, n_time) for acc_g."""
+            acc_ms2 = acc_g * _G
+            p = -ms * acc_ms2
+            n_time = len(acc_ms2)
+            n_per = len(periods)
+
+            u = np.zeros((n_per, n_time))
+            v = np.zeros((n_per, n_time))
+            a = np.zeros((n_per, n_time))
+
+            a[:, 0] = p[0] / ms
+
+            for i in range(n_time - 1):
+                dp = p[i + 1] - p[i]
+                dp_bar = dp + A * v[:, i] + B * a[:, i]
+                du = dp_bar / k_bar
+                dv = (
+                    (gamma_nb / (beta_nb * dt)) * du
+                    - (gamma_nb / beta_nb) * v[:, i]
+                    + dt * (1 - gamma_nb / (2 * beta_nb)) * a[:, i]
+                )
+                da = (
+                    du / (beta_nb * dt**2)
+                    - v[:, i] / (beta_nb * dt)
+                    - a[:, i] / (2 * beta_nb)
+                )
+                u[:, i + 1] = u[:, i] + du
+                v[:, i + 1] = v[:, i] + dv
+                a[:, i + 1] = a[:, i] + da
+
+            return u
+
+        # SDOF displacement responses for the two components
+        u1 = _newmark_u(self.acc)   # (n_periods, n_time)
+        u2 = _newmark_u(acc2_g)     # (n_periods, n_time)
+
+        # 180 rotation angles: 0°, 1°, …, 179°
+        theta_rad = np.deg2rad(np.arange(180))   # (180,)
+
+        # SA at each (angle, period) combination
+        # u_rot(θ) = cos(θ)*u1 + sin(θ)*u2  →  shape (n_periods, n_time)
+        # Vectorise over angles by broadcasting
+        # cos_th: (180, 1, 1), u1: (1, n_periods, n_time)
+        cos_th = np.cos(theta_rad)[:, np.newaxis, np.newaxis]  # (180,1,1)
+        sin_th = np.sin(theta_rad)[:, np.newaxis, np.newaxis]  # (180,1,1)
+        u_rot = cos_th * u1[np.newaxis] + sin_th * u2[np.newaxis]
+        # u_rot shape: (180, n_periods, n_time)
+
+        sd_rot = np.max(np.abs(u_rot), axis=2)   # (180, n_periods)
+        sa_rot = sd_rot * omega[np.newaxis, :] ** 2 / _G   # (180, n_periods)
+
+        # RotDxx: percentile across the 180 rotation angles
+        rotdxx = np.percentile(sa_rot, percentile, axis=0)   # (n_periods,)
+
+        return periods, rotdxx

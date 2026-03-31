@@ -75,17 +75,40 @@ class TestImCalculator(unittest.TestCase):
         t595 = self.calculator.get_significant_duration()
         self.assertAlmostEqual(t595, self.t595_test, places=3)
 
-    def test_get_duration_ims(self):
-        ai, cav, t595 = self.calculator.get_duration_ims()
-        self.assertAlmostEqual(ai, self.ai_test, places=3)
-        self.assertAlmostEqual(cav, self.cav_test, places=3)
-        self.assertAlmostEqual(t595, self.t595_test, places=3)
-
     def test_get_fiv3(self):
         fiv3, _, _, _, _, _ = self.calculator.get_FIV3(
             period=0.3, alpha=1.0, beta=0.7
         )
         self.assertAlmostEqual(fiv3, self.fiv3_test, places=3)
+
+    def test_get_rotdxx(self):
+        # Use a zero second component so that rotated acceleration is
+        # acc1 * cos(theta).  The max |cos(theta)| = 1 (at theta=0°),
+        # so RotD100 equals the single-component SA at that period.
+        # The median of |cos(theta)| over 0..179 degrees is cos(45°) =
+        # sqrt(2)/2, so RotD50 equals SA * sqrt(2)/2.
+        #
+        # Reference SA is computed directly at T=0.3 s (not via
+        # interpolation) so that it is consistent with how get_rotdxx
+        # evaluates the spectrum.
+        target_period = np.array([0.3])
+        acc_zero = np.zeros_like(self.calculator.acc)
+
+        _, _, _, sa_ref = self.calculator.get_spectrum(
+            periods=target_period, damping_ratio=0.05
+        )
+        rotd100_expected = sa_ref[0]
+        rotd50_expected = sa_ref[0] * np.sqrt(2) / 2
+
+        _, rotd100 = self.calculator.get_rotdxx(
+            acc_zero, percentile=100, periods=target_period
+        )
+        _, rotd50 = self.calculator.get_rotdxx(
+            acc_zero, percentile=50, periods=target_period
+        )
+
+        self.assertAlmostEqual(rotd100[0], rotd100_expected, places=4)
+        self.assertAlmostEqual(rotd50[0], rotd50_expected, places=4)
 
 
 if __name__ == "__main__":
