@@ -2554,8 +2554,10 @@ class modeller:
                     f"Execution Limit Reached: {max_runs} runs. "
                     f"Skipping SF {sf_value:.3f}")
                 return None, None
-            print(f" -- Run {self.run_count +
-                             1}/{max_runs} | SF: {sf_value:.3f}")
+            print(
+                f" -- Run {self.run_count + 1}/{max_runs}"
+                f" | SF: {sf_value:.3f}"
+            )
 
             # Reset environment and rebuild model for the current iteration
             ops.wipe()
