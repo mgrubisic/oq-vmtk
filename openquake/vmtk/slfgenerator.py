@@ -545,8 +545,7 @@ class slfgenerator:
             model = component_data_model.model_validate(row)
             if model.Component_ID is not None and model.Component_ID in id_set:
                 raise ValueError(
-                    f"Duplicate Component ID: {
-                        model.Component_ID}")
+                    f"Duplicate Component ID: {model.Component_ID}")
             id_set.add(model.Component_ID)
 
         counts = {

@@ -8,7 +8,7 @@ import warnings
 
 import numpy as np
 
-from openquake.vmtk.im_selection import imselection, _PDF_FLOOR
+from openquake.vmtk.imselection import imselection, _PDF_FLOOR
 
 
 # ---------------------------------------------------------------------------

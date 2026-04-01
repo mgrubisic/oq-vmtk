@@ -475,19 +475,19 @@ class postprocessor:
         return poes.values
 
     def process_mca_results(self,
-                                   imls,
-                                   edps,
-                                   damage_thresholds,
-                                   lower_limit,
-                                   censored_limit,
-                                   sigma_build2build=0.3,
-                                   sigma_ds=0.3,
-                                   intensities=np.geomspace(0.05, 10, 50),
-                                   n_bootstrap=200,
-                                   random_seed=None,
-                                   fragility_rotation=False,
-                                   rotation_percentile=0.10,
-                                   fragility_method='lognormal'):
+                            imls,
+                            edps,
+                            damage_thresholds,
+                            lower_limit,
+                            censored_limit,
+                            sigma_build2build=0.3,
+                            sigma_ds=0.3,
+                            intensities=np.geomspace(0.05, 10, 50),
+                            n_bootstrap=200,
+                            random_seed=None,
+                            fragility_rotation=False,
+                            rotation_percentile=0.10,
+                            fragility_method='lognormal'):
         """
         Perform a Modified Cloud Analysis (MCA) to derive seismic
         fragility functions. This method extends classical cloud analysis
@@ -967,15 +967,15 @@ class postprocessor:
     # POSTPROCESS MULTIPLE STRIPE ANALYSIS RESULTS
     # ---------------------------------------------------------------
     def process_msa_results(self,
-                                    imls,
-                                    edps,
-                                    damage_thresholds,
-                                    sigma_build2build=0.3,
-                                    sigma_ds=0.3,
-                                    intensities=np.round(
-                                        np.geomspace(0.05, 10.0, 50), 3),
-                                    fragility_rotation=False,
-                                    rotation_percentile=0.10):
+                            imls,
+                            edps,
+                            damage_thresholds,
+                            sigma_build2build=0.3,
+                            sigma_ds=0.3,
+                            intensities=np.round(
+                                np.geomspace(0.05, 10.0, 50), 3),
+                            fragility_rotation=False,
+                            rotation_percentile=0.10):
         """
         Perform maximum likelihood estimation (MLE) for fragility curve
         fitting following a multiple stripe analysis. This method
@@ -1211,17 +1211,17 @@ class postprocessor:
     # POSTPROCESS INCREMENTAL DYNAMIC ANALYSIS RESULTS
     # ---------------------------------------------------------------
     def process_ida_results(self,
-                                        ansys_dict,
-                                        im_matrix,
-                                        damage_thresholds,
-                                        edp_key,
-                                        sigma_build2build=0.3,
-                                        sigma_ds=0.3,
-                                        intensities=np.round(
-                                            np.geomspace(0.05, 10.0, 50), 3),
-                                        edp_range=np.linspace(0.00, 0.05, 101),
-                                        fragility_rotation=False,
-                                        rotation_percentile=0.10):
+                            ansys_dict,
+                            im_matrix,
+                            damage_thresholds,
+                            edp_key,
+                            sigma_build2build=0.3,
+                            sigma_ds=0.3,
+                            intensities=np.round(
+                                np.geomspace(0.05, 10.0, 50), 3),
+                            edp_range=np.linspace(0.00, 0.05, 101),
+                            fragility_rotation=False,
+                            rotation_percentile=0.10):
         """
         Perform fragility function fitting and statistical processing on
         Incremental Dynamic Analysis (IDA) results.

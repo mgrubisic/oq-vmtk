@@ -1283,10 +1283,8 @@ class plotter:
 
         ani = FuncAnimation(fig, update, frames=num_frames,
                             interval=10, blit=False, repeat=False)
-
         if export_path:
-            print(f'\nSaving NRHA animation ({
-                  num_frames} frames) to: {export_path}')
+            print(f'\nSaving NRHA animation ({num_frames} frames) to: {export_path}')
             try:
                 if export_path.lower().endswith('.gif'):
                     ani.save(export_path, writer='pillow', dpi=dpi)
@@ -1778,8 +1776,9 @@ class plotter:
                        label=f'$DS_{{{i + 1}}}$ Threshold',
                        zorder=2)
 
-        self._set_plot_style(ax, title=title or f"IDA: {imt_label} vs {
-                             edp_label}", xlabel=edp_label, ylabel=imt_label)
+        self._set_plot_style(
+            ax, title=title or f"IDA: {imt_label} vs {edp_label}",
+            xlabel=edp_label, ylabel=imt_label)
 
         ax.set_xlim(xlims)
         ax.set_ylim(ylims)
@@ -1924,8 +1923,7 @@ class plotter:
                       color=stripe_col, lw=1.2, ls='--', alpha=0.75, zorder=4)
 
         # ── Styling ──────────────────────────────────────────────────────────
-        default_title = f"Multiple Stripe Analysis — {
-            edp_label} vs {imt_label}"
+        default_title = f"Multiple Stripe Analysis — {edp_label} vs {imt_label}"
         self._set_plot_style(ax,
                              title=title if title else default_title,
                              xlabel=f"{edp_label} [%]",
@@ -2066,9 +2064,7 @@ class plotter:
                 # Last state is always Collapse (Black)
                 c = 'black'
                 # Use mean logistic parameters as they define the shape
-                label = rf"Collapse: $\alpha_0$={
-                    alpha0_mean:.2f}, $\alpha_1$={
-                    alpha1_mean:.2f}"
+                label = rf"Collapse: $\alpha_0$={alpha0_mean:.2f}, $\alpha_1$={alpha1_mean:.2f}"
             else:
                 # Standard Damage States
                 c = self.colors['fragility'][ds %
@@ -2079,11 +2075,7 @@ class plotter:
                 beta_val = betas[ds]
 
                 # Label using Theta and Beta symbols
-                label = rf"DS{
-                    ds +
-                    1}: $\theta$={
-                    theta_val:.2f}g, $\beta$={
-                    beta_val:.2f}"
+                label = rf"DS{ds +1}: $\theta$={theta_val:.2f}g, $\beta$={beta_val:.2f}"
 
             ax.plot(intensities, poes_mean[:, ds],
                     color=c,
