@@ -880,6 +880,18 @@ class postprocessor:
                 else:
                     betas_total[ds] = np.nan
 
+            # For any DS where beta could not be estimated (fragility median
+            # lies below the minimum IM so im16 is undefined), substitute the
+            # next valid beta.  The medians are still used as-is, so the
+            # ordering median_DS1 < median_DS2 < ... is preserved and the
+            # final np.maximum cleanup below prevents curve crossings.
+            for ds in range(n_ds):
+                if np.isnan(betas_total[ds]):
+                    for ds_next in range(ds + 1, n_ds + 1):
+                        if not np.isnan(betas_total[ds_next]):
+                            betas_total[ds] = betas_total[ds_next]
+                            break
+
             # Recalculate the lognormal fragility functions
             for ds in range(n_ds+1):
 

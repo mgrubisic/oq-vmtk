@@ -36,13 +36,13 @@ class component_data_model(BaseModel):
         Number of defined damage states.
     """
 
-    Component_ID: Optional[int] = Field(alias="Component ID")
-    Description: Optional[str] = None
-    EDP: str
-    Typology: str
+    Component_ID:      Optional[int] = Field(alias="Component ID")
+    Description:       Optional[str] = None
+    EDP:                        str
+    Typology:                   str
     Performance_Group: Optional[int] = Field(alias="Performance Group")
-    Quantity: float
-    Damage_States: int = Field(alias="Damage States")
+    Quantity:                  float
+    Damage_States:               int = Field(alias="Damage States")
 
     @validator("Component_ID")
     def validate_id(cls, v):
@@ -247,8 +247,8 @@ class slf_model(BaseModel):
         Mean Storey Loss Function values.
     """
 
-    directionality: Optional[int] = Field(alias="Directionality")
-    component_type: str = Field(alias="Component-type")
+    directionality: Optional[int]  = Field(alias="Directionality")
+    component_type: str             = Field(alias="Component-type")
     storey: Optional[Union[int, List[int]]] = Field(alias="Storey")
     edp: str
     edp_range: List[float]
@@ -378,7 +378,7 @@ class slfgenerator:
         edp_defaults = {
             "idr": (0.1 / 100, 0, 0.5),
             "psd": (0.1 / 100, 0, 0.5),
-            "pfa": (0.05, 0, 5.0),
+            "pfa": (0.05,      0, 5.0),
         }
 
         if self.edp not in edp_defaults:
@@ -468,7 +468,7 @@ class slfgenerator:
 
         self.component_groups = {
             k: v for k, v in {
-                "PSD, S": psd_s,
+                "PSD, S":  psd_s,
                 "PSD, NS": psd_ns,
                 "PFA, NS": pfa_ns,
             }.items() if v is not None
@@ -510,8 +510,7 @@ class slfgenerator:
         for i, row in enumerate(correlation_values):
             for j, value in enumerate(row):
                 if j == 0:
-                    if isinstance(value,
-                                  str) and value.lower() == "independent":
+                    if isinstance(value, str) and value.lower() == "independent":
                         self.matrix[i, j] = item_ids[i]
                     elif not item_ids[i] or math.isnan(item_ids[i]):
                         self.matrix[i, j] = np.nan
@@ -544,8 +543,7 @@ class slfgenerator:
         for row in component_data:
             model = component_data_model.model_validate(row)
             if model.Component_ID is not None and model.Component_ID in id_set:
-                raise ValueError(
-                    f"Duplicate Component ID: {model.Component_ID}")
+                raise ValueError(f"Duplicate Component ID: {model.Component_ID}")
             id_set.add(model.Component_ID)
 
         counts = {
@@ -613,12 +611,7 @@ class slfgenerator:
                 "must match."
             )
 
-    def _fit_regression(
-            self,
-            losses,
-            edp_range,
-            fitting_function,
-            percentiles):
+    def _fit_regression(self, losses, edp_range, fitting_function, percentiles):
         """Fit a single regression model across all requested quantiles.
 
         Parameters
@@ -701,10 +694,10 @@ class slfgenerator:
         ).values
 
         num_components = len(data)
-        means_fr = data[:, :n_ds]
-        covs_fr = data[:, n_ds:2 * n_ds]
+        means_fr  = data[:, :n_ds]
+        covs_fr   = data[:, n_ds:2 * n_ds]
         means_cost = data[:, 2 * n_ds:3 * n_ds] * self.conversion
-        covs_cost = data[:, 3 * n_ds:4 * n_ds]
+        covs_cost  = data[:, 3 * n_ds:4 * n_ds]
 
         fragilities = {"EDP": self.edp_range, "IDs": {}}
 
@@ -712,14 +705,14 @@ class slfgenerator:
             fragilities["IDs"][item + 1] = {}
             for ds in range(n_ds):
                 mean_val = means_fr[item, ds]
-                cov_val = covs_fr[item, ds]
+                cov_val  = covs_fr[item, ds]
 
                 if mean_val == 0:
                     fragilities["IDs"][item + 1][f"DS{ds + 1}"] = np.zeros(
                         len(self.edp_range)
                     )
                 else:
-                    log_std = np.sqrt(np.log(cov_val ** 2 + 1))
+                    log_std  = np.sqrt(np.log(cov_val ** 2 + 1))
                     log_mean = np.exp(np.log(mean_val) - 0.5 * log_std ** 2)
                     curve = stats.norm.cdf(
                         np.log(self.edp_range / log_mean) / log_std
@@ -797,7 +790,7 @@ class slfgenerator:
             m = int(self.matrix[i][0])   # causation component ID
             j = i + 1                    # dependent component ID
             for n in range(self.realizations):
-                causation_ds = damage_state[m][n]
+                causation_ds  = damage_state[m][n]
                 correlated_ds = damage_state[j][n]
 
                 temp = np.zeros(causation_ds.shape)
@@ -857,24 +850,19 @@ class slfgenerator:
                                 f"DS{ds}, Best Fit"
                             ].lower()
                         )
-                        mu = means_cost[idx][ds - 1]
+                        mu  = means_cost[idx][ds - 1]
                         cov = covs_cost[idx][ds - 1]
                         idx_list = np.where(damage_state[item][n] == ds)[0]
 
                         for idx_repair in idx_list:
                             if best_fit == "lognormal":
-                                a = np.random.normal(mu, cov * mu)
-                                while a < 0:
-                                    std_log = np.sqrt(
-                                        np.log((mu ** 2 + (cov * mu) ** 2)
-                                               / mu ** 2)
-                                    )
-                                    m_log = np.log(
-                                        mu ** 2
-                                        / np.sqrt(mu ** 2 + (cov * mu) ** 2)
-                                    )
-                                    a = np.random.lognormal(m_log, std_log)
+                                # Lognormal is always positive — sample directly,
+                                # no rejection loop needed.
+                                std_log = np.sqrt(np.log(1.0 + cov ** 2))
+                                m_log   = np.log(mu) - 0.5 * std_log ** 2
+                                a = np.random.lognormal(m_log, std_log)
                             else:
+                                # Normal can yield negatives — resample until positive.
                                 a = np.random.normal(mu, cov * mu)
                                 while a < 0:
                                     a = np.random.normal(mu, cov * mu)
@@ -950,14 +938,14 @@ class slfgenerator:
         """
         percentiles = percentiles or [0.16, 0.50, 0.84]
 
-        loss_df = pd.DataFrame.from_dict(loss)
+        loss_df       = pd.DataFrame.from_dict(loss)
         loss_ratio_df = pd.DataFrame.from_dict(loss_ratio)
 
         losses = {
-            "loss": loss_df.quantile(percentiles, axis=1),
+            "loss":       loss_df.quantile(percentiles, axis=1),
             "loss_ratio": loss_ratio_df.quantile(percentiles, axis=1),
         }
-        losses["loss"].loc["mean"] = loss_df.mean(axis=1)
+        losses["loss"].loc["mean"]       = loss_df.mean(axis=1)
         losses["loss_ratio"].loc["mean"] = loss_ratio_df.mean(axis=1)
 
         edp_range = (
@@ -1055,7 +1043,7 @@ class slfgenerator:
             Sum of absolute errors weighted by ``edp_bin``, as a percentage
             of ``max(y)``.
         """
-        y = np.asarray(y)
+        y    = np.asarray(y)
         yhat = np.asarray(yhat)
         abs_error = np.abs(y - yhat)
         max_y = np.max(y)
@@ -1084,10 +1072,10 @@ class slfgenerator:
         return {
             "Directionality": self.directionality,
             "Component-type": typology,
-            "Storey": self.storey,
-            "edp": self.edp,
-            "edp_range": list(self.edp_range),
-            "slf": list(losses_fitted["mean"]),
+            "Storey":         self.storey,
+            "edp":            self.edp,
+            "edp_range":      list(self.edp_range),
+            "slf":            list(losses_fitted["mean"]),
         }
 
     def generate(self) -> tuple:
@@ -1155,21 +1143,21 @@ class slfgenerator:
                 [total[i] for i in range(len(total))]
             )
             cache[group_str] = {
-                "component": component_data_group,
-                "fragilities": fragilities_group,
-                "total_loss_storey": total,
+                "component":             component_data_group,
+                "fragilities":           fragilities_group,
+                "total_loss_storey":     total,
                 "total_loss_storey_ratio": ratio,
-                "repair_cost": repair_cost,
-                "damage_states": damage_state,
-                "losses": losses,
-                "slfs": losses_fitted,
-                "fit_pars": fitting_parameters,
-                "accuracy": [error_max, error_cum],
-                "regression": self.regression,
-                "edp": self.edp,
-                "empirical_median": np.median(loss_matrix, axis=0),
-                "empirical_16th": np.percentile(loss_matrix, 16, axis=0),
-                "empirical_84th": np.percentile(loss_matrix, 84, axis=0),
+                "repair_cost":           repair_cost,
+                "damage_states":         damage_state,
+                "losses":                losses,
+                "slfs":                  losses_fitted,
+                "fit_pars":              fitting_parameters,
+                "accuracy":              [error_max, error_cum],
+                "regression":            self.regression,
+                "edp":                   self.edp,
+                "empirical_median":      np.median(loss_matrix, axis=0),
+                "empirical_16th":        np.percentile(loss_matrix, 16, axis=0),
+                "empirical_84th":        np.percentile(loss_matrix, 84, axis=0),
             }
 
         self.cache = cache
