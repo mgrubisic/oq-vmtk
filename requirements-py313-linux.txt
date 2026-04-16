@@ -12,8 +12,7 @@ https://wheelhouse.openquake.org/v3/linux/py313/pandas-2.2.3-cp313-cp313-manylin
 https://wheelhouse.openquake.org/v3/linux/py313/pyproj-3.7.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
 https://wheelhouse.openquake.org/v3/linux/py313/scipy-1.15.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 https://wheelhouse.openquake.org/v3/linux/py313/shapely-2.1.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-#
-https://wheelhouse.openquake.org/v3/linux/py312/statsmodels-0.14.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+https://wheelhouse.openquake.org/v3/linux/py313/statsmodels-0.14.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 #
 openseespy==3.7.0.4
 openseespylinux==3.7.0.4
