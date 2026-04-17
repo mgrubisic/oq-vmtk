@@ -211,6 +211,21 @@ class plotter:
             ax.grid(visible=True, which='major')
             ax.grid(visible=True, which='minor')
 
+    def _show(self):
+        """
+        Display the current figure, suppressing the non-interactive backend
+        warning that Matplotlib raises when running in headless environments
+        (e.g. CI with the Agg backend).
+        """
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=".*non-interactive.*",
+                category=UserWarning,
+            )
+            self._show()
+
     def _save_plot(self, output_directory, plot_label):
         """
         Save the current Matplotlib figure to disk and display it.
@@ -240,7 +255,7 @@ class plotter:
                 f'{output_directory}/{plot_label}.png',
                 dpi=self.resolution,
                 format='png')
-        plt.show()
+        self._show()
 
     def duplicate_for_drift(self,
                             peak_drift_list,
@@ -431,9 +446,9 @@ class plotter:
         if export_path:
             plt.savefig(export_path, dpi=self.resolution,
                         bbox_inches='tight', facecolor=BG)
-            plt.show()
+            self._show()
         else:
-            plt.show()
+            self._show()
         plt.close(fig)
 
     # ANIMATE STATIC PUSHOVER ANALYSES
@@ -1301,9 +1316,9 @@ class plotter:
                 plt.close(fig)
             except Exception as e:
                 print(f'Animation save failed: {e}')
-                plt.show()
+                self._show()
         else:
-            plt.show()
+            self._show()
 
         return ani
 
@@ -1414,9 +1429,9 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
             else:
-                plt.show()
+                self._show()
         else:
             plt.close()
 
@@ -1627,10 +1642,10 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
                 plt.close(fig)
             else:
-                plt.show()
+                self._show()
         else:
             plt.close(fig)
 
@@ -1791,10 +1806,10 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
                 plt.close(fig)
             else:
-                plt.show()
+                self._show()
         else:
             plt.close(fig)
 
@@ -1953,9 +1968,9 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
             else:
-                plt.show()
+                self._show()
         else:
             plt.close(fig)
 
@@ -2186,10 +2201,10 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
                 plt.close(fig)
             else:
-                plt.show()
+                self._show()
         else:
             plt.close(fig)
 
@@ -2302,11 +2317,11 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
             # Show if no path OR if you want to see it after saving
             if not export_path:
                 # Display but do not save to disk
-                plt.show()
+                self._show()
             else:
                 # Close the plot to free memory after saving if not showing
                 plt.close()
@@ -2423,11 +2438,11 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
             # Show if no path OR if you want to see it after saving
             if not export_path:
                 # Display but do not save to disk
-                plt.show()
+                self._show()
             else:
                 # Close the plot to free memory after saving if not showing
                 plt.close()
@@ -2563,9 +2578,9 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
             else:
-                plt.show()
+                self._show()
         else:
             plt.close()
 
@@ -2734,8 +2749,8 @@ class plotter:
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
-                plt.show()
+                self._show()
             else:
-                plt.show()
+                self._show()
         else:
             plt.close()
