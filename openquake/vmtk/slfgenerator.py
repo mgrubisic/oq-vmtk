@@ -443,8 +443,8 @@ class slfgenerator:
         ``Performance Group`` values are present they override this default
         grouping.
         """
-        self.component_data["Performance Group"].fillna(-1, inplace=True)
-        self.component_data["Typology"].fillna("-1", inplace=True)
+        self.component_data["Performance Group"] = self.component_data["Performance Group"].fillna(-1)
+        self.component_data["Typology"] = self.component_data["Typology"].fillna("-1")
 
         if not self.grouping_flag:
             key = self.component_data["EDP"].iloc[0]

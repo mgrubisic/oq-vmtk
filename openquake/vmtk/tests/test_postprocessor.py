@@ -60,7 +60,7 @@ class TestLognormalFragility(unittest.TestCase):
             self.theta, self.sigma_rr,
             sigma_build2build=0.0, sigma_ds=0.0,
             intensities=[self.theta])
-        self.assertAlmostEqual(float(poe), 0.50, places=6)
+        self.assertAlmostEqual(float(poe.item()), 0.50, places=6)
 
     def test_poe_at_median_with_combined_uncertainty(self):
         """PoE at IM = theta is 0.50 regardless of sigma components."""
@@ -68,7 +68,7 @@ class TestLognormalFragility(unittest.TestCase):
             self.theta, self.sigma_rr,
             sigma_build2build=0.30, sigma_ds=0.30,
             intensities=[self.theta])
-        self.assertAlmostEqual(float(poe), 0.50, places=6)
+        self.assertAlmostEqual(float(poe.item()), 0.50, places=6)
 
     def test_poes_bounded(self):
         poes = self.pp.calculate_lognormal_fragility(
@@ -92,7 +92,7 @@ class TestLognormalFragility(unittest.TestCase):
         poe_high = self.pp.calculate_lognormal_fragility(
             self.theta, 0.8,
             sigma_build2build=0.0, sigma_ds=0.0, intensities=im)
-        self.assertGreater(float(poe_low), float(poe_high))
+        self.assertGreater(float(poe_low.item()), float(poe_high.item()))
 
 
 # ---------------------------------------------------------------------------
@@ -558,7 +558,7 @@ class TestVulnerabilityFunction(unittest.TestCase):
         df = self._vuln()
         self.assertAlmostEqual(
             df['Loss'].values[-1],
-            float(self.poes[-1]),
+            float(self.poes[-1].item()),
             places=2)
 
     def test_no_uncertainty_zero_cov(self):
