@@ -7,11 +7,6 @@ on:
         description: Git Ref
         default: master
         required: true
-      debug_enabled:
-        type: boolean
-        description: 'tmate debug enabled'
-        required: false
-        default: false
   schedule:
     - cron: "0 2 * * 0"
 
