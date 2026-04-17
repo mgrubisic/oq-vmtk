@@ -224,7 +224,7 @@ class plotter:
                 message=".*non-interactive.*",
                 category=UserWarning,
             )
-            self._show()
+            plt.show()
 
     def _save_plot(self, output_directory, plot_label):
         """
