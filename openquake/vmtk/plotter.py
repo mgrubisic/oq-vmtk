@@ -1967,128 +1967,208 @@ class plotter:
                                 xlims,
                                 ylims,
                                 title=None,
+                                cloud_method=None,
                                 plot_bootstrap=False,
                                 pFlag=True,
                                 export_path=None):
         """
-        Generates a fragility analysis plot showing the Probability of Exceedance (PoE)
-        for multiple damage states using Modified Cloud Analysis (MCA) results.
+        Generates a fragility analysis plot showing the Probability of
+        Exceedance (PoE) for multiple damage states using Modified Cloud
+        Analysis (MCA) results.
 
-        This method visualizes the mean robust fragility curves derived from the
-        combined linear (for standard damage states) and logistic (for collapse)
-        regression models. It optionally displays the underlying bootstrap
-        realizations as a background 'cloud' to visualize statistical uncertainty.
+        Supports both uncertainty quantification approaches:
 
-        The figure uses ``self.figsize`` with ``constrained_layout`` and is
-        saved without ``bbox_inches='tight'`` so that every output image has
-        identical, deterministic pixel dimensions.
+        - ``'bootstrap'``: plots the mean fragility curves and,
+          optionally, individual bootstrap realizations as a faint
+          background cloud.
+        - ``'classical'``: plots the Robust Fragility mean and a
+          shaded ±k·σ confidence band derived from the posterior
+          variance (Jalayer et al. 2017).
+
+        The ``cloud_method`` is auto-detected from
+        ``cloud_dict['fragility']['cloud_method']`` when the argument is
+        ``None`` (default), falling back to ``'bootstrap'`` for dicts
+        produced by older code that does not carry the key.
+
+        The figure uses ``self.figsize`` with ``constrained_layout`` and
+        is saved without ``bbox_inches='tight'`` so that every output
+        image has identical, deterministic pixel dimensions.
 
         Parameters
         ----------
         cloud_dict : dict
-            Standardized dictionary containing analysis results. Required keys:
-            - 'fragility': dict containing 'intensities' (1D array) and 'poes' (2D array).
-            - 'regression': dict containing 'b0' (intercept) and 'b1' (slope).
-            - 'bootstraps': dict containing 'alpha0', 'alpha1' arrays and
-              optionally 'poes_all' (3D array of bootstrap curves).
+            Standardized dictionary returned by
+            ``postprocessor.process_mca_results()``. Required keys:
+
+            - ``'fragility'``: contains ``intensities`` (1-D array),
+              ``poes`` (2-D), ``medians``, ``betas_total``.
+            - For ``'bootstrap'``: ``'bootstraps'`` sub-dict with
+              ``alpha0``, ``alpha1`` arrays and optional ``poes_all``
+              (3-D array of per-iteration curves).
+            - For ``'classical'``: ``'fragility'`` must also contain
+              ``poes_robust_plus`` and ``poes_robust_minus``; and
+              ``'mcmc'`` sub-dict with ``chi_mean``.
 
         imt_label : str
-            The label for the X-axis, typically the Intensity Measure type and
-            unit (e.g., 'PGA [g]' or 'Sa(T1) [g]').
+            X-axis label (e.g., ``'PGA [g]'``, ``'Sa(T1) [g]'``).
 
         xlims : tuple of float
-            (min, max) limits for the X-axis (EDP axis).
+            ``(min, max)`` limits for the X-axis.
 
         ylims : tuple of float
-            (min, max) limits for the Y-axis (Probability axis).
+            ``(min, max)`` limits for the Y-axis.
 
         title : str, optional
-            Custom title for the plot. If None, a default MCA title is used.
+            Custom plot title. If ``None``, a method-specific default
+            is used.
+
+        cloud_method : {'bootstrap', 'classical'} or None, optional
+            Selects the plotting style. When ``None`` (default), the
+            value is read from
+            ``cloud_dict['fragility'].get('cloud_method', 'bootstrap')``.
 
         plot_bootstrap : bool, default False
-            If True, plots all bootstrap fragility realizations with a low
-            alpha (transparency) to illustrate uncertainty bounds.
-            Note: This may increase rendering time for large bootstrap samples.
+            *Bootstrap only.* If ``True``, plots all individual
+            bootstrap fragility curves with low alpha as a background
+            cloud. Ignored when ``cloud_method='classical'``.
 
         pFlag : bool, default True
-            If True, the plot is rendered and either shown or saved.
-            If False, the figure is closed without display to save memory.
+            If ``True``, renders and/or saves the figure. If ``False``,
+            closes the figure immediately (useful for batch runs).
 
         export_path : str, optional
-            The full file path (including extension) where the plot should be saved.
-            The method automatically creates the target directory if it does not exist.
+            Full file path (including extension) for saving the figure.
+            The parent directory is created automatically if needed.
 
         Returns
         -------
         None
-            The function renders the plot to the active Matplotlib backend or
-            exports it to a file.
         """
 
-        # Setup Data from cloud_dict
-        frag = cloud_dict['fragility']
-        boot = cloud_dict['bootstraps']
+        # -----------------------------------------------------------------
+        # Resolve cloud_method
+        # -----------------------------------------------------------------
+        if cloud_method is None:
+            cloud_method = cloud_dict['fragility'].get(
+                'cloud_method', 'bootstrap')
 
+        frag = cloud_dict['fragility']
         intensities = frag['intensities']
-        poes_mean = frag['poes']  # Mapped from 'poes' in your dict
-        boot_poes = boot.get('poes_all', [])
+        poes_mean = frag['poes']
         medians = frag['medians']
         betas = frag['betas_total']
+        n_ds = poes_mean.shape[1]
+        n_fragility_colors = len(self.colors['fragility'])
 
-        # Extract mean logistic params for the legend labels
-        # Logistic mean params
-        alpha0_mean = boot['alpha0'].mean()
-        alpha1_mean = boot['alpha1'].mean()
-
-        # 2. Initialise Plot
+        # -----------------------------------------------------------------
+        # Initialise figure
+        # -----------------------------------------------------------------
         fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
         self._set_plot_style(
             ax,
             xlabel=imt_label,
             ylabel=r'Probability of Exceedance $P(DS \geq ds | IM)$')
 
-        n_ds = poes_mean.shape[1]
+        # -----------------------------------------------------------------
+        # Bootstrap rendering
+        # -----------------------------------------------------------------
+        if cloud_method.lower() == 'bootstrap':
+            boot = cloud_dict['bootstraps']
+            boot_poes = boot.get('poes_all', [])
+            alpha0_mean = boot['alpha0'].mean()
+            alpha1_mean = boot['alpha1'].mean()
 
-        # Plot Bootstrap Samples (Optional Background)
-        if plot_bootstrap and len(boot_poes) > 0:
-            for i in range(len(boot_poes)):
-                for ds in range(n_ds):
-                    color = 'black' if ds == n_ds - \
-                        1 else self.colors['fragility'][ds % len(self.colors['fragility'])]
-                    ax.plot(intensities, boot_poes[i][:, ds],
-                            color=color, alpha=0.05, lw=0.5, zorder=1)
+            # Optional: individual bootstrap curves as faint background
+            if plot_bootstrap and len(boot_poes) > 0:
+                for i in range(len(boot_poes)):
+                    for ds in range(n_ds):
+                        c_bg = (
+                            'black' if ds == n_ds - 1
+                            else self.colors['fragility'][
+                                ds % n_fragility_colors])
+                        ax.plot(intensities, boot_poes[i][:, ds],
+                                color=c_bg, alpha=0.05,
+                                lw=0.5, zorder=1)
 
-        # Plot Mean Robust Fragility Curves
-        for ds in range(n_ds):
-            if ds == n_ds - 1:
-                # Last state is always Collapse (Black)
-                c = 'black'
-                # Use mean logistic parameters as they define the shape
-                label = rf"Collapse: $\alpha_0$={alpha0_mean:.2f}, $\alpha_1$={alpha1_mean:.2f}"
-            else:
-                # Standard Damage States
-                c = self.colors['fragility'][ds %
-                                             len(self.colors['fragility'])]
+            # Mean fragility curves
+            for ds in range(n_ds):
+                if ds == n_ds - 1:
+                    c = 'black'
+                    label = (
+                        rf"Collapse: $\alpha_0$={alpha0_mean:.2f}, "
+                        rf"$\alpha_1$={alpha1_mean:.2f}")
+                else:
+                    c = self.colors['fragility'][ds % n_fragility_colors]
+                    label = (
+                        rf"DS{ds + 1}: $\theta$={medians[ds]:.2f}g, "
+                        rf"$\beta$={betas[ds]:.2f}")
+                ax.plot(intensities, poes_mean[:, ds],
+                        color=c,
+                        linewidth=self.line_widths['thick'],
+                        label=label,
+                        zorder=3)
 
-                # Get the median (theta) and dispersion (beta) for this DS
-                theta_val = medians[ds]
-                beta_val = betas[ds]
+            default_title = (
+                "Fragility Functions from Modified Cloud Analysis"
+                " (Bootstrap)")
 
-                # Label using Theta and Beta symbols
-                label = rf"DS{ds +1}: $\theta$={theta_val:.2f}g, $\beta$={beta_val:.2f}"
+        # -----------------------------------------------------------------
+        # Classical (Bayesian MCMC) rendering
+        # -----------------------------------------------------------------
+        elif cloud_method.lower() == 'classical':
+            poes_plus = frag['poes_robust_plus']
+            poes_minus = frag['poes_robust_minus']
+            k = frag.get('confidence_k', 2)
 
-            ax.plot(intensities, poes_mean[:, ds],
-                    color=c,
-                    linewidth=self.line_widths['thick'],
-                    label=label,
-                    zorder=3)
-        # Final Formatting
+            mc = cloud_dict.get('mcmc', {})
+            chi_mean = mc.get('chi_mean', np.zeros(5))
+            alpha0_mean = float(chi_mean[3])
+            alpha1_mean = float(chi_mean[4])
+
+            for ds in range(n_ds):
+                if ds == n_ds - 1:
+                    c = 'black'
+                    label = (
+                        rf"Collapse: $\alpha_0$={alpha0_mean:.2f}, "
+                        rf"$\alpha_1$={alpha1_mean:.2f}")
+                else:
+                    c = self.colors['fragility'][ds % n_fragility_colors]
+                    label = (
+                        rf"DS{ds + 1}: $\theta$={medians[ds]:.2f}g, "
+                        rf"$\beta$={betas[ds]:.2f}")
+
+                # Confidence band (±k·σ)
+                ax.fill_between(
+                    intensities,
+                    poes_minus[:, ds], poes_plus[:, ds],
+                    color=c, alpha=0.15, zorder=1,
+                    label=(rf"$\pm{k}\sigma$ band" if ds == 0
+                           else None))
+
+                # Robust mean curve
+                ax.plot(intensities, poes_mean[:, ds],
+                        color=c,
+                        linewidth=self.line_widths['thick'],
+                        label=label,
+                        zorder=3)
+
+            default_title = (
+                "Robust Fragility Functions from Modified Cloud Analysis"
+                " (Classical / Jalayer et al. 2017)")
+
+        else:
+            raise ValueError(
+                f"Unknown cloud_method '{cloud_method}'. "
+                f"Expected 'bootstrap' or 'classical'.")
+
+        # -----------------------------------------------------------------
+        # Final formatting
+        # -----------------------------------------------------------------
         ax.set_xlim([xlims[0], xlims[1]])
         ax.set_ylim([ylims[0], ylims[1]])
         ax.xaxis.set_minor_locator(AutoMinorLocator())
         ax.yaxis.set_minor_locator(AutoMinorLocator())
 
-        default_title = "Fragility Functions from Modified Cloud Analysis"
         ax.set_title(
             title if title else default_title,
             fontsize=self.font_sizes['title'])
@@ -2099,7 +2179,7 @@ class plotter:
             framealpha=0.9,
             edgecolor='black')
 
-        # 6. Save or Show
+        # Save or show
         if pFlag:
             if export_path:
                 directory = os.path.dirname(export_path)

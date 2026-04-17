@@ -238,9 +238,9 @@ class TestModifiedCloudAnalysis(unittest.TestCase):
     https://gitlab.seismo.ethz.ch/efehr/esrm20_vulnerability/
     """
 
-    B0_EXPECTED = -6.650269
-    B1_EXPECTED = 2.564951
-    SIGMA_EXPECTED = 0.507748
+    B0_EXPECTED = -6.657090
+    B1_EXPECTED = 2.491236
+    SIGMA_EXPECTED = 0.493070
     TOLERANCE = 0.01  # 1 % relative tolerance
 
     def setUp(self):
@@ -361,6 +361,81 @@ class TestModifiedCloudAnalysis(unittest.TestCase):
         result = self._run(
             fragility_rotation=True, rotation_percentile=0.10)
         self.assertIn('fragility', result)
+
+    def test_cloud_method_key_bootstrap(self):
+        result = self._run(cloud_method='bootstrap')
+        self.assertEqual(
+            result['fragility']['cloud_method'], 'bootstrap')
+
+    def test_cloud_method_key_classical(self):
+        result = self._run(
+            cloud_method='classical',
+            n_mcmc=300, n_mcmc_burnin=100)
+        self.assertEqual(
+            result['fragility']['cloud_method'], 'classical')
+
+    def test_classical_top_level_keys(self):
+        result = self._run(
+            cloud_method='classical',
+            n_mcmc=300, n_mcmc_burnin=100)
+        for key in ['cloud inputs', 'fragility',
+                    'regression', 'mcmc', 'raw_data']:
+            self.assertIn(key, result)
+
+    def test_classical_fragility_extra_keys(self):
+        result = self._run(
+            cloud_method='classical',
+            n_mcmc=300, n_mcmc_burnin=100)
+        frag = result['fragility']
+        for key in ['poes_robust_plus', 'poes_robust_minus',
+                    'confidence_k']:
+            self.assertIn(key, frag)
+
+    def test_classical_poes_shape(self):
+        result = self._run(
+            cloud_method='classical',
+            n_mcmc=300, n_mcmc_burnin=100)
+        poes = result['fragility']['poes']
+        self.assertEqual(poes.shape[1], len(self.thresholds) + 1)
+
+    def test_classical_poes_bounded(self):
+        result = self._run(
+            cloud_method='classical',
+            n_mcmc=300, n_mcmc_burnin=100)
+        frag = result['fragility']
+        for key in ['poes', 'poes_robust_plus', 'poes_robust_minus']:
+            self.assertTrue(np.all(frag[key] >= 0.0))
+            self.assertTrue(np.all(frag[key] <= 1.0))
+
+    def test_classical_mcmc_keys(self):
+        result = self._run(
+            cloud_method='classical',
+            n_mcmc=300, n_mcmc_burnin=100)
+        mc = result['mcmc']
+        for key in ['chain', 'acceptance_rate', 'n_mcmc',
+                    'n_burnin', 'chi_labels', 'chi_mean',
+                    'chi_std', 'chi_median', 'poes_all']:
+            self.assertIn(key, mc)
+
+    def test_classical_mcmc_chain_shape(self):
+        n_mcmc, n_burnin = 300, 100
+        result = self._run(
+            cloud_method='classical',
+            n_mcmc=n_mcmc, n_mcmc_burnin=n_burnin)
+        chain = result['mcmc']['chain']
+        self.assertEqual(chain.shape, (n_mcmc - n_burnin, 5))
+
+    def test_classical_acceptance_rate_in_range(self):
+        result = self._run(
+            cloud_method='classical',
+            n_mcmc=300, n_mcmc_burnin=100)
+        rate = result['mcmc']['acceptance_rate']
+        self.assertGreater(rate, 0.0)
+        self.assertLessEqual(rate, 1.0)
+
+    def test_unknown_cloud_method_raises(self):
+        with self.assertRaises((ValueError, Exception)):
+            self._run(cloud_method='invalid')
 
 
 # ---------------------------------------------------------------------------

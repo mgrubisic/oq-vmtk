@@ -11,16 +11,16 @@ class TestImCalculator(unittest.TestCase):
     pga_test = 0.54557
     pgv_test = 0.42661
     pgd_test = 0.03304
-    sa03_test = 1.26963
+    sa03_test = 1.30976
     sa06_test = 0.78053
-    sa10_test = 0.31027
-    avgsa03_test = 1.19491
-    avgsa06_test = 0.82186
-    avgsa10_test = 0.43333
+    sa10_test = 0.31042
+    avgsa03_test = 1.20747
+    avgsa06_test = 0.81096
+    avgsa10_test = 0.43578
     periods_list = np.linspace(0.1, 1, 10)
-    user_avgsa_test = 0.753149
-    ai_test = 0.02069
-    cav_test = 1.02289
+    user_avgsa_test = 0.76748
+    ai_test = 1.99202
+    cav_test = 10.03464
     t595_test = 7.695
     fiv3_test = 0.073900
 

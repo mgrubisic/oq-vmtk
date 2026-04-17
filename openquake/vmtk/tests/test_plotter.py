@@ -72,6 +72,64 @@ def _cloud_dict():
     }
 
 
+def _cloud_dict_classical():
+    """Minimal cloud_dict for cloud_method='classical' (Jalayer et al. 2017)."""
+    n = 50
+    rng = np.random.default_rng(1)
+    n_post = 20
+    n_ds = 2
+    intensities = np.geomspace(0.05, 2.0, n)
+    poes = np.clip(rng.uniform(0.0, 1.0, (n, n_ds)), 0, 1)
+    imls = np.geomspace(0.05, 2.0, n)
+    edps = np.exp(rng.normal(np.log(0.01), 0.5, n))
+    return {
+        'cloud inputs': {
+            'imls': imls,
+            'edps': edps,
+            'upper_limit': 0.10,
+        },
+        'raw_data': {
+            'im_nc': imls[:40],
+            'edp_nc': edps[:40],
+            'im_c': imls[40:],
+            'edp_c': edps[40:],
+        },
+        'regression': {
+            'b0': np.log(0.018),
+            'b1': 1.2,
+            'sigma': 0.4,
+            'alpha0': -4.5,
+            'alpha1': 3.1,
+            'fitted_x': np.log(intensities),
+            'fitted_y': np.log(0.018) + 1.2 * np.log(intensities),
+        },
+        'mcmc': {
+            'chain': rng.normal(0, 1, (n_post, 5)),
+            'acceptance_rate': 0.28,
+            'n_mcmc': n_post + 100,
+            'n_burnin': 100,
+            'chi_labels': ['ln_a', 'b', 'beta', 'alpha0', 'alpha1'],
+            'chi_mean': np.array(
+                [np.log(0.018), 1.2, 0.4, -4.5, 3.1]),
+            'chi_std': np.ones(5) * 0.1,
+            'chi_median': np.array(
+                [np.log(0.018), 1.2, 0.4, -4.5, 3.1]),
+            'poes_all': rng.uniform(
+                0.0, 1.0, (n_post, n, n_ds)),
+        },
+        'fragility': {
+            'cloud_method': 'classical',
+            'intensities': intensities,
+            'poes': poes,
+            'poes_robust_plus': np.clip(poes + 0.1, 0, 1),
+            'poes_robust_minus': np.clip(poes - 0.1, 0, 1),
+            'medians': [0.3, 0.8],
+            'betas_total': [0.4, 0.5],
+            'confidence_k': 2,
+        },
+    }
+
+
 def _ida_dict():
     """Minimal ida_dict for plot_ida_analysis and plot_fragility_from_ida."""
     rng = np.random.default_rng(1)
@@ -467,6 +525,53 @@ class TestPlotFragilityFromMCA(unittest.TestCase):
             plot_bootstrap=True,
             pFlag=False,
         )
+
+    def test_explicit_bootstrap_arg(self):
+        self.pl.plot_fragility_from_mca(
+            self.cd, 'PGA [g]',
+            xlims=(0.0, 2.0), ylims=(0.0, 1.0),
+            cloud_method='bootstrap',
+            pFlag=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# plot_fragility_from_mca — classical (Jalayer et al. 2017)
+# ---------------------------------------------------------------------------
+
+class TestPlotFragilityFromMCAClassical(unittest.TestCase):
+
+    def setUp(self):
+        self.pl = _pl()
+        self.cd = _cloud_dict_classical()
+
+    def tearDown(self):
+        plt.close('all')
+
+    def test_runs_without_error_autodetect(self):
+        """Auto-detects cloud_method='classical' from the dict."""
+        self.pl.plot_fragility_from_mca(
+            self.cd, 'PGA [g]',
+            xlims=(0.0, 2.0), ylims=(0.0, 1.0),
+            pFlag=False,
+        )
+
+    def test_runs_with_explicit_classical_arg(self):
+        self.pl.plot_fragility_from_mca(
+            self.cd, 'PGA [g]',
+            xlims=(0.0, 2.0), ylims=(0.0, 1.0),
+            cloud_method='classical',
+            pFlag=False,
+        )
+
+    def test_invalid_cloud_method_raises(self):
+        with self.assertRaises(ValueError):
+            self.pl.plot_fragility_from_mca(
+                self.cd, 'PGA [g]',
+                xlims=(0.0, 2.0), ylims=(0.0, 1.0),
+                cloud_method='unknown',
+                pFlag=False,
+            )
 
 
 # ---------------------------------------------------------------------------

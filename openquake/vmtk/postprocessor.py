@@ -444,7 +444,7 @@ class postprocessor:
         # Loop over each EDP and determine the highest exceeded damage state
         for i, edp in enumerate(edps):
             # Indices where EDP exceeds thresholds
-            exceeded = np.where(edp > damage_thresholds)[0]
+            exceeded = np.where(edp > np.asarray(damage_thresholds))[0]
             # Assign highest exceeded state (0-based)
             damage_states[i] = exceeded[-1] + 1 if exceeded.size > 0 else 0
 
@@ -487,14 +487,29 @@ class postprocessor:
                             random_seed=None,
                             fragility_rotation=False,
                             rotation_percentile=0.10,
-                            fragility_method='lognormal'):
+                            fragility_method='lognormal',
+                            cloud_method='bootstrap',
+                            n_mcmc=5000,
+                            n_mcmc_burnin=1000,
+                            confidence_k=2):
         """
         Perform a Modified Cloud Analysis (MCA) to derive seismic
         fragility functions. This method extends classical cloud analysis
         by incorporating logistic regression to account for structural
-        collapse cases and using bootstrapping to ensure statistical
-        stability. It supports lognormal, ordinal, and GLM-based
+        collapse cases. It supports lognormal, ordinal, and GLM-based
         fragility fitting.
+
+        When ``fragility_method='lognormal'``, two ``cloud_method``
+        options are available:
+
+        - ``'bootstrap'`` (default): uses non-parametric bootstrapping
+          to estimate the mean fragility and parameter uncertainty.
+        - ``'classical'``: implements the Bayesian Robust Fragility
+          procedure of Jalayer et al. (2017), sampling the 5-parameter
+          vector chi = [ln a, b, beta, alpha0, alpha1] from its
+          posterior distribution via MCMC (Metropolis-Hastings), and
+          computing the Robust Fragility as the posterior expected value
+          of the fragility model together with confidence bands.
 
         Parameters
         ----------
@@ -532,31 +547,66 @@ class postprocessor:
 
         n_bootstrap : int, optional
             Number of bootstrap samples to draw for statistical
-            stability. Default is 200.
+            stability (used only when ``cloud_method='bootstrap'``).
+            Default is 200.
 
         random_seed : int, optional
-            Seed for reproducibility of the bootstrap sampling.
+            Seed for reproducibility of the bootstrap sampling or MCMC.
             Default is None.
 
-        fragility_rotation : float, optional
-            Parameter for rotating fragility functions around a specific
-            percentile to adjust for target reliability. Default is 0.1.
+        fragility_rotation : bool, optional
+            Whether to rotate the fragility curve around a specific
+            percentile to adjust for target reliability. Default is
+            False.
+
+        rotation_percentile : float, optional
+            The target percentile for fragility function rotation.
+            Default is 0.10.
 
         fragility_method : {'lognormal', 'ordinal', 'probit', 'logit'},
-            optional. The methodology used to fit the fragility functions.
-            Default is 'lognormal'.
+            optional. The methodology used to fit the fragility
+            functions. Default is 'lognormal'.
+
+        cloud_method : {'bootstrap', 'classical'}, optional
+            When ``fragility_method='lognormal'``, selects the
+            uncertainty quantification approach.
+
+            - ``'bootstrap'``: non-parametric bootstrapping (default).
+            - ``'classical'``: Bayesian MCMC (Metropolis-Hastings) on
+              the full 5-parameter model chi = [ln a, b, beta,
+              alpha0, alpha1] following Jalayer et al. (2017). The
+              Robust Fragility is computed as the posterior expected
+              value of the fragility model (Eq. 10), and confidence
+              bands are derived from the posterior variance (Eq. 11).
+
+        n_mcmc : int, optional
+            Total number of MCMC samples (including burn-in) used
+            when ``cloud_method='classical'``. Default is 5000.
+
+        n_mcmc_burnin : int, optional
+            Number of initial MCMC samples discarded as burn-in.
+            Default is 1000.
+
+        confidence_k : float, optional
+            Half-width of the robust confidence band in units of the
+            posterior standard deviation. Default is 2.
 
         Returns
         -------
         cloud_dict : dict
-            A nested dictionary with keys: ``'cloud inputs'`` (imls, edps,
-            lower_limit, upper_limit, damage_thresholds); ``'fragility'``
-            (fragility_method, intensities, poes, medians,
-            sigma_record2record, sigma_build2build, sigma_ds, betas_total);
-            ``'regression'`` (b1, b0, sigma, fitted_x, fitted_y — lognormal
-            only); ``'bootstraps'`` (b1, a, sigma_rr, alpha0, alpha1,
-            poes_all of shape n_bootstrap x n_IM x n_DS+1 — lognormal only);
-            ``'raw_data'`` (im_nc, edp_nc, im_c — lognormal only).
+            A nested dictionary. Keys present for all fragility methods:
+            ``'cloud inputs'``, ``'fragility'``, ``'regression'``.
+            Additional keys for ``fragility_method='lognormal'``:
+            ``'raw_data'``; and either ``'bootstraps'``
+            (``cloud_method='bootstrap'``) or ``'mcmc'``
+            (``cloud_method='classical'``).
+
+            ``'fragility'`` always contains: ``fragility_method``,
+            ``cloud_method``, ``intensities``, ``poes``, ``medians``,
+            ``sigma_record2record``, ``sigma_build2build``, ``sigma_ds``,
+            ``betas_total``. When ``cloud_method='classical'``, also
+            includes ``poes_robust_plus``, ``poes_robust_minus``, and
+            ``confidence_k``.
 
         Notes
         -----
@@ -566,6 +616,39 @@ class postprocessor:
         2.  **Logistic Regression**: Used to predict P(C|IM).
         3.  **Total Fragility**: P(DS|IM) = P(DS|NC,IM)*P(NC|IM) +
             P(C|IM).
+
+        The ``'classical'`` cloud method follows the 5-parameter
+        fragility model from Jalayer et al. (2017), Eq. 7:
+
+            P(DCR>1|Sa,chi) = Phi(ln(eta)/beta) * P(NC|Sa) + P(C|Sa)
+
+        where chi = [ln a, b, beta, alpha0, alpha1]. The posterior
+        joint distribution f(chi|D) is sampled via MCMC using the
+        likelihood from Eq. A1.2 (Jalayer et al. 2017). The Robust
+        Fragility (Eq. 10) is the posterior mean of the fragility
+        model over the sampled chi vectors, and the confidence bands
+        (Eq. 11) are derived from the posterior variance.
+
+        References
+        ----------
+        1) Jalayer, F., Ebrahimian, H., Miano, A., Manfredi, G., and
+           Sezen, H. (2017). Analytical fragility assessment using
+           unscaled ground motion records. Earthquake Engng Struct.
+           Dyn., 46, 2639-2663. https://doi.org/10.1002/eqe.2922
+
+        2) Jalayer, F., Elefante, L., De Risi, R., and Manfredi, G.
+           (2014). Cloud Analysis revisited: Efficient fragility
+           calculation and uncertainty propagation using simple linear
+           regression. Proceedings of the 10th NCEE, Anchorage, AK.
+
+        3) Jalayer, F., De Risi, R., and Manfredi, G. (2015). Bayesian
+           Cloud Analysis: efficient structural fragility assessment
+           using linear regression. Bulletin of Earthquake Engineering,
+           13(4), 1183-1203.
+
+        4) Miano, A., Jalayer, F., and Prota, A. (2019). Considering
+           structural modelling uncertainties using Bayesian cloud
+           analysis. COMPDYN 2019.
         """
 
         def cond_fragility(x, a, b):
@@ -767,213 +850,560 @@ class postprocessor:
             # Ensure inputs are in the right format
             imls, edps = np.asarray(imls), np.asarray(edps)
 
-            # Storage for exceedance probabilities and regression parameters
+            # Common dimensions (shared by both cloud methods)
             n_ds = len(damage_thresholds)
             n_im = len(intensities)
-            # +1 to store the "collapse" fragility in the last index
-            poes_s = np.zeros((n_bootstrap, n_im, n_ds + 1))
-            a_s, b_s, sig_s = np.zeros(n_bootstrap), np.zeros(
-                n_bootstrap), np.zeros(n_bootstrap)
-            al0_s, al1_s = np.zeros(n_bootstrap), np.zeros(n_bootstrap)
 
-            # Bootstrapping loop
-            for i in range(n_bootstrap):
+            # =============================================================
+            # BOOTSTRAP APPROACH
+            # =============================================================
+            if cloud_method.lower() == 'bootstrap':
 
-                # Prepare bootstrap samples
-                im_nc_b, edp_nc_b, im_c_b = prepare_mca_data(imls,
-                                                             edps,
-                                                             censored_limit,
-                                                             bootstrap=True)
+                # --- Full-dataset OLS (regression dict) — raw data, no
+                #     bootstrap resampling or collapse-stabilisation ---
+                _is_coll_f = edps > censored_limit
+                _im_nc_f = imls[~_is_coll_f]
+                _edp_nc_f = edps[~_is_coll_f]
+                _mask_f = _edp_nc_f >= lower_limit
+                _ln_im_f = np.log(_im_nc_f[_mask_f])
+                _ln_edp_f = np.log(_edp_nc_f[_mask_f])
+                b_full = (
+                    np.sum((_ln_im_f - _ln_im_f.mean())
+                           * (_ln_edp_f - _ln_edp_f.mean()))
+                    / np.sum((_ln_im_f - _ln_im_f.mean()) ** 2))
+                a_full = np.exp(_ln_edp_f.mean() - b_full * _ln_im_f.mean())
+                _res_full = _ln_edp_f - np.log(a_full * _im_nc_f[_mask_f] ** b_full)
+                sig_full = np.linalg.norm(_res_full) / np.sqrt(len(_res_full) - 2)
 
-                # Cloud regression on non-collapse cases above lower_limit
-                mask_lower = edp_nc_b >= lower_limit
-                ln_im, ln_edp = np.log(im_nc_b[mask_lower]), np.log(
-                    edp_nc_b[mask_lower])  # log-log transform
-                b = (
-                    np.sum(
-                        (ln_im - ln_im.mean())
-                        * (ln_edp - ln_edp.mean()))
-                    / np.sum((ln_im - ln_im.mean()) ** 2)
-                )  # b-parameter
-                # Calculate the a-parameter
-                a = np.exp(ln_edp.mean()-b*ln_im.mean())
-                # Apply the regression to get the mean
-                res = ln_edp - np.log(a*im_nc_b[mask_lower]**b)
-                # Get the standard error
-                sig = np.linalg.norm(res)/np.sqrt(len(res)-2)
+                # Storage for exceedance probabilities and regression params
+                poes_s = np.zeros((n_bootstrap, n_im, n_ds + 1))
+                a_s, b_s, sig_s = np.zeros(n_bootstrap), np.zeros(
+                    n_bootstrap), np.zeros(n_bootstrap)
+                al0_s, al1_s = (np.zeros(n_bootstrap),
+                                np.zeros(n_bootstrap))
 
-                # Store cloud analysis coefficients for this bootstrap
-                a_s[i], b_s[i], sig_s[i] = a, b, sig
+                # Bootstrapping loop
+                for i in range(n_bootstrap):
 
-                # Do logistic regression to account for the collapse cases
-                y_logit = np.concatenate(
-                    [np.zeros(len(im_nc_b)), np.ones(len(im_c_b))])
-                x_logit = sm.add_constant(
-                    np.log(np.concatenate([im_nc_b, im_c_b])))
-                logit_mod = sm.GLM(
-                    y_logit, x_logit,
-                    family=sm.families.Binomial()).fit(disp=0)
+                    # Prepare bootstrap samples
+                    im_nc_b, edp_nc_b, im_c_b = prepare_mca_data(
+                        imls, edps, censored_limit, bootstrap=True)
 
-                # Store logistic regression coefficients for this bootstrap
-                al0_s[i], al1_s[i] = logit_mod.params
+                    # Cloud regression on non-collapse cases
+                    # above lower_limit
+                    mask_lower = edp_nc_b >= lower_limit
+                    ln_im = np.log(im_nc_b[mask_lower])
+                    ln_edp = np.log(edp_nc_b[mask_lower])
+                    b = (
+                        np.sum(
+                            (ln_im - ln_im.mean())
+                            * (ln_edp - ln_edp.mean()))
+                        / np.sum((ln_im - ln_im.mean()) ** 2)
+                    )  # b-parameter
+                    # Calculate the a-parameter
+                    a = np.exp(ln_edp.mean() - b * ln_im.mean())
+                    # Apply the regression to get the mean
+                    res = ln_edp - np.log(
+                        a * im_nc_b[mask_lower]**b)
+                    # Get the standard error
+                    sig = np.linalg.norm(res) / np.sqrt(
+                        len(res) - 2)
 
-                # Calculate the probabilities of exceedance
-                p_collapse = logit_mod.predict(sm.add_constant(
-                    np.log(intensities)))  # The probability of collapse
-                # The cloud regression
-                mu_ln = np.log(a * intensities**b)
-                # Total uncertainty (b2b + DS threshold inflated)
-                sig_total = np.sqrt(sig**2 + sigma_build2build**2+sigma_ds**2)
+                    # Store cloud analysis coefficients
+                    a_s[i], b_s[i], sig_s[i] = a, b, sig
 
-                # Loop over damage states
-                for ds in range(n_ds):
-                    # Calculate the non-collapse fragility functions
-                    poe_nc = 1 - \
-                        norm.cdf(
+                    # Logistic regression for collapse cases
+                    y_logit = np.concatenate(
+                        [np.zeros(len(im_nc_b)),
+                         np.ones(len(im_c_b))])
+                    x_logit = sm.add_constant(
+                        np.log(np.concatenate(
+                            [im_nc_b, im_c_b])))
+                    logit_mod = sm.GLM(
+                        y_logit, x_logit,
+                        family=sm.families.Binomial()).fit(disp=0)
+
+                    # Store logistic regression coefficients
+                    al0_s[i], al1_s[i] = logit_mod.params
+
+                    # Calculate the probabilities of exceedance
+                    p_collapse = logit_mod.predict(
+                        sm.add_constant(np.log(intensities)))
+                    mu_ln = np.log(a * intensities**b)
+                    sig_total = np.sqrt(
+                        sig**2 + sigma_build2build**2
+                        + sigma_ds**2)
+
+                    # Loop over damage states
+                    for ds in range(n_ds):
+                        poe_nc = 1 - norm.cdf(
                             np.log(damage_thresholds[ds]),
                             loc=mu_ln, scale=sig_total)
-                    # Calculate the conditional fragility functions P(NC, IM|C)
-                    poes_s[i, :, ds] = poe_nc * (1-p_collapse) + p_collapse
+                        poes_s[i, :, ds] = (
+                            poe_nc * (1 - p_collapse)
+                            + p_collapse)
 
-                # Store the collapse fragility
-                poes_s[i, :, -1] = p_collapse
+                    # Store the collapse fragility
+                    poes_s[i, :, -1] = p_collapse
 
-            # Storage for mean statistics and lognormal CDF parameters
-            poes_mean = poes_s.mean(axis=0)
-            poes_fitted = np.zeros_like(poes_mean)
-            params_a, params_b = np.zeros(n_ds+1), np.zeros(n_ds+1)
-            medians = np.zeros(n_ds+1)
-            betas_total = np.zeros(n_ds+1)
-            sigmas_ds = np.full(len(damage_thresholds), sigma_ds)
+                # Mean statistics and lognormal CDF parameters
+                poes_mean = poes_s.mean(axis=0)
+                poes_fitted = np.zeros_like(poes_mean)
+                params_a = np.zeros(n_ds + 1)
+                params_b = np.zeros(n_ds + 1)
+                medians = np.zeros(n_ds + 1)
+                betas_total = np.zeros(n_ds + 1)
+                sigmas_ds = np.full(
+                    len(damage_thresholds), sigma_ds)
 
-            # Loop over damage states and collapse
-            for ds in range(n_ds+1):
-                # Fit functional form
-                try:
-                    popt, _ = curve_fit(cond_fragility,
-                                        intensities,
-                                        poes_mean[:, ds],
-                                        bounds=((0, 0), (np.inf, np.inf)))
-                    params_a[ds], params_b[ds] = popt
+                # Loop over damage states and collapse
+                for ds in range(n_ds + 1):
+                    try:
+                        popt, _ = curve_fit(
+                            cond_fragility,
+                            intensities,
+                            poes_mean[:, ds],
+                            bounds=((0, 0),
+                                    (np.inf, np.inf)))
+                        params_a[ds], params_b[ds] = popt
+                    except Exception as e:
+                        raise RuntimeError(
+                            f'ERROR! Curve fitting failed for '
+                            f'DS {ds}: {e}')
 
-                except Exception as e:
-                    raise RuntimeError(
-                        f'ERROR! Curve fitting failed for DS '
-                        f'{ds}: {e}')
+                    poes_fitted[:, ds] = cond_fragility(
+                        intensities, params_a[ds], params_b[ds])
 
-                # Calculate the fitted probabilities
-                poes_fitted[:, ds] = cond_fragility(intensities,
-                                                    params_a[ds],
-                                                    params_b[ds])
+                    # Lognormal equivalents at 16%, 50%, 84%
+                    f_interp = interp1d(
+                        poes_fitted[:, ds], intensities,
+                        bounds_error=False,
+                        fill_value='extrapolate')
+                    medians[ds] = f_interp(0.5)
+                    im16 = f_interp(0.16)
+                    im84 = f_interp(0.84)
 
-                # Interpolate for lognormal equivalents at 16%, 50%, 84%
-                f_interp = interp1d(
-                    poes_fitted[:, ds], intensities,
-                    bounds_error=False, fill_value='extrapolate')
-                medians[ds] = f_interp(0.5)
-                im16 = f_interp(0.16)
-                im84 = f_interp(0.84)
+                    if im16 > 0 and im84 > im16:
+                        betas_total[ds] = np.log(im84 / im16) / 2
+                    else:
+                        betas_total[ds] = np.nan
 
-                # Calculate the uncertainty
-                if im16 > 0 and im84 > im16:
-                    betas_total[ds] = np.log(im84/im16)/2
-                else:
-                    betas_total[ds] = np.nan
+                # Fill NaN betas from the next valid DS
+                for ds in range(n_ds):
+                    if np.isnan(betas_total[ds]):
+                        for ds_next in range(ds + 1, n_ds + 1):
+                            if not np.isnan(betas_total[ds_next]):
+                                betas_total[ds] = (
+                                    betas_total[ds_next])
+                                break
 
-            # For any DS where beta could not be estimated (fragility median
-            # lies below the minimum IM so im16 is undefined), substitute the
-            # next valid beta.  The medians are still used as-is, so the
-            # ordering median_DS1 < median_DS2 < ... is preserved and the
-            # final np.maximum cleanup below prevents curve crossings.
-            for ds in range(n_ds):
-                if np.isnan(betas_total[ds]):
-                    for ds_next in range(ds + 1, n_ds + 1):
-                        if not np.isnan(betas_total[ds_next]):
-                            betas_total[ds] = betas_total[ds_next]
-                            break
+                # Recalculate lognormal fragility functions
+                for ds in range(n_ds + 1):
+                    if fragility_rotation:
+                        fragility_method = (
+                            f'lognormal - rotated around the '
+                            f'{rotation_percentile}th percentile')
+                        (medians[ds],
+                         betas_total[ds],
+                         poes_fitted[:, ds]) = (
+                            self.calculate_rotated_fragility(
+                                rotation_percentile,
+                                medians[ds],
+                                betas_total[ds],
+                                sigma_build2build=0.0,
+                                sigma_ds=0.0))
+                    else:
+                        poes_fitted[:, ds] = (
+                            self.calculate_lognormal_fragility(
+                                medians[ds],
+                                betas_total[ds],
+                                sigma_build2build=0.0,
+                                sigma_ds=0.0))
 
-            # Recalculate the lognormal fragility functions
-            for ds in range(n_ds+1):
+                # Final cleanup: prevent fragility crossing
+                for i in range(n_ds - 1, -1, -1):
+                    poes_fitted[:, i] = np.maximum(
+                        poes_fitted[:, i], poes_fitted[:, i + 1])
 
-                if fragility_rotation:
-                    fragility_method = (
-                        f'lognormal - rotated around the '
-                        f'{rotation_percentile}th percentile')
-                    (medians[ds],
-                     betas_total[ds],
-                     poes_fitted[:, ds]) = (
-                        self.calculate_rotated_fragility(
-                            rotation_percentile,
-                            medians[ds],
-                            betas_total[ds],
-                            sigma_build2build=0.0,
-                            sigma_ds=0.0))
-                else:
-                    poes_fitted[:, ds] = (
-                        self.calculate_lognormal_fragility(
-                            medians[ds],
-                            betas_total[ds],
-                            sigma_build2build=0.0,
-                            sigma_ds=0.0))
+                # Store everything
+                is_collapse = edps >= censored_limit
+                is_nc_plot = (
+                    (~is_collapse) & (edps >= lower_limit))
 
-            # Final cleanup: ensure fragility functions are not crossing
-            # Work backwards from Collapse to DS1 to ensure PoE(DS_i) is always
-            # >= PoE(Collapse) and PoE(DS_i) >= PoE(DS_i+1)
-            for i in range(n_ds-1, -1, -1):
-                poes_fitted[:, i] = np.maximum(
-                    poes_fitted[:, i], poes_fitted[:, i+1])
+                cloud_dict = {
+                    'cloud inputs': {
+                        'imls': imls,
+                        'edps': edps,
+                        'lower_limit': lower_limit,
+                        'upper_limit': censored_limit,
+                        'damage_thresholds': damage_thresholds},
+                    'fragility': {
+                        'fragility_method': (
+                            fragility_method.lower()),
+                        'cloud_method': 'bootstrap',
+                        'intensities': intensities,
+                        'poes': poes_fitted,
+                        'medians': medians[:n_ds],
+                        'sigma_record2record': sig_s.mean(),
+                        'sigma_build2build': sigma_build2build,
+                        'sigma_ds': sigmas_ds,
+                        'betas_total': betas_total[:n_ds]},
+                    'regression': {
+                        'b1': b_full,
+                        'b0': np.log(a_full),
+                        'sigma': sig_full,
+                        'alpha0': al0_s.mean(),
+                        'alpha1': al1_s.mean(),
+                        'fitted_x': np.log(intensities),
+                        'fitted_y': (
+                            np.log(a_full)
+                            + b_full
+                            * np.log(intensities))},
+                    'bootstraps': {
+                        'b1': b_s,
+                        'a': a_s,
+                        'sigma_rr': sig_s,
+                        'alpha0': al0_s,
+                        'alpha1': al1_s,
+                        'poes_all': poes_s},
+                    'raw_data': {
+                        'im_nc': imls[is_nc_plot],
+                        'edp_nc': edps[is_nc_plot],
+                        'im_c': imls[is_collapse]}
+                }
 
-            # Store everything in dedicated dictionary
-            is_collapse = edps >= censored_limit
-            is_nc_plot = (~is_collapse) & (edps >= lower_limit)
+                return cloud_dict
 
-            # Create the dictionary
-            cloud_dict = {
-                # Add a nested dictionary for the inputs of the regression
-                'cloud inputs': {
-                    'imls': imls,
-                    'edps': edps,
-                    'lower_limit': lower_limit,
-                    'upper_limit': censored_limit,
-                    'damage_thresholds': damage_thresholds},
+            # =============================================================
+            # CLASSICAL APPROACH (Jalayer et al. 2017, Bayesian MCMC)
+            # =============================================================
+            elif cloud_method.lower() == 'classical':
 
-                # Fragility functions parameters
-                'fragility': {
-                    'fragility_method': fragility_method.lower(),
-                    'intensities': intensities,
-                    'poes': poes_fitted,
-                    'medians': medians,
-                    'sigma_record2record': sig_s.mean(),
-                    'sigma_build2build': sigma_build2build,
-                    'sigma_ds': sigmas_ds,
-                    'betas_total': betas_total},
+                # ---------------------------------------------------------
+                # Step 1: Partition data into NoC and C
+                # ---------------------------------------------------------
+                is_collapse = edps >= censored_limit
+                is_nc = ~is_collapse
+                # For regression: also exclude sub-lower_limit data
+                is_nc_reg = is_nc & (edps >= lower_limit)
 
-                # Regression coefficients
-                'regression': {
-                    'b1': b_s.mean(),
-                    'b0': np.log(a_s.mean()),
-                    'sigma': sig_s.mean(),
-                    'alpha0': al0_s.mean(),
-                    'alpha1': al1_s.mean(),
-                    'fitted_x': np.log(intensities),
-                    'fitted_y': (np.log(a_s.mean())
-                                 + b_s.mean() * np.log(intensities))},
+                im_nc = imls[is_nc_reg]
+                edp_nc = edps[is_nc_reg]
+                im_c = imls[is_collapse]
+                n_nc = len(im_nc)
+                n_c = len(im_c)
 
-                # Bootstrap iteration results
-                'bootstraps': {
-                    'b1': b_s,
-                    'a': a_s,
-                    'sigma_rr': sig_s,
-                    'alpha0': al0_s,
-                    'alpha1': al1_s,
-                    'poes_all': poes_s},
+                if n_nc < 3:
+                    raise ValueError(
+                        'ERROR! Fewer than 3 non-collapse data '
+                        'points above lower_limit. Cloud '
+                        'regression cannot be performed.')
 
-                'raw_data': {'im_nc': imls[is_nc_plot],
-                             'edp_nc': edps[is_nc_plot],
-                             'im_c': imls[is_collapse]}
-            }
+                # ---------------------------------------------------------
+                # Step 2: OLS point estimates for [ln a, b, beta]
+                # Jalayer et al. 2017, Eq. 2
+                # ---------------------------------------------------------
+                ln_im_nc = np.log(im_nc)
+                ln_edp_nc = np.log(edp_nc)
+                nu = n_nc - 2  # degrees of freedom
 
-            return cloud_dict
+                # Slope b
+                b_hat = (
+                    np.sum((ln_im_nc - ln_im_nc.mean())
+                           * (ln_edp_nc - ln_edp_nc.mean()))
+                    / np.sum(
+                        (ln_im_nc - ln_im_nc.mean()) ** 2)
+                )
+                # Intercept ln(a)
+                lna_hat = (ln_edp_nc.mean()
+                           - b_hat * ln_im_nc.mean())
+                # Residuals and standard error (beta)
+                residuals = (ln_edp_nc
+                             - (lna_hat + b_hat * ln_im_nc))
+                s2 = np.sum(residuals**2) / nu
+                beta_hat = np.sqrt(s2)
+
+                # Design matrix quantities
+                X_design = np.column_stack(
+                    [np.ones(n_nc), ln_im_nc])
+                XtX = X_design.T @ X_design
+                XtX_inv = np.linalg.inv(XtX)
+
+                # ---------------------------------------------------------
+                # Step 3: Logistic regression for [alpha0, alpha1]
+                # Jalayer et al. 2017, Eq. 6 and Appendix B
+                # ---------------------------------------------------------
+                im_all = np.concatenate([imls[is_nc], imls[is_collapse]])
+                y_all = np.concatenate(
+                    [np.zeros(np.sum(is_nc)),
+                     np.ones(n_c)])
+                x_logit_all = sm.add_constant(np.log(im_all))
+                logit_fit = sm.GLM(
+                    y_all, x_logit_all,
+                    family=sm.families.Binomial()).fit(disp=0)
+                alpha0_hat, alpha1_hat = logit_fit.params
+
+                # ---------------------------------------------------------
+                # Step 4: Define the log-likelihood function
+                # Jalayer et al. 2017, Eq. A1.2
+                # ---------------------------------------------------------
+                sa_nc = imls[is_nc_reg]
+                dcr_nc = edps[is_nc_reg]
+                ln_sa_nc = np.log(sa_nc)
+                ln_dcr_nc = np.log(dcr_nc)
+                sa_c = imls[is_collapse]
+                ln_sa_c = np.log(sa_c)
+
+                def log_likelihood(chi):
+                    """
+                    Log-likelihood f(D|chi) from Eq. A1.2 of
+                    Jalayer et al. (2017).
+
+                    Parameters
+                    ----------
+                    chi : array of length 5
+                        [ln_a, b, beta, alpha0, alpha1]
+
+                    Returns
+                    -------
+                    ll : float
+                        The log-likelihood value.
+                    """
+                    ln_a, b_val, beta_val, a0, a1 = chi
+
+                    if beta_val <= 0:
+                        return -np.inf
+
+                    # NoC contribution
+                    mu_nc = ln_a + b_val * ln_sa_nc
+                    z_nc = (ln_dcr_nc - mu_nc) / beta_val
+                    ll_nc = np.sum(
+                        norm.logpdf(z_nc)
+                        - np.log(beta_val))
+                    eta_nc = a0 + a1 * ln_sa_nc
+                    ll_nc += np.sum(
+                        np.log(1.0 / (1.0 + np.exp(eta_nc))
+                               + 1e-300))
+
+                    # C contribution
+                    eta_c = a0 + a1 * ln_sa_c
+                    ll_c = np.sum(
+                        np.log(1.0 / (1.0 + np.exp(-eta_c))
+                               + 1e-300))
+
+                    return ll_nc + ll_c
+
+                # ---------------------------------------------------------
+                # Step 5: MCMC sampling (Metropolis-Hastings)
+                # Jalayer et al. 2017, Appendix A
+                # ---------------------------------------------------------
+                chi_current = np.array([
+                    lna_hat, b_hat, beta_hat,
+                    alpha0_hat, alpha1_hat])
+                n_params = len(chi_current)
+
+                se_lna = np.sqrt(XtX_inv[0, 0] * s2)
+                se_b = np.sqrt(XtX_inv[1, 1] * s2)
+                se_beta = beta_hat / np.sqrt(2.0 * nu)
+                se_a0 = logit_fit.bse[0]
+                se_a1 = logit_fit.bse[1]
+                proposal_scale = np.array(
+                    [se_lna, se_b, se_beta, se_a0, se_a1])
+                prop_factor = 2.4 / np.sqrt(n_params)
+                proposal_cov = np.diag(
+                    (prop_factor * proposal_scale) ** 2)
+
+                chain = np.zeros((n_mcmc, n_params))
+                ll_current = log_likelihood(chi_current)
+                n_accepted = 0
+                n_adapt = min(n_mcmc_burnin, 500)
+
+                for step in range(n_mcmc):
+                    chi_candidate = np.random.multivariate_normal(
+                        chi_current, proposal_cov)
+
+                    if chi_candidate[2] <= 0:
+                        chain[step] = chi_current
+                        continue
+
+                    ll_candidate = log_likelihood(chi_candidate)
+                    log_r = ll_candidate - ll_current
+                    if np.log(np.random.uniform()) < log_r:
+                        chi_current = chi_candidate
+                        ll_current = ll_candidate
+                        n_accepted += 1
+
+                    chain[step] = chi_current
+
+                    if step == n_adapt - 1 and step > 50:
+                        emp_cov = np.cov(
+                            chain[:n_adapt].T)
+                        proposal_cov = (
+                            prop_factor**2 * emp_cov
+                            + 1e-8 * np.eye(n_params))
+
+                # Discard burn-in
+                chain_post = chain[n_mcmc_burnin:]
+                n_post = len(chain_post)
+                acceptance_rate = n_accepted / n_mcmc
+
+                # ---------------------------------------------------------
+                # Step 6: Robust Fragility (Eq. 10) and variance (Eq. 11)
+                # ---------------------------------------------------------
+                poes_mcmc = np.zeros((n_post, n_im, n_ds + 1))
+                ln_intensities = np.log(intensities)
+
+                for j in range(n_post):
+                    ln_a_j, b_j, beta_j, a0_j, a1_j = chain_post[j]
+
+                    eta_j = a0_j + a1_j * ln_intensities
+                    p_c_j = 1.0 / (1.0 + np.exp(-eta_j))
+                    mu_ln_j = ln_a_j + b_j * ln_intensities
+
+                    for ds in range(n_ds):
+                        poe_nc_j = 1.0 - norm.cdf(
+                            np.log(damage_thresholds[ds]),
+                            loc=mu_ln_j, scale=beta_j)
+                        poes_mcmc[j, :, ds] = (
+                            poe_nc_j * (1.0 - p_c_j) + p_c_j)
+
+                    poes_mcmc[j, :, -1] = p_c_j
+
+                # Posterior mean (Eq. 10) and variance (Eq. 11)
+                poes_robust = poes_mcmc.mean(axis=0)
+                poes_std = np.sqrt(poes_mcmc.var(axis=0))
+                poes_robust_plus = np.clip(
+                    poes_robust + confidence_k * poes_std, 0.0, 1.0)
+                poes_robust_minus = np.clip(
+                    poes_robust - confidence_k * poes_std, 0.0, 1.0)
+
+                # ---------------------------------------------------------
+                # Step 7: Lognormal-equivalent parameters
+                # ---------------------------------------------------------
+                medians = np.zeros(n_ds + 1)
+                betas_total = np.zeros(n_ds + 1)
+                sigmas_ds_arr = np.full(
+                    len(damage_thresholds), sigma_ds)
+
+                for ds in range(n_ds + 1):
+                    f_interp = interp1d(
+                        poes_robust[:, ds], intensities,
+                        bounds_error=False,
+                        fill_value='extrapolate')
+                    medians[ds] = f_interp(0.5)
+                    im16 = f_interp(0.16)
+                    im84 = f_interp(0.84)
+                    if im16 > 0 and im84 > im16:
+                        betas_total[ds] = (
+                            np.log(im84 / im16) / 2)
+                    else:
+                        betas_total[ds] = np.nan
+
+                # Fill NaN betas from the next valid DS
+                for ds in range(n_ds):
+                    if np.isnan(betas_total[ds]):
+                        for ds_next in range(ds + 1, n_ds + 1):
+                            if not np.isnan(betas_total[ds_next]):
+                                betas_total[ds] = (
+                                    betas_total[ds_next])
+                                break
+
+                # ---------------------------------------------------------
+                # Step 8: Optional rotation and crossing cleanup
+                # ---------------------------------------------------------
+                poes_fitted = poes_robust.copy()
+
+                for ds in range(n_ds + 1):
+                    if fragility_rotation:
+                        fragility_method = (
+                            f'lognormal - rotated around the '
+                            f'{rotation_percentile}th percentile')
+                        (medians[ds],
+                         betas_total[ds],
+                         poes_fitted[:, ds]) = (
+                            self.calculate_rotated_fragility(
+                                rotation_percentile,
+                                medians[ds],
+                                betas_total[ds],
+                                sigma_build2build=0.0,
+                                sigma_ds=0.0))
+
+                # Final cleanup: prevent fragility crossing
+                for i in range(n_ds - 1, -1, -1):
+                    poes_fitted[:, i] = np.maximum(
+                        poes_fitted[:, i], poes_fitted[:, i + 1])
+
+                # Apply crossing cleanup to confidence bands
+                for i in range(n_ds - 1, -1, -1):
+                    poes_robust_plus[:, i] = np.maximum(
+                        poes_robust_plus[:, i],
+                        poes_robust_plus[:, i + 1])
+                    poes_robust_minus[:, i] = np.maximum(
+                        poes_robust_minus[:, i],
+                        poes_robust_minus[:, i + 1])
+
+                chi_mean = chain_post.mean(axis=0)
+                is_nc_plot = (
+                    (~is_collapse) & (edps >= lower_limit))
+
+                cloud_dict = {
+                    'cloud inputs': {
+                        'imls': imls,
+                        'edps': edps,
+                        'lower_limit': lower_limit,
+                        'upper_limit': censored_limit,
+                        'damage_thresholds': damage_thresholds},
+                    'fragility': {
+                        'fragility_method': (
+                            fragility_method.lower()),
+                        'cloud_method': 'classical',
+                        'intensities': intensities,
+                        'poes': poes_fitted,
+                        'poes_robust_plus': poes_robust_plus,
+                        'poes_robust_minus': poes_robust_minus,
+                        'medians': medians[:n_ds],
+                        'sigma_record2record': beta_hat,
+                        'sigma_build2build': sigma_build2build,
+                        'sigma_ds': sigmas_ds_arr,
+                        'betas_total': betas_total[:n_ds],
+                        'confidence_k': confidence_k},
+                    'regression': {
+                        'b1': chi_mean[1],
+                        'b0': chi_mean[0],
+                        'sigma': chi_mean[2],
+                        'alpha0': chi_mean[3],
+                        'alpha1': chi_mean[4],
+                        'fitted_x': np.log(intensities),
+                        'fitted_y': (
+                            chi_mean[0]
+                            + chi_mean[1]
+                            * np.log(intensities))},
+                    'mcmc': {
+                        'chain': chain_post,
+                        'acceptance_rate': acceptance_rate,
+                        'n_mcmc': n_mcmc,
+                        'n_burnin': n_mcmc_burnin,
+                        'chi_labels': [
+                            'ln_a', 'b', 'beta',
+                            'alpha0', 'alpha1'],
+                        'chi_mean': chi_mean,
+                        'chi_std': chain_post.std(axis=0),
+                        'chi_median': np.median(
+                            chain_post, axis=0),
+                        'poes_all': poes_mcmc},
+                    'raw_data': {
+                        'im_nc': imls[is_nc_plot],
+                        'edp_nc': edps[is_nc_plot],
+                        'im_c': imls[is_collapse]}
+                }
+
+                return cloud_dict
+
+            else:
+                raise ValueError(
+                    f"ERROR! Unknown cloud_method: "
+                    f"'{cloud_method}'. Expected 'bootstrap' "
+                    f"or 'classical'.")
 
     # ---------------------------------------------------------------
     # POSTPROCESS MULTIPLE STRIPE ANALYSIS RESULTS
@@ -1175,13 +1605,13 @@ class postprocessor:
         poes = np.zeros((len(intensities), len(damage_thresholds)))
         for i in range(len(damage_thresholds)):
             if fragility_rotation:
-                # Assuming this helper exists in your class
-                poes[:, i] = self.calculate_rotated_fragility(
-                    thetas[i],
+                _, _, poes[:, i] = self.calculate_rotated_fragility(
                     rotation_percentile,
+                    thetas[i],
                     sigmas_record2record[i],
                     sigma_build2build=sigma_build2build,
-                    sigma_ds=sigma_ds
+                    sigma_ds=sigma_ds,
+                    intensities=intensities
                 )
             else:
                 # Standard lognormal PoE
