@@ -4,10 +4,19 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-# Stub openseespy before plotter is imported — openseespy is only needed by
-# the OpenSees-dependent animation/mode methods, which are skipped in CI.
+# Stub openseespy only when it is not already available as the real module.
+# When the full test suite runs, test_modeller.py loads openseespy first so
+# setdefault is a no-op and the real module is used throughout.
+# When test_plotter.py runs in isolation (no openseespy installed), the mock
+# lets the non-OpenSees tests import plotter without error.
 sys.modules.setdefault('openseespy', MagicMock())
 sys.modules.setdefault('openseespy.opensees', MagicMock())
+
+# Detect whether the real openseespy is available so that OpenSees-dependent
+# tests can be skipped gracefully in environments without it.
+import openseespy.opensees as _ops_detect  # noqa: E402
+_HAS_REAL_OPENSEES = not isinstance(_ops_detect, MagicMock)
+del _ops_detect
 
 import matplotlib  # noqa: E402
 matplotlib.use('Agg')
@@ -670,17 +679,50 @@ class TestPlotVulnerabilityFunction(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# OpenSees-dependent methods — skipped in CI
+# OpenSees-dependent methods
 # ---------------------------------------------------------------------------
 
-@unittest.skip("Requires a compiled OpenSees model — run manually")
+@unittest.skipUnless(_HAS_REAL_OPENSEES, "requires real openseespy")
 class TestOpenSeesDependent(unittest.TestCase):
+    """Tests for plotter methods that require a live OpenSees model."""
 
     def setUp(self):
+        from openquake.vmtk.modeller import modeller
+        import openseespy.opensees as ops
+
         self.pl = _pl()
 
+        m = modeller(
+            number_storeys=2,
+            storey_heights=[2.80, 2.80],
+            floor_masses=[0.5979496788391293, 0.448462259129347],
+            storey_drifts=np.array([
+                [0.00052664, 0.00421318, 0.02096557, 0.03771796],
+                [0.00028185, 0.00225482, 0.01122043, 0.02018604],
+            ]),
+            storey_forces=np.array([
+                [0.11496146, 0.22992293, 0.13795376, 0.1393333],
+                [0.06152551, 0.12305102, 0.07383061, 0.07456892],
+            ]) * 9.81,
+            degradation=True,
+        )
+        m.compile_model()
+        self.T, self.mode_shapes = m.do_modal_analysis(
+            num_modes=3, plot_modes=False
+        )
+        self.node_list = ops.getNodeTags()
+
+    def tearDown(self):
+        plt.close('all')
+
     def test_plot_modes(self):
-        self.pl.plot_modes([], [], [], export_path=None)
+        with tempfile.TemporaryDirectory() as tmp:
+            export = os.path.join(tmp, 'modes.png')
+            self.pl.plot_modes(
+                self.node_list, self.mode_shapes, self.T,
+                export_path=export,
+            )
+            self.assertTrue(os.path.isfile(export))
 
     def test_animate_spo(self):
         pass
