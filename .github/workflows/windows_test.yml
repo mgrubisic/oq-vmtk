@@ -7,11 +7,6 @@ on:
         description: Git Ref
         default: master
         required: true
-      debug_enabled:
-        type: boolean
-        description: 'tmate debug enabled'
-        required: false
-        default: false
   schedule:
     - cron: "0 2 * * 0"
 
@@ -22,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2025]
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python  ${{ matrix.python-version }}
