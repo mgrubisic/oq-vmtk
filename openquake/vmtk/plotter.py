@@ -9,7 +9,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import openseespy.opensees as ops
+import platform
+if platform.system() == "Windows":
+    import openseespy.opensees as ops
+elif platform.system() == "Darwin":
+    import openseespymac.opensees as ops
+else:
+    import openseespy.opensees as ops
 from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import AutoMinorLocator
 from scipy import stats

@@ -4,19 +4,27 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-# Stub openseespy only when it is not already available as the real module.
-# When the full test suite runs, test_modeller.py loads openseespy first so
+# Stub openseespy/openseespymac only when not already available as the real module.
+# When the full test suite runs, test_modeller.py loads the real module first so
 # setdefault is a no-op and the real module is used throughout.
-# When test_plotter.py runs in isolation (no openseespy installed), the mock
+# When test_plotter.py runs in isolation (no opensees installed), the mock
 # lets the non-OpenSees tests import plotter without error.
-sys.modules.setdefault('openseespy', MagicMock())
-sys.modules.setdefault('openseespy.opensees', MagicMock())
+import platform as _platform
+if _platform.system() == "Darwin":
+    sys.modules.setdefault('openseespymac', MagicMock())
+    sys.modules.setdefault('openseespymac.opensees', MagicMock())
+else:
+    sys.modules.setdefault('openseespy', MagicMock())
+    sys.modules.setdefault('openseespy.opensees', MagicMock())
 
-# Detect whether the real openseespy is available so that OpenSees-dependent
+# Detect whether the real opensees is available so that OpenSees-dependent
 # tests can be skipped gracefully in environments without it.
-import openseespy.opensees as _ops_detect  # noqa: E402
+if _platform.system() == "Darwin":
+    import openseespymac.opensees as _ops_detect  # noqa: E402
+else:
+    import openseespy.opensees as _ops_detect  # noqa: E402
 _HAS_REAL_OPENSEES = not isinstance(_ops_detect, MagicMock)
-del _ops_detect
+del _ops_detect, _platform
 
 import matplotlib  # noqa: E402
 matplotlib.use('Agg')
@@ -688,7 +696,11 @@ class TestOpenSeesDependent(unittest.TestCase):
 
     def setUp(self):
         from openquake.vmtk.modeller import modeller
-        import openseespy.opensees as ops
+        import platform
+        if platform.system() == "Darwin":
+            import openseespymac.opensees as ops
+        else:
+            import openseespy.opensees as ops
 
         self.pl = _pl()
 

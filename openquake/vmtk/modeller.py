@@ -1,7 +1,13 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import openseespy.opensees as ops
+import platform
+if platform.system() == "Windows":
+    import openseespy.opensees as ops
+elif platform.system() == "Darwin":
+    import openseespymac.opensees as ops
+else:
+    import openseespy.opensees as ops
 import matplotlib.lines as mlines
 from matplotlib.lines import Line2D
 from openquake.vmtk.units import units
