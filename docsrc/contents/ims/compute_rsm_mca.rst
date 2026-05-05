@@ -1,7 +1,7 @@
 Relative Score Method — Modified Cloud Analysis
 ===============================================
 
-.. automethod:: openquake.vmtk.im_selection.imselection.compute_rsm_mca
+.. automethod:: openquake.vmtk.imselection.imselection.compute_rsm_mca
 
 .. admonition:: Theoretical Background
 

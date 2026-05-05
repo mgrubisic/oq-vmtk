@@ -86,7 +86,7 @@ class modeller:
         system with absolute-acceleration recording and MinMax
         stopping criteria.
 
-    do_incremental_dynamic_analysis(fnames, dt_gm, t_max, dt_ansys,
+    do_ida_analysis(fnames, dt_gm, t_max, dt_ansys,
             ...)
         Performs incremental dynamic analysis (IDA) using the
         Hunt-Trace-Fill algorithm (Vamvatsikos & Cornell, 2002).
@@ -2455,7 +2455,7 @@ class modeller:
                 peak_disp,
                 hysteretic_energy_per_storey, total_hysteretic_energy)
 
-    def do_incremental_dynamic_analysis(
+    def do_ida_analysis(
         self,
         fnames,
         dt_gm,

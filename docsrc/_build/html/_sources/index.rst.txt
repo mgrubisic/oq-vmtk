@@ -50,7 +50,9 @@ Currently, the ``oq-vmtk`` includes the following sub-modules:
    contents/pos
    contents/slf
    contents/plo
+   contents/demos
    contents/examples
+   contents/validation
 
 Indices and tables
 ==================

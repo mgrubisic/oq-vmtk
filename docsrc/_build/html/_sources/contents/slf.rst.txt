@@ -7,6 +7,40 @@ Engineering Demand Parameter (EDP). A Monte Carlo approach is used to sample dam
 states and associated repair costs across a user-defined inventory of damageable
 components.
 
+Minimal example
+---------------
+
+The example below uses the inventory CSVs bundled with the ``oq-vmtk``
+demos at ``demos/StoreyLossFunctionGeneration/in/``.
+
+.. code-block:: python
+
+   import numpy as np
+   import pandas as pd
+   from openquake.vmtk.slfgenerator import slfgenerator
+
+   # Drift-sensitive nonstructural component inventory (FEMA P-58 derived)
+   inventory_psd = pd.read_csv(
+       "demos/StoreyLossFunctionGeneration/in/inventory_psd.csv"
+   )
+
+   model = slfgenerator(
+       component_data=inventory_psd,
+       edp="PSD",
+       edp_range=np.linspace(0.001, 0.10, 100),
+       grouping_flag=True,
+       conversion=1.0,
+       realizations=500,
+       replacement_cost=1.0,
+       regression=None,           # auto-select best fit
+   )
+   slf, cache = model.generate()
+
+The full notebook (which also generates the acceleration-sensitive SLF and
+plots both) is bundled at
+``demos/StoreyLossFunctionGeneration/StoreyLossFunctionGeneration.ipynb`` —
+see :doc:`demos` and :doc:`examples`.
+
 .. toctree::
 
    slf/init

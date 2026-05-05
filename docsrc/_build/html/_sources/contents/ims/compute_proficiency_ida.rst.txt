@@ -1,4 +1,4 @@
 Proficiency — Incremental Dynamic Analysis
 ==========================================
 
-.. automethod:: openquake.vmtk.im_selection.imselection.compute_proficiency_ida
+.. automethod:: openquake.vmtk.imselection.imselection.compute_proficiency_ida

@@ -6,8 +6,8 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>5.1. Initialisation &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=92fd9be5" />
+  <title>5.1.1. Initialisation &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=749cc255" />
 
@@ -15,13 +15,13 @@
       <script src="../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
-      <script src="../../_static/doctools.js?v=9a2dae69"></script>
-      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="5.2. SDOF-to-MDOF Calibration" href="calibrate_model.html" />
+    <link rel="next" title="5.1.2. SDOF-to-MDOF Calibration" href="calibrate_model.html" />
     <link rel="prev" title="5. Model Calibration" href="../cal.html" /> 
 </head>
 
@@ -51,19 +51,21 @@
 <li class="toctree-l1"><a class="reference internal" href="../imc.html">3. Intensity Measure Calculation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../ims.html">4. Intensity Measure Selection</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="../cal.html">5. Model Calibration</a><ul class="current">
-<li class="toctree-l2 current"><a class="current reference internal" href="#">5.1. Initialisation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#openquake.vmtk.calibration.calibration.__init__"><code class="docutils literal notranslate"><span class="pre">calibration.__init__()</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../cal.html#minimal-example">5.1. Minimal example</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">5.1.1. Initialisation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="calibrate_model.html">5.1.2. SDOF-to-MDOF Calibration</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="calibrate_model.html">5.2. SDOF-to-MDOF Calibration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../cal.html#references">5.3. References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../cal.html#references">5.2. References</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../mod.html">6. Model Building and Analysis</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../pos.html">7. Postprocessing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../slf.html">8. Storey Loss Function Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../plo.html">9. Visualisation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples.html">10. Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../demos.html">10. Demos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples.html">11. Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../validation.html">12. Validation and Quality Assurance</a></li>
 </ul>
 
         </div>
@@ -81,7 +83,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../cal.html"><span class="section-number">5. </span>Model Calibration</a></li>
-      <li class="breadcrumb-item active"><span class="section-number">5.1. </span>Initialisation</li>
+      <li class="breadcrumb-item active"><span class="section-number">5.1.1. </span>Initialisation</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../../_sources/contents/cal/init.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -92,59 +94,7 @@
            <div itemprop="articleBody">
              
   <section id="initialisation">
-<h1><span class="section-number">5.1. </span>Initialisation<a class="headerlink" href="#initialisation" title="Link to this heading"></a></h1>
-<dl class="py method">
-<dt class="sig sig-object py" id="openquake.vmtk.calibration.calibration.__init__">
-<span class="sig-prename descclassname"><span class="pre">calibration.</span></span><span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nst</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sdof_capacity</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_sos</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">storey_heights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stiffness_profile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mass_profile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">roof_mass_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.75</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">soft_storey_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stiffness_group_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validate_results</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/openquake/vmtk/calibration.html#calibration.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#openquake.vmtk.calibration.calibration.__init__" title="Link to this definition"></a></dt>
-<dd><p>Initialise the calibration object and validate inputs.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>nst</strong> (<em>int</em>) – Number of storeys. Must be a positive integer.</p></li>
-<li><p><strong>sdof_capacity</strong> (<em>numpy.ndarray</em>) – SDOF capacity array <code class="docutils literal notranslate"><span class="pre">[Sd</span> <span class="pre">(m),</span> <span class="pre">Sa</span> <span class="pre">(g)]</span></code>, shape
-<code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">2)</span></code>. Must not include <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">0)</span></code> rows and
-must contain at least 2 non-zero points.</p></li>
-<li><p><strong>is_sos</strong> (<em>bool</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">True</span></code> if a soft-storey system. Reduces the
-ground-floor stiffness by <em>soft_storey_factor</em>.
-Default is <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
-<li><p><strong>storey_heights</strong> (<em>list</em><em> of </em><em>float</em><em>, </em><em>optional</em>) – Storey heights in metres, length <em>nst</em>. When
-provided, triggers OpenSees period-matching and
-SPO verification inside <code class="docutils literal notranslate"><span class="pre">calibrate_model()</span></code>.
-Default is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
-<li><p><strong>stiffness_profile</strong> (<em>numpy.ndarray</em><em>, </em><em>optional</em>) – Custom relative storey stiffnesses (length <em>nst</em>).
-Overrides the default decay profile. Default is
-<code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
-<li><p><strong>mass_profile</strong> (<em>numpy.ndarray</em><em>, </em><em>optional</em>) – Custom floor masses (length <em>nst</em>, should sum to
-1.0). Overrides the default mass distribution.
-Default is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
-<li><p><strong>phi_target</strong> (<em>numpy.ndarray</em><em>, </em><em>optional</em>) – Custom first mode shape (length <em>nst</em>,
-roof-normalised). Overrides the eigenvalue-based
-mode shape. Default is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
-<li><p><strong>roof_mass_factor</strong> (<em>float</em><em>, </em><em>optional</em>) – Ratio of roof mass to typical floor mass. Default
-is 0.75.</p></li>
-<li><p><strong>soft_storey_factor</strong> (<em>float</em><em>, </em><em>optional</em>) – Multiplicative reduction for the ground-floor
-stiffness when <em>is_sos</em> is <code class="docutils literal notranslate"><span class="pre">True</span></code>. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
-defaults to 0.35 for soft-storey systems and 0.50
-otherwise.</p></li>
-<li><p><strong>stiffness_group_size</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of storeys per stiffness group. Default
-is 2.</p></li>
-<li><p><strong>validate_results</strong> (<em>bool</em><em>, </em><em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, capacity curves are validated for
-monotonicity and positive values after
-calibration. Default is <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
-<li><p><strong>verbose</strong> (<em>bool</em><em>, </em><em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, print calibration progress to
-console. Default is <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><ul class="simple">
-<li><p><strong>TypeError</strong> – If any input has an incorrect type.</p></li>
-<li><p><strong>ValueError</strong> – If any input has an invalid value or inconsistent
-    dimensions.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
+<h1><span class="section-number">5.1.1. </span>Initialisation<a class="headerlink" href="#initialisation" title="Link to this heading"></a></h1>
 </section>
 
 
@@ -152,7 +102,7 @@ console. Default is <code class="docutils literal notranslate"><span class="pre"
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="../cal.html" class="btn btn-neutral float-left" title="5. Model Calibration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="calibrate_model.html" class="btn btn-neutral float-right" title="5.2. SDOF-to-MDOF Calibration" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="calibrate_model.html" class="btn btn-neutral float-right" title="5.1.2. SDOF-to-MDOF Calibration" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

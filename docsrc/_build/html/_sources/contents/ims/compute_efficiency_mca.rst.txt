@@ -1,7 +1,7 @@
 Efficiency — Modified Cloud Analysis
 ====================================
 
-.. automethod:: openquake.vmtk.im_selection.imselection.compute_efficiency_mca
+.. automethod:: openquake.vmtk.imselection.imselection.compute_efficiency_mca
 
 .. admonition:: Theoretical Background
 

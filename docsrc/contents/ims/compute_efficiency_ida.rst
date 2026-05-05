@@ -1,7 +1,7 @@
 Efficiency — Incremental Dynamic Analysis
 =========================================
 
-.. automethod:: openquake.vmtk.im_selection.imselection.compute_efficiency_ida
+.. automethod:: openquake.vmtk.imselection.imselection.compute_efficiency_ida
 
 .. admonition:: Theoretical Background
 

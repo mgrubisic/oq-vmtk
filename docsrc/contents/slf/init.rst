@@ -1,4 +1,4 @@
 Initialisation
 ==============
 
-.. automethod:: openquake.vmtk.slf_generator.slf_generator.__init__
+.. automethod:: openquake.vmtk.slfgenerator.slfgenerator.__init__

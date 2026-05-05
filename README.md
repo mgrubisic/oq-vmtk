@@ -122,12 +122,24 @@ It is highly recommended to use a **virtual environment** to install this tool. 
 
 
 ### 4. Install the Package
-   Install the `oq-vmtk` package in editable mode:
+
+   **Standard install (recommended for users):**
+   ```bash
+   pip install .
+   ```
+
+   **Editable / developer install** — use only if you plan to modify the source:
    ```bash
    pip install -e .
    ```
 
 <img src="imgs/packaging.gif" alt="Logo" >
+
+### 5. Verify the Installation
+   ```bash
+   python -c "import openquake.vmtk; print(openquake.vmtk.__version__)"
+   ```
+   This should print the installed version (e.g., `1.0.0`).
 
 
 ## 📼 Demos
@@ -166,6 +178,28 @@ This work is licensed under an AGPL v3 license (https://www.gnu.org/licenses/agp
 # 📚 Documentation
 
 For detailed documentation and user guidance on using the toolkit for vulnerability modeling, including installation instructions, key functionalities, and example workflows, please visit: [https://gemsciencetools.github.io/oq-vmtk](https://gemsciencetools.github.io/oq-vmtk/)
+
+# 📑 Citation
+
+If you use `oq-vmtk` in academic work, please cite the archived release. The v1.0.0 release is permanently archived on Zenodo:
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17524871.svg)](https://doi.org/10.5281/zenodo.17524871)
+
+BibTeX:
+
+```bibtex
+@software{oq_vmtk_2025,
+  author       = {{GEM Foundation}},
+  title        = {{OpenQuake Vulnerability Modeller's Toolkit (oq-vmtk)}},
+  version      = {1.0.0},
+  date         = {2025-11-04},
+  doi          = {10.5281/zenodo.17524871},
+  url          = {https://github.com/GEMScienceTools/oq-vmtk}
+}
+```
+
+A `CITATION.cff` file is also provided at the repository root so that GitHub
+displays a "Cite this repository" widget.
 
 # 📑 References
 

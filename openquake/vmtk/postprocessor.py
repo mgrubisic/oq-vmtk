@@ -1851,12 +1851,13 @@ class postprocessor:
                 # Fill the remaining EDP range with the collapse IM
                 im_at_edp_matrix[i, last_valid_idx+1:] = last_valid_im
 
-        # Calculate percentiles
-        # Now that collapse region is filled, no All-NaN slices
-        # unless a record never started at all.
-        median_ida_im = np.nanmedian(im_at_edp_matrix, axis=0)
-        p16_ida_im = np.nanpercentile(im_at_edp_matrix, 16, axis=0)
-        p84_ida_im = np.nanpercentile(im_at_edp_matrix, 84, axis=0)
+        # Calculate percentiles — suppress the all-NaN slice warning that
+        # arises for EDP levels not reached by any record (result is NaN,
+        # which is the correct behaviour).
+        with np.errstate(all='ignore'):
+            median_ida_im = np.nanmedian(im_at_edp_matrix, axis=0)
+            p16_ida_im = np.nanpercentile(im_at_edp_matrix, 16, axis=0)
+            p84_ida_im = np.nanpercentile(im_at_edp_matrix, 84, axis=0)
 
         # Fragility Fitting (MLE for Censored Data)
         im_max = np.nanmax(im_matrix)

@@ -141,10 +141,10 @@ class plotter:
 
         # Define default styles
         self.font_sizes = {
-            'title': 16,
-            'labels': 14,
-            'ticks': 12,
-            'legend': 10
+            'title': 18,
+            'labels': 16,
+            'ticks': 13,
+            'legend': 12
         }
         self.line_widths = {
             'thick': 3,
@@ -1526,9 +1526,8 @@ class plotter:
         fig, ax = plt.subplots(figsize=self.figsize, constrained_layout=True)
 
         # Apply consistent Class Styling
-        default_title = f"MCA: {imt_label} vs {edp_label}"
         self._set_plot_style(ax,
-                             title=title if title else default_title,
+                             title=title,
                              xlabel=imt_label,
                              ylabel=edp_label)
 
@@ -1681,7 +1680,7 @@ class plotter:
         Parameters
         ----------
         ida_dict : dict
-            The processed results dictionary returned by `do_incremental_dynamic_analysis`.
+            The processed results dictionary returned by `postprocessor.process_ida_results`.
             Must contain the following nested keys:
             - ['ida_inputs']['raw_curves']: List of (IM, EDP) pairs for each record.
             - ['ida_inputs']['damage_thresholds']: EDP values for limit states.
@@ -1798,7 +1797,7 @@ class plotter:
                        zorder=2)
 
         self._set_plot_style(
-            ax, title=title or f"IDA: {imt_label} vs {edp_label}",
+            ax, title=title,
             xlabel=edp_label, ylabel=imt_label)
 
         ax.set_xlim(xlims)
@@ -1839,7 +1838,7 @@ class plotter:
         - A filled lognormal PDF silhouette scaled to the inter-stripe spacing.
         - A vertical line at the lognormal median and dashed lines at the 16th/84th
           percentiles, both labelled on the first stripe only.
-        - A compact statistics table (inset axes) listing median and dispersion per stripe.
+        - A horizontal bracket connecting the 16th and 84th percentile ticks per stripe.
 
         Parameters
         ----------
@@ -1944,28 +1943,15 @@ class plotter:
                       color=stripe_col, lw=1.2, ls='--', alpha=0.75, zorder=4)
 
         # ── Styling ──────────────────────────────────────────────────────────
-        default_title = f"Multiple Stripe Analysis — {edp_label} vs {imt_label}"
         self._set_plot_style(ax,
-                             title=title if title else default_title,
+                             title=title,
                              xlabel=f"{edp_label} [%]",
                              ylabel=imt_label)
         ax.set_xlim(xlims)
         ax.set_ylim(ylims)
-        ax.grid(True, which='major', ls=':', lw=0.6, alpha=0.5)
-        ax.grid(True, which='minor', ls=':', lw=0.3, alpha=0.3)
-        ax.spines[['top', 'right']].set_visible(False)
 
-        # ── Legend (deduplicated) ────────────────────────────────────────────
-        seen, h_out, l_out = set(), [], []
-        for h, l in zip(*ax.get_legend_handles_labels()):
-            if l and l not in seen:
-                seen.add(l)
-                h_out.append(h)
-                l_out.append(l)
-        if h_out:
-            ax.legend(h_out, l_out, loc='upper right',
-                      fontsize=self.font_sizes['legend'],
-                      framealpha=0.85, edgecolor='#cccccc')
+        # ── Legend ───────────────────────────────────────────────────────────
+        ax.legend(loc='upper right', fontsize=self.font_sizes['legend'])
 
         # ── Save / show ──────────────────────────────────────────────────────
         if pFlag:
@@ -1975,6 +1961,7 @@ class plotter:
                     os.makedirs(directory, exist_ok=True)
                 plt.savefig(export_path, dpi=self.resolution)
                 self._show()
+                plt.close(fig)
             else:
                 self._show()
         else:

@@ -55,6 +55,8 @@ extensions = [
 autodoc_mock_imports = [
     'openseespy',
     'openseespy.opensees',
+    'openseespymac',
+    'openseespymac.opensees',
     'statsmodels',
     'statsmodels.api',
     'statsmodels.miscmodels',

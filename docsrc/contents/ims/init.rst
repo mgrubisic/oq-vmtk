@@ -1,4 +1,4 @@
 Initialisation
 ==============
 
-.. automethod:: openquake.vmtk.im_selection.imselection.__init__
+.. automethod:: openquake.vmtk.imselection.imselection.__init__

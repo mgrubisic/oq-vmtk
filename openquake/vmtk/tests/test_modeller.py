@@ -308,7 +308,7 @@ class TestModellerMethods(unittest.TestCase):
 
     def test_incremental_dynamic_analysis_returns(self):
         self.model.do_modal_analysis(num_modes=3)
-        ida_data, ordered_sfs = self.model.do_incremental_dynamic_analysis(
+        ida_data, ordered_sfs = self.model.do_ida_analysis(
             self.fnames,
             self.dt_gm,
             t_max=self.t_max,
@@ -324,7 +324,7 @@ class TestModellerMethods(unittest.TestCase):
 
     def test_incremental_dynamic_analysis_data_keys(self):
         self.model.do_modal_analysis(num_modes=3)
-        ida_data, ordered_sfs = self.model.do_incremental_dynamic_analysis(
+        ida_data, ordered_sfs = self.model.do_ida_analysis(
             self.fnames,
             self.dt_gm,
             t_max=self.t_max,

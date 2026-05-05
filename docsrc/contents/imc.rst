@@ -8,6 +8,33 @@ Arias Intensity, Cumulative Absolute Velocity (CAV), significant duration, the
 filtered incremental velocity (FIV3), and orientation-independent spectral
 acceleration (RotDxx).
 
+Minimal example
+---------------
+
+.. code-block:: python
+
+   import numpy as np
+   from openquake.vmtk.imcalculator import imcalculator
+
+   # Acceleration time series (g) and time step (s)
+   acc = np.loadtxt("openquake/vmtk/tests/test_data/acceleration.txt")
+   dt = 0.005
+
+   im = imcalculator(acc, dt)
+   pga, pgv, pgd = im.get_amplitude_ims()
+   sa_T1 = im.get_sa(period=1.0)
+   avg_sa = im.get_saavg(period=0.6)
+   ai = im.get_arias_intensity()
+   t595 = im.get_significant_duration()
+
+   print(f"PGA = {pga:.3f} g, Sa(1.0) = {sa_T1:.3f} g, AI = {ai:.3f} m/s")
+
+The reference values produced by this snippet are tabulated in
+:doc:`validation` and asserted by ``test_imcalculator.py``. A full
+end-to-end workflow is provided in the
+``IntensityMeasureProcessing`` notebook
+(see :doc:`demos` and :doc:`examples`).
+
 .. toctree::
 
    imc/init
