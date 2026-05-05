@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>6.1.3. Model Visualisation &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
+  <title>6.3. Model Visualisation &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=749cc255" />
@@ -21,8 +21,8 @@
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="6.1.4. Gravity Analysis" href="do_gravity_analysis.html" />
-    <link rel="prev" title="6.1.2. Model Compilation" href="compile_model.html" /> 
+    <link rel="next" title="6.4. Gravity Analysis" href="do_gravity_analysis.html" />
+    <link rel="prev" title="6.2. Model Compilation" href="compile_model.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -52,17 +52,17 @@
 <li class="toctree-l1"><a class="reference internal" href="../ims.html">4. Intensity Measure Selection</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../cal.html">5. Model Calibration</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="../mod.html">6. Model Building and Analysis</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="../mod.html#minimal-example">6.1. Minimal example</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="init.html">6.1.1. Initialisation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compile_model.html">6.1.2. Model Compilation</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">6.1.3. Model Visualisation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="do_gravity_analysis.html">6.1.4. Gravity Analysis</a></li>
-<li class="toctree-l3"><a class="reference internal" href="do_modal_analysis.html">6.1.5. Modal Analysis</a></li>
-<li class="toctree-l3"><a class="reference internal" href="do_spo_analysis.html">6.1.6. Static Pushover Analysis</a></li>
-<li class="toctree-l3"><a class="reference internal" href="do_nrha_analysis.html">6.1.7. Nonlinear Time-History Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="init.html">6.1. Initialisation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="compile_model.html">6.2. Model Compilation</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">6.3. Model Visualisation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#openquake.vmtk.modeller.modeller.plot_model"><code class="docutils literal notranslate"><span class="pre">modeller.plot_model()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../mod.html#references">6.2. References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="do_gravity_analysis.html">6.4. Gravity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="do_modal_analysis.html">6.5. Modal Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="do_spo_analysis.html">6.6. Static Pushover Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="do_nrha_analysis.html">6.7. Nonlinear Time-History Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mod.html#references">6.8. References</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../pos.html">7. Postprocessing</a></li>
@@ -70,7 +70,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../plo.html">9. Visualisation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../demos.html">10. Demos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../examples.html">11. Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../validation.html">12. Validation and Quality Assurance</a></li>
 </ul>
 
         </div>
@@ -88,7 +87,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../mod.html"><span class="section-number">6. </span>Model Building and Analysis</a></li>
-      <li class="breadcrumb-item active"><span class="section-number">6.1.3. </span>Model Visualisation</li>
+      <li class="breadcrumb-item active"><span class="section-number">6.3. </span>Model Visualisation</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../../_sources/contents/mod/plot_model.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -99,15 +98,46 @@
            <div itemprop="articleBody">
              
   <section id="model-visualisation">
-<h1><span class="section-number">6.1.3. </span>Model Visualisation<a class="headerlink" href="#model-visualisation" title="Link to this heading"></a></h1>
+<h1><span class="section-number">6.3. </span>Model Visualisation<a class="headerlink" href="#model-visualisation" title="Link to this heading"></a></h1>
+<dl class="py method">
+<dt class="sig sig-object py" id="openquake.vmtk.modeller.modeller.plot_model">
+<span class="sig-prename descclassname"><span class="pre">modeller.</span></span><span class="sig-name descname"><span class="pre">plot_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pFlag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/openquake/vmtk/modeller.html#modeller.plot_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#openquake.vmtk.modeller.modeller.plot_model" title="Link to this definition"></a></dt>
+<dd><p>Plots a 2-D visualisation of the stick-and-mass model as two subplots.</p>
+<p>Left panel  — node elevation diagram with zigzag spring symbols
+(zero-length Pinching4 elements), individual storey height brackets,
+and a separate double-headed total-height dimension line.
+Right panel — force-deformation backbone curves for every storey,
+both axes starting from zero.
+Legend boxes are placed at the same vertical level below each panel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pFlag</strong> (<em>bool</em><em>, </em><em>optional</em><em>, </em><em>default=True</em>) – If True, the plot is processed (saved/shown).</p></li>
+<li><p><strong>export_path</strong> (<em>str</em><em>, </em><em>optional</em>) – Full path including filename to save the plot.
+Creates directories if missing.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<div class="note admonition">
+<p class="admonition-title">Example</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">m</span><span class="o">.</span><span class="n">compile_model</span><span class="p">()</span>
+<span class="n">m</span><span class="o">.</span><span class="n">plot_model</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
 </section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="compile_model.html" class="btn btn-neutral float-left" title="6.1.2. Model Compilation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="do_gravity_analysis.html" class="btn btn-neutral float-right" title="6.1.4. Gravity Analysis" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="compile_model.html" class="btn btn-neutral float-left" title="6.2. Model Compilation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="do_gravity_analysis.html" class="btn btn-neutral float-right" title="6.4. Gravity Analysis" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

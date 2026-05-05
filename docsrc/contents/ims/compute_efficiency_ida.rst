@@ -27,4 +27,14 @@ Efficiency — Incremental Dynamic Analysis
    similar structural capacities — i.e. the IM is a more efficient predictor of
    structural performance.
 
+.. admonition:: Example
+   :class: note
 
+   .. code-block:: python
+
+      from openquake.vmtk.imselection import imselection
+
+      ims = imselection()
+      # ida_dict is the output of postprocessor.process_ida_results()
+      result = ims.compute_efficiency_ida(ida_dict)
+      print(f"Efficiency (beta_D|IM) = {result['efficiency']:.4f}")

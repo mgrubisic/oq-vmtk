@@ -8,33 +8,6 @@ Dynamic Analysis (IDA). Fragility fitting options are lognormal (with bootstrap 
 MCMC estimation), probit, logit, and ordinal models. Vulnerability functions and average annual loss (AAL) are
 also computed.
 
-Minimal example
----------------
-
-.. code-block:: python
-
-   import numpy as np
-   from openquake.vmtk.postprocessor import postprocessor
-
-   pp = postprocessor()
-
-   # Lognormal fragility for a single damage state
-   theta = 0.35                     # median IM at the damage threshold (g)
-   sigma_record2record = 0.45       # record-to-record dispersion
-   intensities = np.geomspace(0.05, 3.0, 50)
-
-   poes = pp.calculate_lognormal_fragility(
-       theta=theta,
-       sigma_record2record=sigma_record2record,
-       sigma_build2build=0.30,
-       sigma_ds=0.30,
-       intensities=intensities,
-   )
-
-Full cloud-, MSA-, and IDA-based vulnerability workflows live in the
-``CloudAnalysis``, ``MultipleStripeAnalysis``, ``IncrementalDynamicAnalysis``
-and ``FragilityAnalysis`` notebooks — see :doc:`demos` and :doc:`examples`.
-
 .. toctree::
 
    pos/init

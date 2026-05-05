@@ -21,8 +21,8 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="6.1.1. Initialisation" href="mod/init.html" />
-    <link rel="prev" title="5.1.2. SDOF-to-MDOF Calibration" href="cal/calibrate_model.html" /> 
+    <link rel="next" title="6.1. Initialisation" href="mod/init.html" />
+    <link rel="prev" title="5.2. SDOF-to-MDOF Calibration" href="cal/calibrate_model.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -52,17 +52,14 @@
 <li class="toctree-l1"><a class="reference internal" href="ims.html">4. Intensity Measure Selection</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cal.html">5. Model Calibration</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">6. Model Building and Analysis</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#minimal-example">6.1. Minimal example</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="mod/init.html">6.1.1. Initialisation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="mod/compile_model.html">6.1.2. Model Compilation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="mod/plot_model.html">6.1.3. Model Visualisation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="mod/do_gravity_analysis.html">6.1.4. Gravity Analysis</a></li>
-<li class="toctree-l3"><a class="reference internal" href="mod/do_modal_analysis.html">6.1.5. Modal Analysis</a></li>
-<li class="toctree-l3"><a class="reference internal" href="mod/do_spo_analysis.html">6.1.6. Static Pushover Analysis</a></li>
-<li class="toctree-l3"><a class="reference internal" href="mod/do_nrha_analysis.html">6.1.7. Nonlinear Time-History Analysis</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#references">6.2. References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mod/init.html">6.1. Initialisation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mod/compile_model.html">6.2. Model Compilation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mod/plot_model.html">6.3. Model Visualisation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mod/do_gravity_analysis.html">6.4. Gravity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mod/do_modal_analysis.html">6.5. Modal Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mod/do_spo_analysis.html">6.6. Static Pushover Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mod/do_nrha_analysis.html">6.7. Nonlinear Time-History Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">6.8. References</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="pos.html">7. Postprocessing</a></li>
@@ -70,7 +67,6 @@
 <li class="toctree-l1"><a class="reference internal" href="plo.html">9. Visualisation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="demos.html">10. Demos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">11. Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="validation.html">12. Validation and Quality Assurance</a></li>
 </ul>
 
         </div>
@@ -103,48 +99,40 @@
 using the OpenSees framework. Each storey is represented by a Pinching4 hysteretic
 spring. Supported analysis types include gravity analysis, modal analysis, static
 pushover (SPO), and nonlinear time-history analysis (NRHA).</p>
-<section id="minimal-example">
-<h2><span class="section-number">6.1. </span>Minimal example<a class="headerlink" href="#minimal-example" title="Link to this heading"></a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">openquake.vmtk.modeller</span><span class="w"> </span><span class="kn">import</span> <span class="n">modeller</span>
-
-<span class="c1"># 2-storey stick-and-mass model</span>
-<span class="n">m</span> <span class="o">=</span> <span class="n">modeller</span><span class="p">(</span>
-    <span class="n">number_storeys</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-    <span class="n">storey_heights</span><span class="o">=</span><span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span>
-    <span class="n">floor_masses</span><span class="o">=</span><span class="p">[</span><span class="mf">120.0</span><span class="p">,</span> <span class="mf">100.0</span><span class="p">],</span>          <span class="c1"># tonnes</span>
-    <span class="n">storey_drifts</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>              <span class="c1"># (nst, n_capacity_points)</span>
-        <span class="p">[</span><span class="mf">0.000</span><span class="p">,</span> <span class="mf">0.005</span><span class="p">,</span> <span class="mf">0.020</span><span class="p">,</span> <span class="mf">0.060</span><span class="p">],</span>
-        <span class="p">[</span><span class="mf">0.000</span><span class="p">,</span> <span class="mf">0.005</span><span class="p">,</span> <span class="mf">0.020</span><span class="p">,</span> <span class="mf">0.060</span><span class="p">],</span>
-    <span class="p">]),</span>
-    <span class="n">storey_forces</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
-        <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">250.0</span><span class="p">,</span> <span class="mf">320.0</span><span class="p">,</span> <span class="mf">200.0</span><span class="p">],</span>
-        <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">220.0</span><span class="p">,</span> <span class="mf">280.0</span><span class="p">,</span> <span class="mf">180.0</span><span class="p">],</span>
-    <span class="p">]),</span>
-    <span class="n">degradation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">compile_model</span><span class="p">()</span>
-<span class="n">m</span><span class="o">.</span><span class="n">do_gravity_analysis</span><span class="p">()</span>
-<span class="n">periods</span><span class="p">,</span> <span class="n">mode_shapes</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">do_modal_analysis</span><span class="p">(</span><span class="n">num_modes</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>End-to-end workflows (pushover, NRHA, cloud analysis) are demonstrated in the
-<code class="docutils literal notranslate"><span class="pre">ModelCompilation</span></code>, <code class="docutils literal notranslate"><span class="pre">PushoverAnalysis</span></code> and <code class="docutils literal notranslate"><span class="pre">NonlinearTimeHistoryAnalysis</span></code>
-notebooks — see <a class="reference internal" href="demos.html"><span class="doc">Demos</span></a> and <a class="reference internal" href="examples.html"><span class="doc">Examples</span></a>.</p>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="mod/init.html">6.1.1. Initialisation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="mod/compile_model.html">6.1.2. Model Compilation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="mod/plot_model.html">6.1.3. Model Visualisation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="mod/do_gravity_analysis.html">6.1.4. Gravity Analysis</a></li>
-<li class="toctree-l1"><a class="reference internal" href="mod/do_modal_analysis.html">6.1.5. Modal Analysis</a></li>
-<li class="toctree-l1"><a class="reference internal" href="mod/do_spo_analysis.html">6.1.6. Static Pushover Analysis</a></li>
-<li class="toctree-l1"><a class="reference internal" href="mod/do_nrha_analysis.html">6.1.7. Nonlinear Time-History Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mod/init.html">6.1. Initialisation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mod/init.html#openquake.vmtk.modeller.modeller.__init__"><code class="docutils literal notranslate"><span class="pre">modeller.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mod/compile_model.html">6.2. Model Compilation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mod/compile_model.html#openquake.vmtk.modeller.modeller.compile_model"><code class="docutils literal notranslate"><span class="pre">modeller.compile_model()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mod/plot_model.html">6.3. Model Visualisation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mod/plot_model.html#openquake.vmtk.modeller.modeller.plot_model"><code class="docutils literal notranslate"><span class="pre">modeller.plot_model()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mod/do_gravity_analysis.html">6.4. Gravity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mod/do_gravity_analysis.html#openquake.vmtk.modeller.modeller.do_gravity_analysis"><code class="docutils literal notranslate"><span class="pre">modeller.do_gravity_analysis()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mod/do_modal_analysis.html">6.5. Modal Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mod/do_modal_analysis.html#openquake.vmtk.modeller.modeller.do_modal_analysis"><code class="docutils literal notranslate"><span class="pre">modeller.do_modal_analysis()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mod/do_spo_analysis.html">6.6. Static Pushover Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mod/do_spo_analysis.html#openquake.vmtk.modeller.modeller.do_spo_analysis"><code class="docutils literal notranslate"><span class="pre">modeller.do_spo_analysis()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mod/do_nrha_analysis.html">6.7. Nonlinear Time-History Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mod/do_nrha_analysis.html#openquake.vmtk.modeller.modeller.do_nrha_analysis"><code class="docutils literal notranslate"><span class="pre">modeller.do_nrha_analysis()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </div>
-</section>
 <section id="references">
-<h2><span class="section-number">6.2. </span>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<h2><span class="section-number">6.8. </span>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
 <ol class="arabic simple">
 <li><p>Minjie, Zhu. McKenna, F. and Scott, M.H. (2018). “OpenSeesPy: Python library for the OpenSees finite element
 framework”, <em>SoftwareX</em>, Volume 7, 2018, Pages 6-11, ISSN 2352-7110,
@@ -157,8 +145,8 @@ framework”, <em>SoftwareX</em>, Volume 7, 2018, Pages 6-11, ISSN 2352-7110,
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="cal/calibrate_model.html" class="btn btn-neutral float-left" title="5.1.2. SDOF-to-MDOF Calibration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="mod/init.html" class="btn btn-neutral float-right" title="6.1.1. Initialisation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="cal/calibrate_model.html" class="btn btn-neutral float-left" title="5.2. SDOF-to-MDOF Calibration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="mod/init.html" class="btn btn-neutral float-right" title="6.1. Initialisation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

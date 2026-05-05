@@ -28,15 +28,16 @@ Create a virtual environment to manage dependencies:
 
 .. code-block:: bash
 
-   python -m venv .venv  # On Windows
-   python3 -m venv .venv  # On Linux
+   python -m venv .venv   # On Windows
+   python3 -m venv .venv  # On Linux / macOS
 
 Activate the virtual environment:
 
 .. code-block:: bash
 
-   .venv\Scripts\activate       # On Windows
-   source .venv/Scripts/activate  # On Linux
+   .venv\Scripts\activate        # On Windows
+   source .venv/bin/activate     # On macOS
+   source .venv/Scripts/activate # On Linux
 
 Install Dependencies
 --------------------
@@ -65,13 +66,6 @@ Then pick the matching file. The naming convention is
 
    # macOS (arm64)
    pip install -r requirements-py312-macos_arm64.txt
-
-.. note::
-
-   **For macOS users:** OpenSeesPy support on arm64 (Apple Silicon) is partial; the
-   provided macOS requirements files install the subset of dependencies that builds
-   reliably on macOS. If you hit OpenSeesPy issues on macOS, run a Linux or Windows
-   virtual machine instead.
 
 Install the Package
 -------------------

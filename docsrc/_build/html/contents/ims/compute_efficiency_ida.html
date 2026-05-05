@@ -54,7 +54,10 @@
 <li class="toctree-l1 current"><a class="reference internal" href="../ims.html">4. Intensity Measure Selection</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="init.html">4.1. Initialisation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="compute_efficiency_mca.html">4.2. Efficiency — Modified Cloud Analysis</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">4.3. Efficiency — Incremental Dynamic Analysis</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">4.3. Efficiency — Incremental Dynamic Analysis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#openquake.vmtk.imselection.imselection.compute_efficiency_ida"><code class="docutils literal notranslate"><span class="pre">imselection.compute_efficiency_ida()</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="compute_proficiency_mca.html">4.4. Proficiency — Modified Cloud Analysis</a></li>
 <li class="toctree-l2"><a class="reference internal" href="compute_proficiency_ida.html">4.5. Proficiency — Incremental Dynamic Analysis</a></li>
 <li class="toctree-l2"><a class="reference internal" href="compute_rsm_mca.html">4.6. Relative Score Method — Modified Cloud Analysis</a></li>
@@ -71,7 +74,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../plo.html">9. Visualisation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../demos.html">10. Demos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../examples.html">11. Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../validation.html">12. Validation and Quality Assurance</a></li>
 </ul>
 
         </div>
@@ -101,6 +103,30 @@
              
   <section id="efficiency-incremental-dynamic-analysis">
 <h1><span class="section-number">4.3. </span>Efficiency — Incremental Dynamic Analysis<a class="headerlink" href="#efficiency-incremental-dynamic-analysis" title="Link to this heading"></a></h1>
+<dl class="py method">
+<dt class="sig sig-object py" id="openquake.vmtk.imselection.imselection.compute_efficiency_ida">
+<span class="sig-prename descclassname"><span class="pre">imselection.</span></span><span class="sig-name descname"><span class="pre">compute_efficiency_ida</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ida_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ds_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/openquake/vmtk/imselection.html#imselection.compute_efficiency_ida"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#openquake.vmtk.imselection.imselection.compute_efficiency_ida" title="Link to this definition"></a></dt>
+<dd><p>Classic efficiency βD|IM from an Incremental Dynamic Analysis result.</p>
+<p>Uses the record-to-record dispersion of the fragility curve at the
+specified damage state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ida_dict</strong> (<em>dict</em>) – Output of <code class="docutils literal notranslate"><span class="pre">postprocessor.process_ida_results</span></code>.</p></li>
+<li><p><strong>ds_index</strong> (<em>int</em><em>, </em><em>optional</em>) – Damage-state index (0 = first / least severe).  Default <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>dict with keys</em></p></li>
+<li><p>* <code class="docutils literal notranslate"><span class="pre">'beta_D_given_IM'</span></code> — sigma_record2record at damage state <em>ds_index</em></p></li>
+<li><p>* <code class="docutils literal notranslate"><span class="pre">'method'</span></code>          — <code class="docutils literal notranslate"><span class="pre">'IDA'</span></code></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
 <div class="admonition-theoretical-background admonition">
 <p class="admonition-title">Theoretical Background</p>
 <p>For IDA, efficiency is quantified by the dispersion of IM capacities across records
@@ -117,6 +143,17 @@ at a given damage state (Shome &amp; Cornell, 1999).</p>
 <p>A smaller dispersion indicates that records scaled to the same IM level produce
 similar structural capacities — i.e. the IM is a more efficient predictor of
 structural performance.</p>
+</div>
+<div class="note admonition">
+<p class="admonition-title">Example</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">openquake.vmtk.imselection</span><span class="w"> </span><span class="kn">import</span> <span class="n">imselection</span>
+
+<span class="n">ims</span> <span class="o">=</span> <span class="n">imselection</span><span class="p">()</span>
+<span class="c1"># ida_dict is the output of postprocessor.process_ida_results()</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">ims</span><span class="o">.</span><span class="n">compute_efficiency_ida</span><span class="p">(</span><span class="n">ida_dict</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Efficiency (beta_D|IM) = </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;efficiency&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
 </div>
 </section>
 

@@ -563,21 +563,18 @@ class postprocessor:
             The target percentile for fragility function rotation.
             Default is 0.10.
 
-        fragility_method : {'lognormal', 'ordinal', 'probit', 'logit'},
-            optional. The methodology used to fit the fragility
-            functions. Default is 'lognormal'.
+        fragility_method : {'lognormal', 'ordinal', 'probit', 'logit'}, optional
+            The methodology used to fit the fragility functions.
+            Default is ``'lognormal'``.
 
         cloud_method : {'bootstrap', 'classical'}, optional
-            When ``fragility_method='lognormal'``, selects the
-            uncertainty quantification approach.
-
-            - ``'bootstrap'``: non-parametric bootstrapping (default).
-            - ``'classical'``: Bayesian MCMC (Metropolis-Hastings) on
-              the full 5-parameter model chi = [ln a, b, beta,
-              alpha0, alpha1] following Jalayer et al. (2017). The
-              Robust Fragility is computed as the posterior expected
-              value of the fragility model (Eq. 10), and confidence
-              bands are derived from the posterior variance (Eq. 11).
+            When ``fragility_method='lognormal'``, selects the uncertainty
+            quantification approach. ``'bootstrap'`` uses non-parametric
+            bootstrapping (default). ``'classical'`` uses Bayesian MCMC
+            (Metropolis-Hastings) on the full 5-parameter model
+            chi = [ln a, b, beta, alpha0, alpha1] following Jalayer et al.
+            (2017), computing the Robust Fragility as the posterior expected
+            value and deriving confidence bands from the posterior variance.
 
         n_mcmc : int, optional
             Total number of MCMC samples (including burn-in) used
@@ -591,31 +588,22 @@ class postprocessor:
             Half-width of the robust confidence band in units of the
             posterior standard deviation. Default is 2.
 
+
         Returns
         -------
         cloud_dict : dict
-            A nested dictionary. Keys present for all fragility methods:
+            Nested result dictionary. Always contains keys
             ``'cloud inputs'``, ``'fragility'``, ``'regression'``.
-            Additional keys for ``fragility_method='lognormal'``:
-            ``'raw_data'``; and either ``'bootstraps'``
-            (``cloud_method='bootstrap'``) or ``'mcmc'``
-            (``cloud_method='classical'``).
-
-            ``'fragility'`` always contains: ``fragility_method``,
-            ``cloud_method``, ``intensities``, ``poes``, ``medians``,
-            ``sigma_record2record``, ``sigma_build2build``, ``sigma_ds``,
-            ``betas_total``. When ``cloud_method='classical'``, also
-            includes ``poes_robust_plus``, ``poes_robust_minus``, and
-            ``confidence_k``.
+            When ``fragility_method='lognormal'``, also contains
+            ``'raw_data'`` plus either ``'bootstraps'`` or ``'mcmc'``
+            depending on ``cloud_method``.
 
         Notes
         -----
-        The 'lognormal' method implements a dual-regression approach:
-        1.  **Linear Regression**: Performed in log-log space on
-            non-collapse data (log(EDP) = log(a) + b * log(IM)).
-        2.  **Logistic Regression**: Used to predict P(C|IM).
-        3.  **Total Fragility**: P(DS|IM) = P(DS|NC,IM)*P(NC|IM) +
-            P(C|IM).
+        The 'lognormal' method uses a dual-regression approach:
+        linear regression in log-log space on non-collapse data,
+        logistic regression to model P(C|IM), and combines them as
+        P(DS|IM) = P(DS|NC,IM)*P(NC|IM) + P(C|IM).
 
         The ``'classical'`` cloud method follows the 5-parameter
         fragility model from Jalayer et al. (2017), Eq. 7:

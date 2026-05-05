@@ -29,4 +29,15 @@ Proficiency — Modified Cloud Analysis
    A smaller :math:`\zeta` indicates a more proficient IM — one that is both efficient
    and predictable.
 
+.. admonition:: Example
+   :class: note
+
+   .. code-block:: python
+
+      from openquake.vmtk.imselection import imselection
+
+      ims = imselection()
+      result = ims.compute_proficiency_mca(cloud_dict)
+      print(f"Proficiency (zeta) = {result['proficiency']:.4f}")
+
 

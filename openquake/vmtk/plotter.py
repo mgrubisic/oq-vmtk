@@ -475,7 +475,7 @@ class plotter:
         Generate and save an animation of a static (monotonic) pushover analysis.
 
         Layout — self.figsize_anim
-        ----------------------
+        --------------------------
         Left  (wide) - 2-D deformed model shape with orange load arrows.
         Top-right    - Pushover curve (base shear vs. roof displacement).
         Bottom-right - Base shear vs. maximum inter-storey drift ratio.
@@ -968,12 +968,9 @@ class plotter:
         Four-panel layout (self.figsize_anim)
         -------------------------------------
         Panel 1 - Floor displacement profile [m] vs. elevation.
-        Panel 2 - Storey drift profile [%] vs. elevation (staircase style,
-                  matching plot_demand_profiles).
+        Panel 2 - Storey drift profile [%] vs. elevation (staircase style, matching plot_demand_profiles).
         Panel 3 - Floor acceleration profile [g] vs. elevation.
-        Panel 4 - Input ground motion time-history with elapsed portion highlighted.
-                  If collapse_time is provided, an 'X' marker is drawn at that
-                  instant to indicate when the MinMax material limit was exceeded.
+        Panel 4 - Input ground motion time-history with elapsed portion highlighted. If collapse_time is provided, an 'X' marker is drawn at that instant to indicate when the MinMax material limit was exceeded.
 
         Line colours update cumulatively based on worst damage state reached so
         far (blue -> green -> yellow -> orange -> red) when drift_thresholds given.
@@ -1462,38 +1459,28 @@ class plotter:
         Parameters
         ----------
         cloud_dict : dict
-            The processed results dictionary returned by `do_cloud_analysis`.
-
-        This method plots cloud data, damage thresholds, a fitted regression line,
-        and upper and lower censoring limits. The data is presented in logarithmic
-        scale for both axes.
-
-        Parameters:
-        ----------
-        cloud_dict : dict
-            A dictionary containing the data for the cloud analysis. The dictionary
-            should have the following keys (direct output from do_cloud_analysis method)
+            Output of ``process_mca_results``. Plots cloud data, damage thresholds,
+            a fitted regression line, and upper/lower censoring limits in log-log space.
 
         imt_label : str
-            Intensity Measure Label for the Y-axis (e.g., 'PGA [g]').
+            Intensity Measure label for the Y-axis (e.g., ``'PGA [g]'``).
 
         edp_label : str
-            Engineering Demand Parameter Label for the X-axis (e.g., 'PSD [-]').
+            Engineering Demand Parameter label for the X-axis (e.g., ``'PSD [-]'``).
 
-        title : str, optional, default=None
-            A custom title for the figure. If not provided, a default title
-            incorporating the Intensity Measure (IM) label is used.
+        title : str, optional
+            Custom title for the figure. If not provided the title is omitted.
 
-        pFlag : bool, optional, default=True
-            If True, the plot is processed (saved/shown).
+        pFlag : bool, optional
+            If ``True`` the plot is displayed or saved. Default is ``True``.
 
         export_path : str, optional
-            Full path including filename to save the plot. Creates directories if missing.
+            Full path including filename to save the plot. Directories are created
+            if missing.
 
-        Returns:
-        --------
+        Returns
+        -------
         None
-            This function saves the plot to a file in the specified output directory.
 
         """
 
@@ -1836,8 +1823,7 @@ class plotter:
         For each intensity stripe the method plots:
         - Individual ground-motion response points coloured and sized by IM level.
         - A filled lognormal PDF silhouette scaled to the inter-stripe spacing.
-        - A vertical line at the lognormal median and dashed lines at the 16th/84th
-          percentiles, both labelled on the first stripe only.
+        - A vertical line at the lognormal median and dashed lines at the 16th/84th percentiles, both labelled on the first stripe only.
         - A horizontal bracket connecting the 16th and 84th percentile ticks per stripe.
 
         Parameters
@@ -2226,14 +2212,9 @@ class plotter:
         Parameters
         ----------
         ida_dict : dict
-            A nested dictionary containing the processed IDA results.
-            Required structure:
-            - 'fragility': A dictionary containing:
-                - 'intensities': 1D array of IM levels used for sampling.
-                - 'poes': 2D array [n_intensities x n_thresholds] of probabilities.
-                - 'medians': List of the estimated median capacities for each state.
-            - 'ida_inputs': A dictionary containing:
-                - 'imt_key': String label of the intensity measure (e.g., 'Sa(T1)').
+            Nested dictionary from ``process_ida_results``. Must contain
+            ``'fragility'`` (with keys ``'intensities'``, ``'poes'``, ``'medians'``)
+            and ``'ida_inputs'`` (with key ``'imt_key'``).
 
 
         imt_label : str
@@ -2472,27 +2453,21 @@ class plotter:
         saved without ``bbox_inches='tight'`` so that every output image has
         identical, deterministic pixel dimensions.
 
-        Parameters:
+        Parameters
         ----------
         out : dict
-            A dictionary containing the results of the model. It should include keys for:
-                - 'edp_range': A range of Engineering Demand Parameters (EDP) used in the analysis.
-                - 'slf': The fitted Storey Loss Function curve.
+            Results dictionary with keys ``'edp_range'`` and ``'slf'``
+            (the fitted Storey Loss Function curve).
 
         cache : dict
-            A dictionary containing cached data, including:
-                - 'total_loss_storey': A list of total storey losses for each realization.
-                - 'empirical_16th', 'empirical_84th': Empirical data representing the 16th and
-                  84th percentiles.
-                - 'empirical_median': Empirical median values of the storey loss for the
-                  simulations.
+            Cached simulation data with keys ``'total_loss_storey'``,
+            ``'empirical_16th'``, ``'empirical_84th'``, and ``'empirical_median'``.
 
         edp_label : str
-            The label for the x-axis, typically representing the Engineering Demand Parameter
-            (EDP) range.
+            Label for the x-axis (Engineering Demand Parameter).
 
         loss_label : str
-            The label for the y-axis, typically representing the Storey Loss Ratio range.
+            Label for the y-axis (Storey Loss Ratio).
 
         xlims : tuple of float
             (min, max) limits for the X-axis (EDP axis).
@@ -2503,17 +2478,16 @@ class plotter:
         title : str, optional
             Custom plot title.
 
-        pFlag : bool, optional, default=True
-            If True, the plot is processed (saved/shown).
+        pFlag : bool, optional
+            If ``True`` the plot is displayed or saved. Default is ``True``.
 
         export_path : str, optional
-            Full path including filename to save the plot. Creates directories if missing.
+            Full path including filename to save the plot. Directories are created
+            if missing.
 
-        Returns:
-        --------
+        Returns
+        -------
         None
-            This function saves the generated plot for each key in the `cache` dictionary to the
-            specified directory.
         """
         keys_list = list(cache.keys())
         for i, current_key in enumerate(keys_list):

@@ -464,7 +464,7 @@ class imcalculator:
 
         CAV is defined as:
 
-            CAV = integral(|a(t)| dt)
+            CAV = integral( abs(a(t)) dt )
 
         where a(t) is the ground acceleration in m/s².
 

@@ -5,8 +5,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>openquake.vmtk.im_selection &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=92fd9be5" />
+  <title>openquake.vmtk.imselection &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=749cc255" />
 
@@ -14,8 +14,8 @@
       <script src="../../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
-      <script src="../../../_static/doctools.js?v=9a2dae69"></script>
-      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
     <script src="../../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../../genindex.html" />
@@ -52,7 +52,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../contents/pos.html">7. Postprocessing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../contents/slf.html">8. Storey Loss Function Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../contents/plo.html">9. Visualisation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../contents/examples.html">10. Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contents/demos.html">10. Demos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contents/examples.html">11. Examples</a></li>
 </ul>
 
         </div>
@@ -70,7 +71,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
-      <li class="breadcrumb-item active">openquake.vmtk.im_selection</li>
+      <li class="breadcrumb-item active">openquake.vmtk.imselection</li>
       <li class="wy-breadcrumbs-aside">
       </li>
   </ul>
@@ -79,7 +80,7 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <h1>Source code for openquake.vmtk.im_selection</h1><div class="highlight"><pre>
+  <h1>Source code for openquake.vmtk.imselection</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Intensity Measure (IM) Selection Framework</span>
 
@@ -96,15 +97,15 @@
 <span class="sd">IM₂ is the more sufficient intensity measure.</span>
 
 <span class="sd">Two nonlinear dynamic analysis procedures (NDAPs) are supported:</span>
-<span class="sd">    - MCA  — Modified Cloud Analysis (``postprocessor.do_modified_cloud_analysis``)</span>
-<span class="sd">    - IDA  — Incremental Dynamic Analysis (``postprocessor.do_incremental_dynamic_analysis``)</span>
+<span class="sd">    - MCA  — Modified Cloud Analysis (``postprocessor.process_mca_results``)</span>
+<span class="sd">    - IDA  — Incremental Dynamic Analysis (``postprocessor.process_ida_results``)</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
-<span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">norm</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.stats</span><span class="w"> </span><span class="kn">import</span> <span class="n">norm</span>
 
 <span class="c1"># ---------------------------------------------------------------------------</span>
 <span class="c1"># Module-level numerical floor constants</span>
@@ -114,7 +115,7 @@
 <span class="n">_IM_FLOOR</span> <span class="o">=</span> <span class="mf">1e-10</span>     <span class="c1"># floor for IM values before log-transform</span>
 
 
-<span class="k">class</span> <span class="nc">imselection</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">imselection</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Intensity Measure selection tools based on the RSM framework.</span>
 
@@ -129,7 +130,7 @@
     <span class="c1"># Private helpers</span>
     <span class="c1"># -----------------------------------------------------------------------</span>
 
-    <span class="k">def</span> <span class="nf">_lognormal_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">mu_ln</span><span class="p">,</span> <span class="n">beta</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lognormal_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">mu_ln</span><span class="p">,</span> <span class="n">beta</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Lognormal probability density function.</span>
 
@@ -153,7 +154,7 @@
         <span class="n">pdf</span> <span class="o">=</span> <span class="n">norm</span><span class="o">.</span><span class="n">pdf</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">beta</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">pdf</span><span class="p">,</span> <span class="n">_PDF_FLOOR</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_pnoc_logistic</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ln_im</span><span class="p">,</span> <span class="n">alpha0</span><span class="p">,</span> <span class="n">alpha1</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_pnoc_logistic</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ln_im</span><span class="p">,</span> <span class="n">alpha0</span><span class="p">,</span> <span class="n">alpha1</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Probability of non-collapse from a logistic regression model.</span>
 
@@ -177,7 +178,7 @@
                         <span class="o">-</span><span class="mf">500.0</span><span class="p">,</span> <span class="mf">500.0</span><span class="p">)</span>
         <span class="k">return</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">logit</span><span class="p">))</span>
 
-    <span class="k">def</span> <span class="nf">_extract_ida_stats_at_demands</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict</span><span class="p">,</span> <span class="n">demand_values</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_ida_stats_at_demands</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict</span><span class="p">,</span> <span class="n">demand_values</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Interpolate IDA ensemble statistics and per-record IM at given demands.</span>
 
@@ -192,7 +193,7 @@
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        ida_dict : dict</span>
-<span class="sd">            Output of ``postprocessor.do_incremental_dynamic_analysis``.</span>
+<span class="sd">            Output of ``postprocessor.process_ida_results``.</span>
 <span class="sd">        demand_values : array_like</span>
 <span class="sd">            EDP level for each record, shape ``(n_records,)``.</span>
 
@@ -240,21 +241,21 @@
 
         <span class="k">return</span> <span class="n">eta</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">im_per_record</span><span class="p">,</span> <span class="n">valid</span>
 
-    <span class="k">def</span> <span class="nf">_validate_cloud_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;cloud_dict&#39;</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_cloud_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;cloud_dict&#39;</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Raise ``ValueError`` if *cloud_dict* is missing required regression keys.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        cloud_dict : dict</span>
-<span class="sd">            Output of ``postprocessor.do_modified_cloud_analysis``.</span>
+<span class="sd">            Output of ``postprocessor.process_mca_results``.</span>
 <span class="sd">        label : str</span>
 <span class="sd">            Name used in error messages.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="s1">&#39;regression&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cloud_dict</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> is missing the &#39;regression&#39; key. &quot;</span>
-                <span class="s2">&quot;Run do_modified_cloud_analysis first.&quot;</span>
+                <span class="s2">&quot;Run process_mca_results first.&quot;</span>
             <span class="p">)</span>
         <span class="n">reg</span> <span class="o">=</span> <span class="n">cloud_dict</span><span class="p">[</span><span class="s1">&#39;regression&#39;</span><span class="p">]</span>
         <span class="n">required</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;b1&#39;</span><span class="p">,</span> <span class="s1">&#39;b0&#39;</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha0&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha1&#39;</span><span class="p">)</span>
@@ -270,8 +271,8 @@
     <span class="c1"># -----------------------------------------------------------------------</span>
 
 <div class="viewcode-block" id="imselection.compute_efficiency_mca">
-<a class="viewcode-back" href="../../../contents/ims/compute_efficiency_mca.html#openquake.vmtk.im_selection.imselection.compute_efficiency_mca">[docs]</a>
-    <span class="k">def</span> <span class="nf">compute_efficiency_mca</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict</span><span class="p">):</span>
+<a class="viewcode-back" href="../../../contents/ims/compute_efficiency_mca.html#openquake.vmtk.imselection.imselection.compute_efficiency_mca">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_efficiency_mca</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Classic efficiency βD|IM from a Modified Cloud Analysis result.</span>
 
@@ -282,7 +283,7 @@
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        cloud_dict : dict</span>
-<span class="sd">            Output of ``postprocessor.do_modified_cloud_analysis``.</span>
+<span class="sd">            Output of ``postprocessor.process_mca_results``.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -297,8 +298,8 @@
 
 
 <div class="viewcode-block" id="imselection.compute_efficiency_ida">
-<a class="viewcode-back" href="../../../contents/ims/compute_efficiency_ida.html#openquake.vmtk.im_selection.imselection.compute_efficiency_ida">[docs]</a>
-    <span class="k">def</span> <span class="nf">compute_efficiency_ida</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict</span><span class="p">,</span> <span class="n">ds_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<a class="viewcode-back" href="../../../contents/ims/compute_efficiency_ida.html#openquake.vmtk.imselection.imselection.compute_efficiency_ida">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_efficiency_ida</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict</span><span class="p">,</span> <span class="n">ds_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Classic efficiency βD|IM from an Incremental Dynamic Analysis result.</span>
 
@@ -308,7 +309,7 @@
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        ida_dict : dict</span>
-<span class="sd">            Output of ``postprocessor.do_incremental_dynamic_analysis``.</span>
+<span class="sd">            Output of ``postprocessor.process_ida_results``.</span>
 <span class="sd">        ds_index : int, optional</span>
 <span class="sd">            Damage-state index (0 = first / least severe).  Default ``0``.</span>
 
@@ -329,12 +330,68 @@
 
 
     <span class="c1"># -----------------------------------------------------------------------</span>
+    <span class="c1"># Practicality</span>
+    <span class="c1"># -----------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_practicality_mca</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Practicality measure from a Modified Cloud Analysis result.</span>
+
+<span class="sd">        Practicality = slope *b* from the log-linear regression</span>
+<span class="sd">        ``log(EDP) = b₀ + b · log(IM)``.  A higher slope indicates a stronger</span>
+<span class="sd">        IM–EDP correlation and therefore a more practical intensity measure.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cloud_dict : dict</span>
+<span class="sd">            Output of ``postprocessor.process_mca_results``.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dict with keys:</span>
+
+<span class="sd">        * ``&#39;b_slope&#39;`` — regression slope *b* (higher is better)</span>
+<span class="sd">        * ``&#39;method&#39;``  — ``&#39;MCA&#39;``</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_cloud_dict</span><span class="p">(</span><span class="n">cloud_dict</span><span class="p">,</span> <span class="s1">&#39;cloud_dict&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;b_slope&#39;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">cloud_dict</span><span class="p">[</span><span class="s1">&#39;regression&#39;</span><span class="p">][</span><span class="s1">&#39;b1&#39;</span><span class="p">]),</span> <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;MCA&#39;</span><span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_practicality_ida</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Practicality measure from an Incremental Dynamic Analysis result.</span>
+
+<span class="sd">        Estimated as the OLS slope of ``log(EDP)`` on ``log(IM)`` along the</span>
+<span class="sd">        median IDA curve, mirroring the MCA log-linear regression convention.</span>
+<span class="sd">        A higher slope indicates a stronger IM–EDP relationship.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ida_dict : dict</span>
+<span class="sd">            Output of ``postprocessor.process_ida_results``.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dict with keys:</span>
+
+<span class="sd">        * ``&#39;b_slope&#39;`` — log-log slope (higher is better); NaN if the median</span>
+<span class="sd">          curve has fewer than 2 positive-valued points</span>
+<span class="sd">        * ``&#39;method&#39;``  — ``&#39;IDA&#39;``</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">edp_axis</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ida_dict</span><span class="p">[</span><span class="s1">&#39;stats&#39;</span><span class="p">][</span><span class="s1">&#39;fitted_edps&#39;</span><span class="p">])</span>
+        <span class="n">median_im</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ida_dict</span><span class="p">[</span><span class="s1">&#39;stats&#39;</span><span class="p">][</span><span class="s1">&#39;median_im&#39;</span><span class="p">])</span>
+        <span class="n">valid</span> <span class="o">=</span> <span class="p">(</span><span class="n">edp_axis</span> <span class="o">&gt;</span> <span class="n">_IM_FLOOR</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">median_im</span> <span class="o">&gt;</span> <span class="n">_IM_FLOOR</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">valid</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;b_slope&#39;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">),</span> <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;IDA&#39;</span><span class="p">}</span>
+        <span class="n">slope</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polyfit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">median_im</span><span class="p">[</span><span class="n">valid</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">edp_axis</span><span class="p">[</span><span class="n">valid</span><span class="p">]),</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;b_slope&#39;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">slope</span><span class="p">),</span> <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;IDA&#39;</span><span class="p">}</span>
+
+    <span class="c1"># -----------------------------------------------------------------------</span>
     <span class="c1"># Proficiency</span>
     <span class="c1"># -----------------------------------------------------------------------</span>
 
 <div class="viewcode-block" id="imselection.compute_proficiency_mca">
-<a class="viewcode-back" href="../../../contents/ims/compute_proficiency_mca.html#openquake.vmtk.im_selection.imselection.compute_proficiency_mca">[docs]</a>
-    <span class="k">def</span> <span class="nf">compute_proficiency_mca</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict</span><span class="p">,</span> <span class="n">ds_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<a class="viewcode-back" href="../../../contents/ims/compute_proficiency_mca.html#openquake.vmtk.imselection.imselection.compute_proficiency_mca">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_proficiency_mca</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict</span><span class="p">,</span> <span class="n">ds_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Proficiency measure βIM|DCR=1 from a Modified Cloud Analysis result.</span>
 
@@ -349,7 +406,7 @@
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        cloud_dict : dict</span>
-<span class="sd">            Output of ``postprocessor.do_modified_cloud_analysis``.</span>
+<span class="sd">            Output of ``postprocessor.process_mca_results``.</span>
 <span class="sd">        ds_index : int, optional</span>
 <span class="sd">            Damage-state index.  Default ``0``.</span>
 
@@ -415,8 +472,8 @@
 
 
 <div class="viewcode-block" id="imselection.compute_proficiency_ida">
-<a class="viewcode-back" href="../../../contents/ims/compute_proficiency_ida.html#openquake.vmtk.im_selection.imselection.compute_proficiency_ida">[docs]</a>
-    <span class="k">def</span> <span class="nf">compute_proficiency_ida</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict</span><span class="p">,</span> <span class="n">ds_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<a class="viewcode-back" href="../../../contents/ims/compute_proficiency_ida.html#openquake.vmtk.imselection.imselection.compute_proficiency_ida">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_proficiency_ida</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict</span><span class="p">,</span> <span class="n">ds_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Proficiency measure βIM|DCR=1 from an Incremental Dynamic Analysis result.</span>
 
@@ -427,7 +484,7 @@
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        ida_dict : dict</span>
-<span class="sd">            Output of ``postprocessor.do_incremental_dynamic_analysis``.</span>
+<span class="sd">            Output of ``postprocessor.process_ida_results``.</span>
 <span class="sd">        ds_index : int, optional</span>
 <span class="sd">            Damage-state index.  Default ``0``.</span>
 
@@ -481,8 +538,8 @@
     <span class="c1"># -----------------------------------------------------------------------</span>
 
 <div class="viewcode-block" id="imselection.compute_rsm_mca">
-<a class="viewcode-back" href="../../../contents/ims/compute_rsm_mca.html#openquake.vmtk.im_selection.imselection.compute_rsm_mca">[docs]</a>
-    <span class="k">def</span> <span class="nf">compute_rsm_mca</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict_im1</span><span class="p">,</span> <span class="n">cloud_dict_im2</span><span class="p">):</span>
+<a class="viewcode-back" href="../../../contents/ims/compute_rsm_mca.html#openquake.vmtk.imselection.imselection.compute_rsm_mca">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_rsm_mca</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cloud_dict_im1</span><span class="p">,</span> <span class="n">cloud_dict_im2</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Relative Sufficiency Measure between two IMs using Modified Cloud Analysis.</span>
 
@@ -520,7 +577,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_validate_cloud_dict</span><span class="p">(</span><span class="n">cloud_dict_im2</span><span class="p">,</span> <span class="s1">&#39;cloud_dict_im2&#39;</span><span class="p">)</span>
 
         <span class="c1"># Extract regression parameters</span>
-        <span class="k">def</span> <span class="nf">_params</span><span class="p">(</span><span class="n">cd</span><span class="p">):</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_params</span><span class="p">(</span><span class="n">cd</span><span class="p">):</span>
             <span class="n">r</span> <span class="o">=</span> <span class="n">cd</span><span class="p">[</span><span class="s1">&#39;regression&#39;</span><span class="p">]</span>
             <span class="k">return</span> <span class="p">{</span>
                 <span class="s1">&#39;b0&#39;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;b0&#39;</span><span class="p">]),</span>
@@ -603,8 +660,8 @@
     <span class="c1"># -----------------------------------------------------------------------</span>
 
 <div class="viewcode-block" id="imselection.compute_rsm_ida">
-<a class="viewcode-back" href="../../../contents/ims/compute_rsm_ida.html#openquake.vmtk.im_selection.imselection.compute_rsm_ida">[docs]</a>
-    <span class="k">def</span> <span class="nf">compute_rsm_ida</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict_im1</span><span class="p">,</span> <span class="n">ida_dict_im2</span><span class="p">):</span>
+<a class="viewcode-back" href="../../../contents/ims/compute_rsm_ida.html#openquake.vmtk.imselection.imselection.compute_rsm_ida">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_rsm_ida</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ida_dict_im1</span><span class="p">,</span> <span class="n">ida_dict_im2</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Relative Sufficiency Measure between two IMs using Incremental Dynamic</span>
 <span class="sd">        Analysis.</span>
@@ -640,9 +697,17 @@
             <span class="p">)</span>
         <span class="n">n_records</span> <span class="o">=</span> <span class="n">n1</span>
 
-        <span class="c1"># Use IM1&#39;s max demand per record as the common demand level</span>
+        <span class="c1"># Use IM1&#39;s max demand per record as the common demand level, clipped</span>
+        <span class="c1"># to the fitted EDP range.  Raw IDA curves can reach collapse EDPs well</span>
+        <span class="c1"># beyond the fitted axis (edp_range[-1]); without clipping every record</span>
+        <span class="c1"># would fail the range check in _extract_ida_stats_at_demands.</span>
         <span class="n">raw1</span> <span class="o">=</span> <span class="n">ida_dict_im1</span><span class="p">[</span><span class="s1">&#39;ida_inputs&#39;</span><span class="p">][</span><span class="s1">&#39;raw_curves&#39;</span><span class="p">]</span>
-        <span class="n">demand_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">raw1</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;edp&#39;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_records</span><span class="p">)])</span>
+        <span class="n">edp_axis</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ida_dict_im1</span><span class="p">[</span><span class="s1">&#39;stats&#39;</span><span class="p">][</span><span class="s1">&#39;fitted_edps&#39;</span><span class="p">])</span>
+        <span class="n">demand_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">raw1</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;edp&#39;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_records</span><span class="p">)]),</span>
+            <span class="n">edp_axis</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">edp_axis</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+        <span class="p">)</span>
 
         <span class="c1"># Ensemble stats + per-record IM at the demand level</span>
         <span class="n">eta1</span><span class="p">,</span> <span class="n">beta1</span><span class="p">,</span> <span class="n">im1_per_rec</span><span class="p">,</span> <span class="n">valid1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_ida_stats_at_demands</span><span class="p">(</span>
@@ -742,8 +807,8 @@
     <span class="c1"># -----------------------------------------------------------------------</span>
 
 <div class="viewcode-block" id="imselection.compute_rsm_general">
-<a class="viewcode-back" href="../../../contents/ims/compute_rsm_general.html#openquake.vmtk.im_selection.imselection.compute_rsm_general">[docs]</a>
-    <span class="k">def</span> <span class="nf">compute_rsm_general</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">demands</span><span class="p">,</span> <span class="n">im1_values</span><span class="p">,</span> <span class="n">im2_values</span><span class="p">,</span>
+<a class="viewcode-back" href="../../../contents/ims/compute_rsm_general.html#openquake.vmtk.imselection.imselection.compute_rsm_general">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_rsm_general</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">demands</span><span class="p">,</span> <span class="n">im1_values</span><span class="p">,</span> <span class="n">im2_values</span><span class="p">,</span>
                             <span class="n">pdf_func_im1</span><span class="p">,</span> <span class="n">pdf_func_im2</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        General Relative Sufficiency Measure using user-supplied PDF callables.</span>
@@ -811,11 +876,12 @@
     <span class="c1"># -----------------------------------------------------------------------</span>
 
 <div class="viewcode-block" id="imselection.compare_ims">
-<a class="viewcode-back" href="../../../contents/ims/compare_ims.html#openquake.vmtk.im_selection.imselection.compare_ims">[docs]</a>
-    <span class="k">def</span> <span class="nf">compare_ims</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">im_results_dict</span><span class="p">,</span> <span class="n">analysis_type</span><span class="o">=</span><span class="s1">&#39;MCA&#39;</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span>
+<a class="viewcode-back" href="../../../contents/ims/compare_ims.html#openquake.vmtk.imselection.imselection.compare_ims">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compare_ims</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">im_results_dict</span><span class="p">,</span> <span class="n">analysis_type</span><span class="o">=</span><span class="s1">&#39;MCA&#39;</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span>
                     <span class="n">reference_im_key</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">damage_threshold_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Compare N ≥ 2 intensity measures by efficiency, proficiency, and RSM.</span>
+<span class="sd">        Compare N ≥ 2 intensity measures by efficiency, proficiency,</span>
+<span class="sd">        practicality, and RSM.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -824,8 +890,8 @@
 <span class="sd">            ``{im_name: ida_dict}`` (for IDA).</span>
 <span class="sd">        analysis_type : {&#39;MCA&#39;, &#39;IDA&#39;}</span>
 <span class="sd">            Which NDAP was used to generate the results.</span>
-<span class="sd">        metric : {&#39;all&#39;, &#39;efficiency&#39;, &#39;proficiency&#39;, &#39;rsm&#39;}</span>
-<span class="sd">            Which metrics to compute.  ``&#39;all&#39;`` computes all three.</span>
+<span class="sd">        metric : {&#39;all&#39;, &#39;efficiency&#39;, &#39;proficiency&#39;, &#39;practicality&#39;, &#39;rsm&#39;}</span>
+<span class="sd">            Which metrics to compute.  ``&#39;all&#39;`` computes all four.</span>
 <span class="sd">        reference_im_key : str or None</span>
 <span class="sd">            IM name to use as IM₁ in RSM pairwise comparisons.  If ``None``,</span>
 <span class="sd">            the first key in *im_results_dict* is used.</span>
@@ -836,13 +902,13 @@
 <span class="sd">        -------</span>
 <span class="sd">        dict with keys:</span>
 
-<span class="sd">        * ``&#39;ranking&#39;``        — ``pd.DataFrame`` with columns im_name,</span>
-<span class="sd">          efficiency, proficiency, rsm_vs_reference, rank_efficiency,</span>
-<span class="sd">          rank_proficiency, rank_rsm</span>
-<span class="sd">        * ``&#39;rsm_matrix&#39;``     — ``dict[str, dict[str, float]]`` where</span>
+<span class="sd">        * ``&#39;ranking&#39;``          — ``pd.DataFrame`` with columns im_name,</span>
+<span class="sd">          efficiency, proficiency, practicality, rsm_vs_reference,</span>
+<span class="sd">          rank_efficiency, rank_proficiency, rank_practicality, rank_rsm</span>
+<span class="sd">        * ``&#39;rsm_matrix&#39;``       — ``dict[str, dict[str, float]]`` where</span>
 <span class="sd">          ``rsm_matrix[im_i][im_j]`` = RSM(IM_j vs IM_i)</span>
-<span class="sd">        * ``&#39;metric&#39;``         — the *metric* argument used</span>
-<span class="sd">        * ``&#39;analysis_type&#39;``  — the *analysis_type* argument used</span>
+<span class="sd">        * ``&#39;metric&#39;``           — the *metric* argument used</span>
+<span class="sd">        * ``&#39;analysis_type&#39;``    — the *analysis_type* argument used</span>
 <span class="sd">        * ``&#39;reference_im_key&#39;`` — the IM used as IM₁ for RSM</span>
 
 <span class="sd">        Raises</span>
@@ -868,19 +934,19 @@
                 <span class="s2">&quot;im_results_dict.&quot;</span>
             <span class="p">)</span>
 
-        <span class="n">compute_metric</span> <span class="o">=</span> <span class="n">metric</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;metric&#39;</span><span class="p">)</span>
-        <span class="n">do_eff</span> <span class="o">=</span> <span class="n">metric</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;efficiency&#39;</span><span class="p">)</span>
+        <span class="n">do_eff</span>  <span class="o">=</span> <span class="n">metric</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;efficiency&#39;</span><span class="p">)</span>
         <span class="n">do_prof</span> <span class="o">=</span> <span class="n">metric</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;proficiency&#39;</span><span class="p">)</span>
-        <span class="n">do_rsm</span> <span class="o">=</span> <span class="n">metric</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;rsm&#39;</span><span class="p">)</span>
-        <span class="n">_</span> <span class="o">=</span> <span class="n">compute_metric</span>  <span class="c1"># suppress unused</span>
+        <span class="n">do_prac</span> <span class="o">=</span> <span class="n">metric</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;practicality&#39;</span><span class="p">)</span>
+        <span class="n">do_rsm</span>  <span class="o">=</span> <span class="n">metric</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;rsm&#39;</span><span class="p">)</span>
 
         <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">rsm_matrix</span> <span class="o">=</span> <span class="p">{</span><span class="n">n</span><span class="p">:</span> <span class="p">{}</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">im_names</span><span class="p">}</span>
 
         <span class="k">for</span> <span class="n">im_name</span> <span class="ow">in</span> <span class="n">im_names</span><span class="p">:</span>
             <span class="n">res</span> <span class="o">=</span> <span class="n">im_results_dict</span><span class="p">[</span><span class="n">im_name</span><span class="p">]</span>
-            <span class="n">eff_val</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+            <span class="n">eff_val</span>  <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
             <span class="n">prof_val</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+            <span class="n">prac_val</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="n">do_eff</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">analysis_type</span> <span class="o">==</span> <span class="s1">&#39;MCA&#39;</span><span class="p">:</span>
@@ -900,10 +966,17 @@
                         <span class="n">res</span><span class="p">,</span> <span class="n">ds_index</span><span class="o">=</span><span class="n">damage_threshold_index</span>
                     <span class="p">)[</span><span class="s1">&#39;beta_IM_given_DCRLS1&#39;</span><span class="p">]</span>
 
+            <span class="k">if</span> <span class="n">do_prac</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">analysis_type</span> <span class="o">==</span> <span class="s1">&#39;MCA&#39;</span><span class="p">:</span>
+                    <span class="n">prac_val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compute_practicality_mca</span><span class="p">(</span><span class="n">res</span><span class="p">)[</span><span class="s1">&#39;b_slope&#39;</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">prac_val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compute_practicality_ida</span><span class="p">(</span><span class="n">res</span><span class="p">)[</span><span class="s1">&#39;b_slope&#39;</span><span class="p">]</span>
+
             <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                <span class="s1">&#39;im_name&#39;</span><span class="p">:</span> <span class="n">im_name</span><span class="p">,</span>
-                <span class="s1">&#39;efficiency&#39;</span><span class="p">:</span> <span class="n">eff_val</span><span class="p">,</span>
-                <span class="s1">&#39;proficiency&#39;</span><span class="p">:</span> <span class="n">prof_val</span><span class="p">,</span>
+                <span class="s1">&#39;im_name&#39;</span><span class="p">:</span>      <span class="n">im_name</span><span class="p">,</span>
+                <span class="s1">&#39;efficiency&#39;</span><span class="p">:</span>   <span class="n">eff_val</span><span class="p">,</span>
+                <span class="s1">&#39;proficiency&#39;</span><span class="p">:</span>  <span class="n">prof_val</span><span class="p">,</span>
+                <span class="s1">&#39;practicality&#39;</span><span class="p">:</span> <span class="n">prac_val</span><span class="p">,</span>
             <span class="p">})</span>
 
         <span class="c1"># RSM matrix</span>
@@ -951,6 +1024,13 @@
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">df</span><span class="p">[</span><span class="s1">&#39;rank_proficiency&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+
+        <span class="k">if</span> <span class="n">do_prac</span><span class="p">:</span>
+            <span class="n">df</span><span class="p">[</span><span class="s1">&#39;rank_practicality&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">df</span><span class="p">[</span><span class="s1">&#39;practicality&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rank</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;min&#39;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">df</span><span class="p">[</span><span class="s1">&#39;rank_practicality&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
 
         <span class="k">if</span> <span class="n">do_rsm</span><span class="p">:</span>
             <span class="n">df</span><span class="p">[</span><span class="s1">&#39;rank_rsm&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>

@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>8.1.2. SLF Generation &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
+  <title>8.2. SLF Generation &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=749cc255" />
@@ -24,7 +24,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="9. Visualisation" href="../plo.html" />
-    <link rel="prev" title="8.1.1. Initialisation" href="init.html" /> 
+    <link rel="prev" title="8.1. Initialisation" href="init.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -56,21 +56,18 @@
 <li class="toctree-l1"><a class="reference internal" href="../mod.html">6. Model Building and Analysis</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../pos.html">7. Postprocessing</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="../slf.html">8. Storey Loss Function Generation</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="../slf.html#minimal-example">8.1. Minimal example</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="init.html">8.1.1. Initialisation</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">8.1.2. SLF Generation</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#self-contained-example">8.1.2.1. Self-contained example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="init.html">8.1. Initialisation</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">8.2. SLF Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#openquake.vmtk.slfgenerator.slfgenerator.generate"><code class="docutils literal notranslate"><span class="pre">slfgenerator.generate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#self-contained-example">8.2.1. Self-contained example</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="../slf.html#references">8.2. References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../slf.html#references">8.3. References</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../plo.html">9. Visualisation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../demos.html">10. Demos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../examples.html">11. Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../validation.html">12. Validation and Quality Assurance</a></li>
 </ul>
 
         </div>
@@ -88,7 +85,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../slf.html"><span class="section-number">8. </span>Storey Loss Function Generation</a></li>
-      <li class="breadcrumb-item active"><span class="section-number">8.1.2. </span>SLF Generation</li>
+      <li class="breadcrumb-item active"><span class="section-number">8.2. </span>SLF Generation</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../../_sources/contents/slf/generate.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -99,9 +96,35 @@
            <div itemprop="articleBody">
              
   <section id="slf-generation">
-<h1><span class="section-number">8.1.2. </span>SLF Generation<a class="headerlink" href="#slf-generation" title="Link to this heading"></a></h1>
+<h1><span class="section-number">8.2. </span>SLF Generation<a class="headerlink" href="#slf-generation" title="Link to this heading"></a></h1>
+<dl class="py method">
+<dt class="sig sig-object py" id="openquake.vmtk.slfgenerator.slfgenerator.generate">
+<span class="sig-prename descclassname"><span class="pre">slfgenerator.</span></span><span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span></span></span><a class="reference internal" href="../../_modules/openquake/vmtk/slfgenerator.html#slfgenerator.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#openquake.vmtk.slfgenerator.slfgenerator.generate" title="Link to this definition"></a></dt>
+<dd><p>Generate Storey Loss Functions for all performance groups.</p>
+<p>Orchestrates the full SLF pipeline:</p>
+<ol class="arabic simple">
+<li><p>Compute component fragility and consequence functions.</p></li>
+<li><p>Sample damage states via Monte Carlo simulation.</p></li>
+<li><p>Enforce correlated damage state constraints.</p></li>
+<li><p>Calculate repair costs per group.</p></li>
+<li><p>Fit regression models to the simulated loss data.</p></li>
+<li><p>Transform results into the output format.</p></li>
+<li><p>Compute empirical statistics (16th, median, 84th percentile).</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>out</strong> (<em>dict</em>) – <code class="docutils literal notranslate"><span class="pre">{group_label:</span> <span class="pre">slf_dict}</span></code> — one SLF record per performance group.</p></li>
+<li><p><strong>cache</strong> (<em>dict</em>) – Intermediate data for each group (fragilities, losses, fitted
+parameters, empirical statistics, etc.).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
 <section id="self-contained-example">
-<h2><span class="section-number">8.1.2.1. </span>Self-contained example<a class="headerlink" href="#self-contained-example" title="Link to this heading"></a></h2>
+<h2><span class="section-number">8.2.1. </span>Self-contained example<a class="headerlink" href="#self-contained-example" title="Link to this heading"></a></h2>
 <p>The snippet below is fully runnable from the repository root after
 <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">.</span></code> — it uses the inventory CSVs shipped with the demo
 notebook.</p>
@@ -179,7 +202,7 @@ also retained in the cache for uncertainty characterisation.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="init.html" class="btn btn-neutral float-left" title="8.1.1. Initialisation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="init.html" class="btn btn-neutral float-left" title="8.1. Initialisation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="../plo.html" class="btn btn-neutral float-right" title="9. Visualisation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

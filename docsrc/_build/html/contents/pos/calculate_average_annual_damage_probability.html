@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>7.1.10. Average Annual Damage Probabilities &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
+  <title>7.10. Average Annual Damage Probabilities &mdash; OpenQuake Vulnerability Modellers Toolkit Suite  documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=749cc255" />
@@ -23,8 +23,8 @@
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="7.1.11. Average Annual Loss" href="calculate_average_annual_loss.html" />
-    <link rel="prev" title="7.1.9. Vulnerability Functions" href="calculate_vulnerability_function.html" /> 
+    <link rel="next" title="7.11. Average Annual Loss" href="calculate_average_annual_loss.html" />
+    <link rel="prev" title="7.9. Vulnerability Functions" href="calculate_vulnerability_function.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -55,28 +55,27 @@
 <li class="toctree-l1"><a class="reference internal" href="../cal.html">5. Model Calibration</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../mod.html">6. Model Building and Analysis</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="../pos.html">7. Postprocessing</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="../pos.html#minimal-example">7.1. Minimal example</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="init.html">7.1.1. Initialisation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="calculate_lognormal_fragility.html">7.1.2. Lognormal Fragility Functions</a></li>
-<li class="toctree-l3"><a class="reference internal" href="calculate_rotated_fragility.html">7.1.3. Fragility Function Rotation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="calculate_glm_fragility.html">7.1.4. GLM Fragility Functions</a></li>
-<li class="toctree-l3"><a class="reference internal" href="calculate_ordinal_fragility.html">7.1.5. Ordinal Fragility Functions</a></li>
-<li class="toctree-l3"><a class="reference internal" href="process_mca_results.html">7.1.6. Modified Cloud Analysis Postprocessing</a></li>
-<li class="toctree-l3"><a class="reference internal" href="process_ida_results.html">7.1.7. Incremental Dynamic Analysis Postprocessing</a></li>
-<li class="toctree-l3"><a class="reference internal" href="process_msa_results.html">7.1.8. Multiple Stripe Analysis Postprocessing</a></li>
-<li class="toctree-l3"><a class="reference internal" href="calculate_vulnerability_function.html">7.1.9. Vulnerability Functions</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">7.1.10. Average Annual Damage Probabilities</a></li>
-<li class="toctree-l3"><a class="reference internal" href="calculate_average_annual_loss.html">7.1.11. Average Annual Loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="init.html">7.1. Initialisation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calculate_lognormal_fragility.html">7.2. Lognormal Fragility Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calculate_rotated_fragility.html">7.3. Fragility Function Rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calculate_glm_fragility.html">7.4. GLM Fragility Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calculate_ordinal_fragility.html">7.5. Ordinal Fragility Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_mca_results.html">7.6. Modified Cloud Analysis Postprocessing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_ida_results.html">7.7. Incremental Dynamic Analysis Postprocessing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_msa_results.html">7.8. Multiple Stripe Analysis Postprocessing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calculate_vulnerability_function.html">7.9. Vulnerability Functions</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">7.10. Average Annual Damage Probabilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#openquake.vmtk.postprocessor.postprocessor.calculate_average_annual_damage_probability"><code class="docutils literal notranslate"><span class="pre">postprocessor.calculate_average_annual_damage_probability()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../pos.html#references">7.2. References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calculate_average_annual_loss.html">7.11. Average Annual Loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../pos.html#references">7.12. References</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../slf.html">8. Storey Loss Function Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../plo.html">9. Visualisation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../demos.html">10. Demos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../examples.html">11. Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../validation.html">12. Validation and Quality Assurance</a></li>
 </ul>
 
         </div>
@@ -94,7 +93,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../pos.html"><span class="section-number">7. </span>Postprocessing</a></li>
-      <li class="breadcrumb-item active"><span class="section-number">7.1.10. </span>Average Annual Damage Probabilities</li>
+      <li class="breadcrumb-item active"><span class="section-number">7.10. </span>Average Annual Damage Probabilities</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../../_sources/contents/pos/calculate_average_annual_damage_probability.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -105,7 +104,52 @@
            <div itemprop="articleBody">
              
   <section id="average-annual-damage-probabilities">
-<h1><span class="section-number">7.1.10. </span>Average Annual Damage Probabilities<a class="headerlink" href="#average-annual-damage-probabilities" title="Link to this heading"></a></h1>
+<h1><span class="section-number">7.10. </span>Average Annual Damage Probabilities<a class="headerlink" href="#average-annual-damage-probabilities" title="Link to this heading"></a></h1>
+<dl class="py method">
+<dt class="sig sig-object py" id="openquake.vmtk.postprocessor.postprocessor.calculate_average_annual_damage_probability">
+<span class="sig-prename descclassname"><span class="pre">postprocessor.</span></span><span class="sig-name descname"><span class="pre">calculate_average_annual_damage_probability</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fragility_array</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hazard_array</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_return_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5000</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/openquake/vmtk/postprocessor.html#postprocessor.calculate_average_annual_damage_probability"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#openquake.vmtk.postprocessor.postprocessor.calculate_average_annual_damage_probability" title="Link to this definition"></a></dt>
+<dd><p>Calculate the Average Annual Damage State Probability (AADP)
+based on fragility and hazard curves.</p>
+<p>This function estimates the average annual probability of damage
+states occurring over a given return period, using the fragility
+curve (which relates intensity measure levels to damage state
+probabilities) and the hazard curve (which relates intensity
+measure levels to annual rates of exceedance).</p>
+<p>The calculation integrates the product of the fragility function
+and the hazard curve over the specified range of intensity measure
+levels, accounting for the return period and a maximum return
+period threshold.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fragility_array</strong> (<em>2D array</em>) – A 2D array where the first column contains intensity measure
+levels, and the second column contains the corresponding
+probabilities of exceedance for each intensity level.</p></li>
+<li><p><strong>hazard_array</strong> (<em>2D array</em>) – A 2D array where the first column contains intensity measure
+levels, and the second column contains the annual rates of
+exceedance (i.e., the probability of exceedance per year)
+for each intensity level.</p></li>
+<li><p><strong>return_period</strong> (<em>float</em><em>, </em><em>optional</em><em>, </em><em>default=1</em>) – The return period used to scale the hazard rate. This is the
+time span (in years) over which the average annual damage
+probability is calculated. A typical value is 1 year, but
+longer periods can be used for multi-year assessments.</p></li>
+<li><p><strong>max_return_period</strong> (<em>float</em><em>, </em><em>optional</em><em>, </em><em>default=5000</em>) – The maximum return period threshold used to filter out very
+low hazard rates. The hazard curve is truncated to include
+only intensity levels with exceedance rates above this
+threshold.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>average_annual_damage_probability</strong> – The average annual damage state probability, calculated by
+integrating the product of the fragility function and the
+hazard curve over the given intensity measure levels.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
 <div class="admonition-theoretical-background admonition">
 <p class="admonition-title">Theoretical Background</p>
 <p>The Average Annual Damage Probability (AADP) for a damage state <span class="math notranslate nohighlight">\(ds\)</span> is the
@@ -136,14 +180,32 @@ the IM bins of the hazard curve:</p>
 IM interval and <span class="math notranslate nohighlight">\(\Delta\lambda_j = |\lambda(x_j) - \lambda(x_{j+1})|\)</span> is
 the corresponding rate of occurrence.</p>
 </div>
+<div class="note admonition">
+<p class="admonition-title">Example</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">openquake.vmtk.postprocessor</span><span class="w"> </span><span class="kn">import</span> <span class="n">postprocessor</span>
+
+<span class="n">pp</span> <span class="o">=</span> <span class="n">postprocessor</span><span class="p">()</span>
+<span class="c1"># fragility_medians, fragility_betas: arrays from process_mca_results()</span>
+<span class="c1"># hazard_imls, hazard_poes: hazard curve arrays</span>
+<span class="n">aadp</span> <span class="o">=</span> <span class="n">pp</span><span class="o">.</span><span class="n">calculate_average_annual_damage_probability</span><span class="p">(</span>
+    <span class="n">fragility_medians</span><span class="o">=</span><span class="n">fragility_medians</span><span class="p">,</span>
+    <span class="n">fragility_betas</span><span class="o">=</span><span class="n">fragility_betas</span><span class="p">,</span>
+    <span class="n">hazard_imls</span><span class="o">=</span><span class="n">hazard_imls</span><span class="p">,</span>
+    <span class="n">hazard_poes</span><span class="o">=</span><span class="n">hazard_poes</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">aadp</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
 </section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="calculate_vulnerability_function.html" class="btn btn-neutral float-left" title="7.1.9. Vulnerability Functions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="calculate_average_annual_loss.html" class="btn btn-neutral float-right" title="7.1.11. Average Annual Loss" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="calculate_vulnerability_function.html" class="btn btn-neutral float-left" title="7.9. Vulnerability Functions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="calculate_average_annual_loss.html" class="btn btn-neutral float-right" title="7.11. Average Annual Loss" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

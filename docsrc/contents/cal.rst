@@ -7,33 +7,6 @@ relationships. It handles building classification, mass and stiffness matrix
 assembly, eigenvalue-based modal analysis, period scaling, storey force-drift
 distribution, and optional OpenSees static pushover verification.
 
-Minimal example
----------------
-
-.. code-block:: python
-
-   import numpy as np
-   from openquake.vmtk.calibration import calibration
-
-   # SDOF capacity curve as [spectral displacement (m), spectral acceleration (g)]
-   sdof_capacity = np.array([
-       [0.000, 0.00],
-       [0.020, 0.18],
-       [0.080, 0.22],
-       [0.150, 0.10],
-   ])
-
-   cal = calibration(
-       nst=4,                     # 4 storeys
-       sdof_capacity=sdof_capacity,
-       storey_heights=[3.0, 3.0, 3.0, 3.0],
-       roof_mass_factor=0.75,
-   )
-   storey_disps, storey_forces, masses, _ = cal.calibrate_model()
-
-A full end-to-end workflow is provided in the ``ModelCompilation`` notebook —
-see :doc:`demos` and :doc:`examples`.
-
 .. toctree::
 
    cal/init

@@ -64,7 +64,6 @@
 <li class="toctree-l1"><a class="reference internal" href="plo.html">9. Visualisation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="demos.html">10. Demos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">11. Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="validation.html">12. Validation and Quality Assurance</a></li>
 </ul>
 
         </div>
@@ -113,13 +112,14 @@ git<span class="w"> </span>clone<span class="w"> </span>https://github.com/GEMSc
 <section id="set-up-a-virtual-environment">
 <h2><span class="section-number">1.2. </span>Set Up a Virtual Environment<a class="headerlink" href="#set-up-a-virtual-environment" title="Link to this heading"></a></h2>
 <p>Create a virtual environment to manage dependencies:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv<span class="w">  </span><span class="c1"># On Windows</span>
-python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv<span class="w">  </span><span class="c1"># On Linux</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv<span class="w">   </span><span class="c1"># On Windows</span>
+python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv<span class="w">  </span><span class="c1"># On Linux / macOS</span>
 </pre></div>
 </div>
 <p>Activate the virtual environment:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv<span class="se">\S</span>cripts<span class="se">\a</span>ctivate<span class="w">       </span><span class="c1"># On Windows</span>
-<span class="nb">source</span><span class="w"> </span>.venv/Scripts/activate<span class="w">  </span><span class="c1"># On Linux</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv<span class="se">\S</span>cripts<span class="se">\a</span>ctivate<span class="w">        </span><span class="c1"># On Windows</span>
+<span class="nb">source</span><span class="w"> </span>.venv/bin/activate<span class="w">     </span><span class="c1"># On macOS</span>
+<span class="nb">source</span><span class="w"> </span>.venv/Scripts/activate<span class="w"> </span><span class="c1"># On Linux</span>
 </pre></div>
 </div>
 </section>
@@ -144,13 +144,6 @@ pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </s
 <span class="c1"># macOS (arm64)</span>
 pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements-py312-macos_arm64.txt
 </pre></div>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p><strong>For macOS users:</strong> OpenSeesPy support on arm64 (Apple Silicon) is partial; the
-provided macOS requirements files install the subset of dependencies that builds
-reliably on macOS. If you hit OpenSeesPy issues on macOS, run a Linux or Windows
-virtual machine instead.</p>
 </div>
 </section>
 <section id="install-the-package">
