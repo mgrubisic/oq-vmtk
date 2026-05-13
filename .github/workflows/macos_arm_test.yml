@@ -5,7 +5,7 @@ on:
     inputs:
       git-ref:
         description: Git Ref
-        default: master
+        default: main
         required: true
   schedule:
     - cron: "0 3 * * 0"
@@ -19,12 +19,21 @@ jobs:
         os: [macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - name: Clone Repository (Main)
+        uses: actions/checkout@v6
+        if: github.event.inputs.git-ref == ''
+      - name: Clone Repository (Custom Ref)
+        uses: actions/checkout@v6
+        if: github.event.inputs.git-ref != ''
+        with:
+          ref: ${{ github.event.inputs.git-ref }}
       - name: Set up Python  ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Dependencies of OpenQuake engine
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           curl -L -O https://github.com/gem/oq-engine/raw/master/install.py
           python install.py user --version=master
